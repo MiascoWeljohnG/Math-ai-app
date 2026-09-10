@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Math AI — Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #0f172a; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .card { background: #1e293b; padding: 2rem; border-radius: 12px; width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+        h1 { color: #f8fafc; margin-bottom: 1.5rem; text-align: center; font-size: 1.5rem; }
+        label { color: #94a3b8; font-size: 0.85rem; display: block; margin-top: 1rem; }
+        input { width: 100%; padding: 0.7rem; margin-top: 0.3rem; border: 1px solid #334155; border-radius: 6px; background: #0f172a; color: #f8fafc; font-size: 0.95rem; }
+        button { width: 100%; padding: 0.75rem; margin-top: 1.5rem; border: none; border-radius: 6px; background: #3b82f6; color: white; font-size: 1rem; cursor: pointer; transition: background 0.2s; }
+        button:hover { background: #2563eb; }
+        .toggle { text-align: center; margin-top: 1rem; color: #64748b; font-size: 0.85rem; }
+        .toggle a { color: #3b82f6; cursor: pointer; text-decoration: none; }
+        .error { color: #ef4444; font-size: 0.85rem; margin-top: 0.5rem; display: none; }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        .modal-overlay.active { display: flex; }
+        .modal { background: #1e293b; border-radius: 12px; padding: 2rem; width: 420px; max-height: 90vh; overflow-y: auto; position: relative; }
+        .modal h2 { color: #f8fafc; margin-bottom: 1rem; font-size: 1.3rem; }
+        .modal .close-btn { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; width: auto; margin: 0; }
+        .modal .close-btn:hover { color: #f8fafc; }
+
+        .calendar-picker { display: none; margin-top: 0.5rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 1rem; }
+        .calendar-picker.active { display: block; }
+        .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+        .cal-header button { background: #334155; border: none; color: #f8fafc; padding: 0.3rem 0.6rem; border-radius: 4px; cursor: pointer; margin: auto; }
+        .cal-header button:hover { background: #475569; margin: auto; }
+        .cal-selects { display: flex; gap: 0.5rem; }
+        .cal-selects select { background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; padding: 0.3rem; cursor: pointer; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+        .cal-grid .day-name { font-size: 0.7rem; color: #64748b; padding: 0.3rem 0; }
+        .cal-grid .day { font-size: 0.8rem; padding: 0.4rem 0; border-radius: 4px; cursor: pointer; color: #f8fafc; }
+        .cal-grid .day:hover { background: #334155; }
+        .cal-grid .day.selected { background: #3b82f6; color: white; }
+        .cal-grid .day.empty { cursor: default; }
+        .cal-grid .day.empty:hover { background: none; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>  Math AI</h1>
+        <form id="authForm">
+            <label>Username</label>
+            <input type="text" id="username" required autocomplete="username">
+
+            <label>Password</label>
+            <input type="password" id="password" required autocomplete="current-password">
+
+            <div class="error" id="error"></div>
+            <button type="submit" id="submitBtn">Login</button>
+        </form>
+        <div class="toggle">
+            <span>Don't have an account?</span>
+            <a id="openRegister">Register</a>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="registerModal">
+        <div class="modal">
+            <button class="close-btn" id="closeModal">&times;</button>
+            <h2>Create Account</h2>
+            <form id="registerForm">
+                <label>First Name</label>
+                <input type="text" id="regFirstName" required placeholder="John">
+
+                <label>Last Name</label>
+                <input type="text" id="regLastName" required placeholder="Doe">
+
+                <label>Middle Name <span style="color:#64748b; font-size:0.75rem">(optional)</span></label>
+                <input type="text" id="regMiddleName" placeholder="James">
+
+                <label>Email</label>
+                <input type="email" id="regEmail" required placeholder="john@example.com">
+
+                <label>Birthday</label>
+                <input type="text" id="regBirthday" placeholder="YYYY-MM-DD" style="cursor:text">
+
+                <div class="calendar-picker" id="calendarPicker">
+                    <div class="cal-header">
+                        <button type="button" id="calPrev">&lt;</button>
+                        <div class="cal-selects">
+                            <select id="calMonth"></select>
+                            <select id="calYear"></select>
+                        </div>
+                        <button type="button" id="calNext">&gt;</button>
+                    </div>
+                    <div class="cal-grid" id="calGrid"></div>
+                </div>
+
+                <label>Password</label>
+                <input type="password" id="regPassword" required minlength="6" placeholder="Min 6 characters">
+
+                <label>Confirm Password</label>
+                <input type="password" id="regConfirm" required placeholder="Repeat password">
+
+                <div class="error" id="regError"></div>
+                <button type="submit">Register</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+</body>
+</html>   
