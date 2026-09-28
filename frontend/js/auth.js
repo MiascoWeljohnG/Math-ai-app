@@ -25,8 +25,10 @@ if (authForm) {
 
             if (data.role === "admin") {
                 window.location.href = "admin.html";
+            } else if (data.role === "teacher") {
+                window.location.href = "teacher.html";
             } else {
-                window.location.href = "user.html";
+                window.location.href = "landing.html";
             }
         } catch (err) {
             errorEl.textContent = err.message;
@@ -217,6 +219,14 @@ if (registerModal) {
 function requireAuth() {
     const token = localStorage.getItem("token");
     if (!token) window.location.href = "index.html";
+}
+
+function requireRole(expectedRole) {
+    const token = localStorage.getItem("token");
+    if (!token) { window.location.href = "index.html"; return; }
+    if (localStorage.getItem("role") !== expectedRole) {
+        window.location.href = "landing.html";
+    }
 }
 
 function logout() {

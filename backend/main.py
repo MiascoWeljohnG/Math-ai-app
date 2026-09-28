@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from database import Base, engine, SessionLocal
 from models import User
 from auth import hash_password
-from routes import auth_routes, admin_routes, user_routes
+from routes import auth_routes, admin_routes, user_routes, teacher_routes, materials_routes
 
 Base.metadata.create_all(bind=engine)
 
@@ -42,6 +42,8 @@ app.add_middleware(
 app.include_router(auth_routes.router)
 app.include_router(admin_routes.router)
 app.include_router(user_routes.router)
+app.include_router(teacher_routes.router)
+app.include_router(materials_routes.router)
 
 @app.get("/")
 def root():

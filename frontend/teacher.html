@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Teacher Dashboard</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 2rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .header h1 { font-size: 1.3rem; }
+        .btn { padding: 0.5rem 1rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-secondary { background: none; border: 1px solid var(--border); color: var(--text); }
+        .section { background: var(--bg-elevated); border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .section h2 { font-size: 1rem; color: var(--text-muted); margin-bottom: 1rem; }
+        .drop-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 1.25rem; min-height: 5rem; text-align: center; color: var(--text-muted); cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+        .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); color: var(--accent); }
+        .drop-zone .placeholder { margin: auto; font-size: 0.9rem; pointer-events: none; }
+        .file-chip { display: flex; align-items: center; gap: 0.5rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 999px; padding: 0.35rem 0.4rem 0.35rem 0.75rem; font-size: 0.8rem; color: var(--text); max-width: 260px; }
+        .file-chip .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-chip .fremove { background: var(--border); border: none; color: var(--text); width: 18px; height: 18px; border-radius: 50%; cursor: pointer; font-size: 0.7rem; line-height: 1; flex-shrink: 0; }
+        .file-chip .fremove:hover { background: var(--danger); }
+        table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+        th, td { text-align: left; padding: 0.6rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        th { color: var(--text-muted); }
+        .mini-progress-track { background: var(--border); border-radius: 999px; height: 6px; width: 80px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
+        .mini-progress-fill { background: var(--accent); height: 100%; }
+        .status { margin-top: 1rem; padding: 0.75rem; border-radius: 6px; display: none; }
+        .status.success { display: block; background: #064e3b; color: #6ee7b7; }
+        .status.error { display: block; background: #7f1d1d; color: #fca5a5; }
+        .theme-switch-wrap { margin-right: 0.75rem; display: inline-block; vertical-align: middle; }
+        .branch-select { padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text); font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Teacher Dashboard</h1>
+        <div>
+            <span class="theme-switch-wrap" id="themeSwitchWrap"></span>
+            <button class="btn btn-danger" onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Upload Course Material</h2>
+        <div class="drop-zone" id="dropZone">
+            <p class="placeholder" id="dropPlaceholder">Drag & drop text, PDF, or Word files here, or click to browse</p>
+        </div>
+        <input type="file" id="fileInput" multiple accept=".txt,.pdf,.docx" style="display:none">
+                <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1rem;">
+            <label for="branchSelect" style="color:var(--text-muted); font-size:0.85rem;">Math branch</label>
+            <select id="branchSelect" class="branch-select">
+                <option value="Algebra">Algebra</option>
+                <option value="Geometry">Geometry</option>
+                <option value="Statistics">Statistics</option>
+                <option value="Calculus">Calculus</option>
+                <option value="General">General (no specific branch)</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" style="margin-top:1rem" id="uploadBtn" onclick="uploadFiles()" disabled>Upload & Ingest</button>
+        <div class="status" id="uploadStatus"></div>
+    </div>
+
+    <div class="section">
+        <h2>Your Students</h2>
+        <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:0.5rem;">
+            Progress shown here is placeholder data until real lesson tracking exists — see the note in backend/progress.py.
+        </p>
+        <table id="studentsTable">
+            <thead>
+                <tr><th>Student</th><th>Email</th><th>Algebra</th><th>Geometry</th><th>Statistics</th><th>Calculus</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <p id="noStudents" style="color:var(--text-muted); font-size:0.85rem; margin-top:0.5rem; display:none;">No students registered yet.</p>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script src="js/teacher.js"></script>
+    <script>
+        requireRole("teacher");
+        document.getElementById("themeSwitchWrap").innerHTML = themeSwitchHTML("teacherThemeSwitch");
+        wireThemeSwitch("teacherThemeSwitch");
+    </script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Math AI — Course Materials</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+        .file-panel { width: 280px; flex-shrink: 0; background: var(--bg-elevated-2); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .file-panel-header { padding: 1rem 1.1rem; display: flex; align-items: center; gap: 0.5rem; border-bottom: 1px solid var(--border); }
+        .file-panel-header h1 { font-size: 1rem; }
+        .file-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
+        .file-item { display: block; width: 100%; text-align: left; padding: 0.65rem 0.8rem; border-radius: 8px; background: none; border: none; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; margin-bottom: 2px; word-break: break-word; }
+        .file-item:hover { background: var(--bg-elevated); }
+        .file-item.active { background: var(--bg-elevated); color: var(--text); }
+        .file-empty { padding: 1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .viewer-header { padding: 0.9rem 1.5rem; background: var(--bg-elevated); border-bottom: 1px solid var(--border); font-size: 0.95rem; }
+        .viewer-body { flex: 1; display: flex; min-height: 0; }
+        .pdf-pane { flex: 2; background: #525659; }
+        .pdf-pane iframe { width: 100%; height: 100%; border: none; }
+        .pdf-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; color: #cbd5e1; font-size: 0.9rem; }
+
+        .ask-pane { flex: 1; min-width: 280px; max-width: 380px; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg-elevated-2); }
+        .ask-pane-header { padding: 0.9rem 1.1rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; color: var(--text-muted); }
+        .ask-log { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 0.7rem; }
+        .ask-msg { padding: 0.6rem 0.85rem; border-radius: 8px; font-size: 0.85rem; line-height: 1.4; white-space: pre-wrap; max-width: 90%; }
+        .ask-msg.user { background: var(--accent); color: white; align-self: flex-end; }
+        .ask-msg.bot { background: var(--bg-elevated); border: 1px solid var(--border); align-self: flex-start; }
+        .ask-input-row { display: flex; gap: 0.5rem; padding: 0.75rem; border-top: 1px solid var(--border); }
+        .ask-input-row input { flex: 1; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font-size: 0.85rem; }
+        .ask-input-row button { padding: 0.6rem 1rem; border: none; border-radius: 8px; background: var(--accent); color: white; cursor: pointer; font-size: 0.85rem; }
+        .ask-input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .branch-filter { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.7rem 0.8rem; border-bottom: 1px solid var(--border); }
+        .branch-chip { padding: 0.25rem 0.65rem; border-radius: 999px; border: 1px solid var(--border); background: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; }
+        .branch-chip:hover { background: var(--bg-elevated); }
+        .branch-chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+        .branch-badge { display: inline-block; margin-top: 0.3rem; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.68rem; color: white; }
+        .badge-Algebra { background: #2e9bff; } .badge-Geometry { background: #b05555; }
+        .badge-Statistics { background: #e08a3c; } .badge-Calculus { background: #14b8a6; }
+        .badge-General { background: #64748b; }
+        .ask-note { align-self: center; font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 0.2rem 0.5rem; }
+    </style>
+</head>
+<body>
+    <div class="file-panel">
+        <div class="file-panel-header">
+            <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu"><span></span><span></span><span></span></button>
+            <h1>Course Materials</h1>
+        </div>
+        <div class="branch-filter" id="branchFilter"></div>
+        <div class="file-list" id="fileList">
+            <div class="file-empty">Loading...</div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="viewer-header" id="viewerHeader">Select a file to view it</div>
+        <div class="viewer-body">
+            <div class="pdf-pane" id="pdfPane">
+                <div class="pdf-placeholder">Pick a file on the left to preview it here</div>
+            </div>
+            <div class="ask-pane">
+                <div class="ask-pane-header">Ask the AI about what you're reading</div>
+                <div class="ask-log" id="askLog"></div>
+                <div class="ask-input-row">
+                    <input type="text" id="askInput" placeholder="Ask a question..." autocomplete="off">
+                    <button id="askSendBtn">Ask</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/materials.js"></script>
+    <script>requireAuth(); initNavDrawer();</script>
+</body>
+</html>

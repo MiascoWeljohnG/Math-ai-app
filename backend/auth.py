@@ -46,4 +46,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 def require_admin(user: User = Depends(get_current_user)) -> User:
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    return user   
+    return user
+
+def require_teacher(user: User = Depends(get_current_user)) -> User:
+    if user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Teacher access required")
+    return user
+
+def require_teacher_or_admin(user: User = Depends(get_current_user)) -> User:
+    # Uploading course material should work for both roles — teachers manage
+    # their own content day-to-day, admins can step in for anything.
+    if user.role not in ("teacher", "admin"):
+        raise HTTPException(status_code=403, detail="Teacher or admin access required")
+    return user

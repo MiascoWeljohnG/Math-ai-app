@@ -18,8 +18,11 @@ CHROMA_COLLECTION = "math_knowledge"
 # whatever your hardware can actually handle (start at 2-3 on a single GPU).
 MAX_CONCURRENT_CHATS = int(os.getenv("MAX_CONCURRENT_CHATS", "3"))
 
-# Hard timeout (seconds) for a single Ollama chat call, so one stuck request
-# can't hang forever and block a slot other students are waiting on. 180s is
-# generous on purpose — see the note in rag.py's ask() about model-swap
-# latency, which is the likely cause if you're hitting this often.
-OLLAMA_CHAT_TIMEOUT = float(os.getenv("OLLAMA_CHAT_TIMEOUT", "180"))
+# No per-request timeout by design: a slow answer finishing late is better
+# than cutting a student off mid-response. The semaphore above is what
+# protects the server from overload, not a timeout.
+
+# Max distance (Chroma's squared-L2) a retrieved document chunk may have to
+# still be considered "relevant" and injected as reference material. See the
+# comment in rag.py's _similarity_search for how to tune this.
+MAX_CONTEXT_DISTANCE = float(os.getenv("MAX_CONTEXT_DISTANCE", "1.2"))   

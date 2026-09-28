@@ -117,6 +117,7 @@ async function uploadFiles() {
     if (!selectedFiles.length) { alert("Select files first."); return; }
 
     const formData = new FormData();
+    formData.append("branch", document.getElementById("branchSelect").value);
     for (const file of selectedFiles) {
         formData.append("files", file);
     }
@@ -159,3 +160,46 @@ async function clearKB() {
     alert(data.message);
     loadFiles();
 }   
+// --- Create teacher account ---
+async function createTeacher() {
+    const username = document.getElementById("teacherUsername").value.trim();
+    const first_name = document.getElementById("teacherFirstName").value.trim();
+    const last_name = document.getElementById("teacherLastName").value.trim();
+    const email = document.getElementById("teacherEmail").value.trim();
+    const password = document.getElementById("teacherPassword").value;
+    const statusEl = document.getElementById("teacherStatus");
+
+    if (!username || !password) {
+        statusEl.className = "status error";
+        statusEl.textContent = "Username and password are required.";
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API}/admin/create-teacher`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getHeaders() },
+            body: JSON.stringify({ username, first_name, last_name, email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail);
+
+        statusEl.className = "status success";
+        statusEl.textContent = data.message;
+        ["teacherUsername", "teacherFirstName", "teacherLastName", "teacherEmail", "teacherPassword"].forEach(id => {
+            document.getElementById(id).value = "";
+        });
+        loadUsers();
+        // Give them a moment to see the success message before the modal
+        // closes, rather than yanking it away instantly.
+        setTimeout(() => {
+            const modal = document.getElementById("teacherModal");
+            if (modal) modal.classList.remove("active");
+            statusEl.className = "status";
+            statusEl.textContent = "";
+        }, 1200);
+    } catch (err) {
+        statusEl.className = "status error";
+        statusEl.textContent = err.message;
+    }
+}

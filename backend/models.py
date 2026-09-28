@@ -44,4 +44,17 @@ class ChatMessage(Base):
     conversation_id = Column(Integer, ForeignKey("conversations.id"), index=True, nullable=False)
     role = Column(String, nullable=False)  # "user" or "assistant"
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)   
+
+class Material(Base):
+    """One uploaded course file, tagged with the math branch it belongs to.
+    `filename` is the name on disk (with the hash prefix), which is what the
+    materials routes and the vector store's `source` metadata both use."""
+    __tablename__ = "materials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String, unique=True, index=True, nullable=False)
+    display_name = Column(String, nullable=False)
+    branch = Column(String, nullable=False, default="General")
+    uploaded_by = Column(String, nullable=False)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)

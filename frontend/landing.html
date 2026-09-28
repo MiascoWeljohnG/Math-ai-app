@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Math AI</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .header { display: flex; align-items: center; gap: 0.75rem; padding: 1rem 1.5rem; }
+        .header h1 { font-size: 1.2rem; }
+
+        .content { max-width: 1080px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+        .tiles { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-bottom: 2rem; }
+        .tile {
+            flex: 1; min-width: 210px; aspect-ratio: 1 / 1; max-height: 220px;
+            border-radius: 20px; border: 2px solid; cursor: pointer;
+            display: flex; flex-direction: column; justify-content: flex-end; padding: 1rem;
+            color: white; transition: transform 0.15s;
+        }
+        .tile:hover { transform: translateY(-3px); }
+        .tile.algebra   { background: #2e9bff; border-color: #5b5bf0; }
+        .tile.geometry  { background: #b05555; border-color: #7a1f1f; }
+        .tile.statistics{ background: #f0a468; border-color: #f5820c; }
+        .tile.calculus  { background: #2dd4bf; border-color: #0d9488; }
+
+        .tile-name { font-weight: 700; font-size: 1.05rem; margin-bottom: 0.5rem; }
+        .tile-progress-track { background: rgba(0,0,0,0.25); border-radius: 999px; height: 8px; overflow: hidden; }
+        .tile-progress-fill { background: white; height: 100%; border-radius: 999px; width: 0%; transition: width 0.4s ease; }
+        .tile-progress-pct { font-size: 0.75rem; margin-top: 4px; opacity: 0.9; }
+
+        .ask-bar { display: flex; align-items: center; gap: 0.75rem; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 999px; padding: 0.4rem 0.4rem 0.4rem 1.25rem; }
+        .ask-bar input { flex: 1; background: none; border: none; color: var(--text); font-size: 1rem; outline: none; }
+        .ask-bar input::placeholder { color: var(--text-muted); }
+        .ask-bar button {
+            background: #5b3fd6; color: white; border: none; border-radius: 999px;
+            padding: 0.7rem 1.4rem; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+        }
+        .ask-bar button:hover { background: #4c32bd; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+        <h1>Math AI</h1>
+    </div>
+
+    <div class="content">
+        <div class="tiles">
+            <div class="tile algebra" data-branch="Algebra">
+                <div class="tile-name">Algebra</div>
+                <div class="tile-progress-track"><div class="tile-progress-fill"></div></div>
+                <div class="tile-progress-pct">Loading...</div>
+            </div>
+            <div class="tile geometry" data-branch="Geometry">
+                <div class="tile-name">Geometry</div>
+                <div class="tile-progress-track"><div class="tile-progress-fill"></div></div>
+                <div class="tile-progress-pct">Loading...</div>
+            </div>
+            <div class="tile statistics" data-branch="Statistics">
+                <div class="tile-name">Statistics</div>
+                <div class="tile-progress-track"><div class="tile-progress-fill"></div></div>
+                <div class="tile-progress-pct">Loading...</div>
+            </div>
+            <div class="tile calculus" data-branch="Calculus">
+                <div class="tile-name">Calculus</div>
+                <div class="tile-progress-track"><div class="tile-progress-fill"></div></div>
+                <div class="tile-progress-pct">Loading...</div>
+            </div>
+        </div>
+
+        <div class="ask-bar">
+            <input type="text" id="landingInput" placeholder="Ask anything" autocomplete="off">
+            <button id="startChattingBtn">Start Chatting</button>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/landing.js"></script>
+    <script>requireAuth(); initNavDrawer();</script>
+</body>
+</html>
