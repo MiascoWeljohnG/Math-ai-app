@@ -1,7 +1,16 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-engine = create_engine("sqlite:///./app.db", connect_args={"check_same_thread": False})
+# Get the Supabase URL from Render. If it doesn't exist (like on your local PC), use SQLite.
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
+
+# PostgreSQL (Supabase) and SQLite require different connection setups
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(DATABASE_URL)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -12,9 +21,8 @@ def get_db():
     finally:
         db.close()
 
-
 def migrate_add_missing_columns():
-    """Add model columns missing from an existing app.db after create_all()."""
+    """Add model columns missing from an existing database after create_all()."""
     from sqlalchemy import inspect, text
     inspector = inspect(engine)
     with engine.begin() as conn:
