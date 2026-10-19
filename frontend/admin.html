@@ -2,59 +2,80 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Admin Dashboard</title>
     <script src="js/theme.js"></script>
     <link rel="stylesheet" href="css/theme.css">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 2rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
-        .header h1 { font-size: 1.3rem; }
-        .btn { padding: 0.5rem 1rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-primary { background: var(--accent); color: white; }
-        .btn-secondary { background: none; border: 1px solid var(--border); color: var(--text); }
-        .section { background: var(--bg-elevated); border-radius: 10px; padding: 1.5rem; margin-bottom: 1.5rem; }
-        .section h2 { font-size: 1rem; color: var(--text-muted); margin-bottom: 1rem; }
-        .drop-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 1.25rem; min-height: 5rem; text-align: center; color: var(--text-muted); cursor: pointer; transition: border-color 0.2s; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-        .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); color: var(--accent); }
-        .drop-zone .placeholder { margin: auto; font-size: 0.9rem; pointer-events: none; }
-        .file-chip { display: flex; align-items: center; gap: 0.5rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 999px; padding: 0.35rem 0.4rem 0.35rem 0.75rem; font-size: 0.8rem; color: var(--text); max-width: 260px; }
-        .file-chip.duplicate { border-color: #f59e0b; background: rgba(245,158,11,0.08); }
-        .file-chip .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .file-chip .fremove { background: var(--border); border: none; color: var(--text); width: 18px; height: 18px; border-radius: 50%; cursor: pointer; font-size: 0.7rem; line-height: 1; flex-shrink: 0; }
-        .file-chip .fremove:hover { background: var(--danger); }
-        .dup-warning { margin-top: 0.6rem; font-size: 0.82rem; color: #f59e0b; display: none; }
-        .dup-warning.show { display: block; }
-        table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
-        th, td { text-align: left; padding: 0.6rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
-        th { color: var(--text-muted); }
-        .status { margin-top: 1rem; padding: 0.75rem; border-radius: 6px; display: none; }
-        .status.success { display: block; background: #064e3b; color: #6ee7b7; }
-        .status.error { display: block; background: #7f1d1d; color: #fca5a5; }
-        .teacher-form input { flex:1; min-width:140px; padding:0.6rem; border-radius:6px; border:1px solid var(--border); background:var(--bg-input); color:var(--text); }
-
-        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
-        .modal-overlay.active { display: flex; }
-        .modal { background: var(--bg-elevated); border-radius: 12px; padding: 2rem; width: 420px; max-width: 90vw; position: relative; }
-        .modal h2 { color: var(--text); margin-bottom: 1.25rem; font-size: 1.2rem; }
-        .modal .close-btn { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; line-height: 1; }
-        .modal .close-btn:hover { color: var(--text); }
-        .modal label { display: block; color: var(--text-muted); font-size: 0.85rem; margin-top: 0.9rem; }
-        .modal input { width: 100%; padding: 0.65rem; margin-top: 0.3rem; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-input); color: var(--text); font-size: 0.95rem; box-sizing: border-box; }
-        .modal button[type="submit"] { width: 100%; padding: 0.7rem; margin-top: 1.5rem; border: none; border-radius: 6px; background: var(--accent); color: white; font-size: 0.95rem; cursor: pointer; }
-        .modal button[type="submit"]:hover { background: var(--accent-hover); }
-        .branch-select { padding: 0.5rem 0.7rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text); font-size: 0.9rem; }
-    </style>
+    <link rel="stylesheet" href="css/dashboard.css">
 </head>
 <body>
+<div class="page">
     <div class="header">
         <h1>Admin Dashboard</h1>
-        <div style="display:flex; align-items:center; gap:0.75rem;">
+        <div class="header-actions">
+            <!-- Hidden by default, made visible via JS for default admin -->
+            <button class="btn btn-secondary" id="openAdminModalBtn" style="display: none;">+ Add Admin</button>
             <button class="btn btn-secondary" id="openTeacherModalBtn">+ Add Teacher</button>
+            <div class="bell-wrap" id="bellWrap">
+                <button type="button" class="btn btn-secondary bell-btn" id="bellBtn" aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                    <span class="bell-badge" id="bellBadge" style="display:none;">0</span>
+                </button>
+                <div class="bell-panel" id="bellPanel" role="dialog" aria-label="Notifications">
+                    <div class="bell-head">
+                        <strong>Notifications</strong>
+                        <span class="bell-head-actions">
+                            <button type="button" class="link-btn" id="bellReadAll">Mark all read</button>
+                            <button type="button" class="link-btn" id="bellClear">Clear</button>
+                        </span>
+                    </div>
+                    <div class="bell-list" id="bellList"></div>
+                    <p class="empty bell-empty" id="bellEmpty">You're all caught up.</p>
+                </div>
+            </div>
             <span id="themeSwitchWrap"></span>
             <button class="btn btn-danger" onclick="logout()">Logout</button>
         </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <h2>Schools</h2>
+            <p class="hint">Accounts, subjects, files and progress are kept separate per school. Accounts made before schools existed stay in "Main".</p>
+        </div>
+        <div class="field-row">
+            <input type="text" id="schoolName" class="branch-select" placeholder="School name, e.g. School A" maxlength="80">
+            <button class="btn btn-primary" type="button" onclick="addSchool()">+ Add School</button>
+        </div>
+        <div id="schoolList" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.75rem;"></div>
+        <p id="noSchools" class="empty">No schools yet. Add one, then create its admin with "+ Add Admin".</p>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <h2>Registered Students</h2>
+            <p class="hint">Only students whose number is listed here can create an account, and they join the school it is listed under. Paste one number per line (commas and spaces work too).</p>
+        </div>
+        <select id="registrySchool" class="branch-select" aria-label="School for these students"></select>
+        <textarea id="registryNumbers" rows="4" style="width:100%; margin:0.6rem 0;" placeholder="2024-0001&#10;2024-0002&#10;2024-0003"></textarea>
+        <button class="btn btn-primary" type="button" onclick="addRegistered()">+ Add Registered Students</button>
+        <div class="status" id="registryStatus" role="status" aria-live="polite"></div>
+        <p id="registryCount" class="hint"></p>
+        <div class="table-wrap">
+            <table id="registryTable">
+                <thead><tr><th>Student number</th><th>School</th><th>Status</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section" id="deletionSection">
+        <div class="section-head">
+            <h2>Subject Deletion Requests <span class="tag" id="deletionCount" style="display:none;"></span></h2>
+            <p class="hint">A subject is deleted only when every admin approves. One rejection keeps it.</p>
+        </div>
+        <div class="stack" id="deletionList"></div>
+        <p class="empty" id="noDeletions">No pending requests.</p>
     </div>
 
     <div class="section">
@@ -64,9 +85,10 @@
         </div>
         <input type="file" id="fileInput" multiple accept=".txt,.pdf,.docx" style="display:none">
         <div class="dup-warning" id="dupWarning"></div>
-                <div style="display:flex; align-items:center; gap:0.6rem; margin-top:1rem;">
-            <label for="branchSelect" style="color:var(--text-muted); font-size:0.85rem;">Math branch</label>
+        <div class="field-row" style="margin-top:1rem;">
+            <label for="branchSelect" class="label">Math branch</label>
             <select id="branchSelect" class="branch-select">
+                <option value="Auto" selected>Auto-detect (AI)</option>
                 <option value="Algebra">Algebra</option>
                 <option value="Geometry">Geometry</option>
                 <option value="Statistics">Statistics</option>
@@ -74,51 +96,73 @@
                 <option value="General">General (no specific branch)</option>
             </select>
         </div>
-        <button class="btn btn-primary" style="margin-top:1rem" id="uploadBtn" onclick="uploadFiles()" disabled>Upload & Ingest</button>
+        <button class="btn btn-primary" id="uploadBtn" onclick="uploadFiles()">Upload & Ingest</button>
         <div class="status" id="uploadStatus"></div>
     </div>
 
     <div class="section">
-        <h2>Files in Knowledge Base</h2>
-        <table id="filesTable">
-            <thead><tr><th>File Name</th></tr></thead>
-            <tbody></tbody>
-        </table>
-        <p id="noFiles" style="color:var(--text-muted); font-size:0.85rem; margin-top:0.5rem">No files uploaded yet.</p>
+        <div class="section-head">
+            <h2>Files in Knowledge Base</h2>
+            <p class="hint">Every uploaded file, newest first, with who uploaded it and when.</p>
+        </div>
+        <div class="table-wrap">
+            <table id="filesTable">
+                <thead><tr><th>File</th><th>Branch</th><th>Uploaded by</th><th>Uploaded</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <p id="noFiles" class="empty">No files uploaded yet.</p>
     </div>
 
     <div class="section">
         <h2>Registered Users</h2>
-        <table id="usersTable">
-            <thead><tr><th>Username</th><th>First Name</th><th>Last Name</th><th>Email</th><th>Birthday</th><th>Role</th><th>Joined</th></tr></thead>
-            <tbody></tbody>
-        </table>
+        <div class="field-row" style="margin-bottom:0.75rem;">
+            <label for="roleFilter" class="label">Show</label>
+            <select id="roleFilter" class="branch-select">
+                <option value="all">All users</option>
+                <option value="user">Students</option>
+                <option value="teacher">Teachers</option>
+                <option value="school_admin">School admins</option>
+                <option value="admin">Main admins</option>
+            </select>
+            <select id="schoolFilter" class="branch-select" aria-label="School"></select>
+            <span id="userCount" class="hint"></span>
+        </div>
+        <div class="table-wrap">
+            <table id="usersTable">
+                <thead><tr><th>Username</th><th>First Name</th><th>Last Name</th><th>Email</th><th>Birthday</th><th>School</th><th>Role</th><th>Joined</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
 
-    <div class="section">
-        <h2>⚠️ Danger Zone</h2>
+    <div class="section danger">
+        <h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Danger Zone</h2>
+        <p class="hint" style="margin-bottom:0.75rem;">Deletes every uploaded file and everything the AI learned from them. This cannot be undone.</p>
         <button class="btn btn-danger" onclick="clearKB()">Clear Entire Knowledge Base</button>
     </div>
+</div>
 
+    <!-- Teacher Modal -->
     <div class="modal-overlay" id="teacherModal">
         <div class="modal">
             <button class="close-btn" id="closeTeacherModal">&times;</button>
             <h2>Add Teacher Account</h2>
             <form id="teacherForm">
-                <label>Username</label>
-                <input type="text" id="teacherUsername" required>
-
-                <label>First name</label>
-                <input type="text" id="teacherFirstName" required>
-
-                <label>Last name</label>
-                <input type="text" id="teacherLastName" required>
-
-                <label>Email</label>
-                <input type="email" id="teacherEmail" required>
-
+                <label>Username</label><input type="text" id="teacherUsername" required>
+                <label>First name</label><input type="text" id="teacherFirstName" required>
+                <label>Last name</label><input type="text" id="teacherLastName" required>
+                <label>Email</label><input type="email" id="teacherEmail" required>
+                <label>Birthday</label><input type="date" id="teacherBirthday" required>
+                <label>School</label><select id="teacherSchool"></select>
+                
                 <label>Temporary password</label>
-                <input type="password" id="teacherPassword" required minlength="6">
+                <div class="field">
+                    <input type="password" id="teacherPassword" required minlength="6">
+                    <button type="button" class="eye" data-target="teacherPassword" aria-label="Show password">
+                        <img src="img/view.svg" alt="Toggle Password" class="eye-icon">
+                    </button>
+                </div>
 
                 <div class="status" id="teacherStatus"></div>
                 <button type="submit">Create Teacher Account</button>
@@ -126,26 +170,94 @@
         </div>
     </div>
 
+    <!-- Admin Modal -->
+    <div class="modal-overlay" id="adminModal">
+        <div class="modal">
+            <button class="close-btn" id="closeAdminModal">&times;</button>
+            <h2>Add Admin Account</h2>
+            <form id="adminForm">
+                <label>Username</label><input type="text" id="adminUsername" required>
+                <label>First name</label><input type="text" id="adminFirstName" required>
+                <label>Last name</label><input type="text" id="adminLastName" required>
+                <label>Email</label><input type="email" id="adminEmail" required>
+                <label>Birthday</label><input type="date" id="adminBirthday" required>
+                <label>School (an admin for a school only sees that school)</label><select id="adminSchool"></select>
+                
+                <label>Temporary password</label>
+                <div class="field">
+                    <input type="password" id="adminPassword" required minlength="6">
+                    <button type="button" class="eye" data-target="adminPassword" aria-label="Show password">
+                        <img src="img/view.svg" alt="Toggle Password" class="eye-icon">
+                    </button>
+                </div>
+
+                <div class="status" id="adminStatus"></div>
+                <button type="submit">Create Admin Account</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Clear KB Modal -->
+    <div class="modal-overlay" id="clearKbModal">
+        <div class="modal">
+            <button class="close-btn" id="closeClearKbModal">&times;</button>
+            <h2 style="color: var(--danger)">Clear Knowledge Base?</h2>
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem;">
+                This will DELETE all ingested documents. This action cannot be undone. Are you sure?
+            </p>
+            <div style="display: flex; gap: 1rem;">
+                <button class="btn btn-secondary" id="cancelClearKbBtn" style="flex: 1;">Cancel</button>
+                <button class="btn btn-danger" id="confirmClearKbBtn" style="flex: 1;">Yes, Clear Everything</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Modal -->
+    <div class="modal-overlay" id="notificationModal">
+        <div class="modal" style="text-align: center; width: 350px;">
+            <h2 id="notificationTitle" style="color: var(--text)">Notification</h2>
+            <p id="notificationMessage" style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem;"></p>
+            <button class="btn btn-primary" id="closeNotificationBtn" style="width: 100%;">OK</button>
+        </div>
+    </div>
+
+    <script src="js/modal.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/topic-picker.js"></script>
+    <script src="js/material-table.js"></script>
+    <script src="js/registry.js"></script>
     <script src="js/admin.js"></script>
     <script>
         requireRole("admin");
         document.getElementById("themeSwitchWrap").innerHTML = themeSwitchHTML("adminThemeSwitch");
         wireThemeSwitch("adminThemeSwitch");
 
+        // Teacher Modal logic
         const teacherModal = document.getElementById("teacherModal");
-        document.getElementById("openTeacherModalBtn").addEventListener("click", () => {
-            teacherModal.classList.add("active");
-        });
-        document.getElementById("closeTeacherModal").addEventListener("click", () => {
-            teacherModal.classList.remove("active");
-        });
-        teacherModal.addEventListener("click", (e) => {
-            if (e.target === teacherModal) teacherModal.classList.remove("active");
-        });
-        document.getElementById("teacherForm").addEventListener("submit", (e) => {
-            e.preventDefault();
-            createTeacher();
+        document.getElementById("openTeacherModalBtn").addEventListener("click", () => teacherModal.classList.add("active"));
+        document.getElementById("closeTeacherModal").addEventListener("click", () => teacherModal.classList.remove("active"));
+        teacherModal.addEventListener("click", (e) => { if (e.target === teacherModal) teacherModal.classList.remove("active"); });
+        document.getElementById("teacherForm").addEventListener("submit", (e) => { e.preventDefault(); createTeacher(); });
+
+        // Admin Modal logic
+        const adminModal = document.getElementById("adminModal");
+        document.getElementById("openAdminModalBtn").addEventListener("click", () => adminModal.classList.add("active"));
+        document.getElementById("closeAdminModal").addEventListener("click", () => adminModal.classList.remove("active"));
+        adminModal.addEventListener("click", (e) => { if (e.target === adminModal) adminModal.classList.remove("active"); });
+        document.getElementById("adminForm").addEventListener("submit", (e) => { e.preventDefault(); createAdmin(); });
+
+        // Password Show/Hide Toggle Logic for Admin Modals
+        document.querySelectorAll(".modal .eye").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const input = document.getElementById(btn.dataset.target);
+                if (!input) return;
+                const show = input.type === "password";
+                input.type = show ? "text" : "password";
+                const icon = btn.querySelector('.eye-icon');
+                if (icon) {
+                    icon.src = show ? 'img/hide.svg' : 'img/view.svg';
+                }
+            });
         });
     </script>
 </body>

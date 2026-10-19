@@ -1,0 +1,56 @@
+/* Shared top strip + header used on the dashboard and profile pages.
+   The header only has the burger + logo — page links live in the drawer. */
+.top-strip {
+    background: var(--strip-bg); color: #fff; text-align: center;
+    font-family: Georgia, 'Times New Roman', serif; font-size: 0.72rem; letter-spacing: 0.02em;
+    padding: 0.4rem 1rem;
+}
+.top-strip .sep { margin: 0 0.5rem; opacity: 0.7; }
+
+.app-header {
+    display: flex; align-items: center; gap: 0.9rem;
+    background: var(--header-bg); padding: 0.55rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 30;
+}
+.brand { display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; }
+.brand img { display: block; }
+.brand .brand-eye { height: 36px; width: auto; }
+.brand .brand-word { height: 28px; width: auto; }
+/* Bottom Footer */
+.bottom-footer {
+    width: 100%;
+    background: var(--strip-bg);
+    color: #fff;
+    text-align: center;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    padding: 0.6rem 1rem;
+    margin-top: auto; /* Pushes the footer to the bottom of flex layouts */
+    z-index: 30; /* Ensures it stays visible above other floating elements */
+}
+.bottom-footer .sep { 
+    margin: 0 0.5rem; 
+    opacity: 0.7; 
+}
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh; /* Forces the body to be at least the height of the full screen */
+}
+
+/* 
+  Apply 'flex: 1' to the container that holds your main page content. 
+  If you use a <main> tag, use 'main'. If you use a div like <div class="container">, 
+  use '.container' instead.
+*/
+main {
+    flex: 1; /* This forces the content area to stretch and fill all remaining empty space, pushing the footer down */
+}
+
+/* Ensure your footer isn't given any weird absolute positioning */
+footer {
+    /* No flex properties needed here, it will naturally sit at the bottom */
+    width: 100%;
+}

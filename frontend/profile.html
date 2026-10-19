@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>iSipnayan — Edit Profile</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap">
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/app-shell.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Roboto', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .page { max-width: 1000px; margin: 0 auto; padding: 1.2rem 1.5rem 3rem; }
+        .page-head { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 1rem; }
+        .back { background: none; border: none; color: var(--text); font-size: 1.8rem; cursor: pointer; line-height: 1; text-decoration: none; }
+        .page-head h1 { font-size: 1.7rem; font-weight: 900; color: var(--heading); line-height: 1.1; }
+        .page-head p { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+
+        .layout { display: grid; grid-template-columns: 1.55fr 1fr; gap: 1.2rem; align-items: start; }
+        @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+        .card { background: var(--card-mint); border: 1px solid var(--field-border); border-radius: 6px; padding: 1.1rem 1.2rem; box-shadow: 1px 2px 6px rgba(0,0,0,0.15); }
+        .card + .card { margin-top: 1.2rem; }
+        .card h2 { font-size: 1.15rem; font-weight: 700; color: var(--heading); display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.9rem; }
+        .card h2 svg { width: 20px; height: 20px; }
+
+        .avatar-row { display: flex; align-items: center; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .avatar { position: relative; width: 84px; height: 84px; flex: none; }
+        .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid var(--field-border); background: #5a6aa0; }
+        .avatar .cam { position: absolute; right: -2px; bottom: -2px; width: 26px; height: 26px; border-radius: 50%; background: #333; color: #fff; display: flex; align-items: center; justify-content: center; }
+        .avatar .cam svg { width: 14px; height: 14px; }
+        .btn-photo { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--card-mint); border: 1px solid var(--field-border); border-radius: 6px; padding: 0.4rem 0.8rem; font: 700 0.8rem 'Roboto', sans-serif; color: var(--text); cursor: pointer; }
+        .btn-photo:hover { background: var(--hover-bg); }
+        .btn-link { background: none; border: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; margin-left: 0.6rem; text-decoration: underline; }
+
+        .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem 1rem; }
+        @media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
+        .full { grid-column: 1 / -1; }
+        label.lbl { display: block; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.25rem; color: var(--text); }
+        label.lbl small { color: var(--text-muted); font-weight: 500; }
+        .inp { position: relative; }
+        .inp svg { position: absolute; left: 0.55rem; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--text-muted); pointer-events: none; }
+        .inp input, .inp select {
+            width: 100%; height: 34px; border: 1px solid var(--field-border); border-radius: 5px; background: var(--bg-elevated); color: var(--text);
+            font: 700 0.82rem 'Roboto', sans-serif; padding: 0 0.6rem 0 2rem; outline: none;
+        }
+        .inp input::placeholder { font-weight: 400; color: var(--text-muted); }
+        .inp input:focus, .inp select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(101,150,79,0.25); }
+        .inp input[readonly] { background: var(--hover-bg); cursor: not-allowed; }
+
+        .save-actions { display: flex; flex-direction: column; gap: 0.6rem; }
+        .btn-save { height: 34px; border: 1px solid var(--field-border); border-radius: 5px; background: #d6f7e6; color: #0b3d18; font: 700 0.85rem 'Roboto', sans-serif; cursor: pointer; }
+        [data-theme="dark"] .btn-save { background: #23402b; color: #eaf6ea; }
+        .btn-save:hover { filter: brightness(0.96); }
+        .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-cancel { height: 34px; border: 1px solid var(--field-border); border-radius: 5px; background: var(--bg-elevated); color: var(--text); font: 700 0.85rem 'Roboto', sans-serif; cursor: pointer; }
+        .btn-cancel:hover { background: var(--hover-bg); }
+        .msg { font-size: 0.8rem; margin-top: 0.7rem; display: none; }
+        .msg.ok { display: block; color: #1c7c1c; }
+        .msg.error { display: block; color: var(--danger); }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+        <a class="brand" href="landing.html"><img class="brand-eye" src="img/logo-eye.png" alt=""><img class="brand-word" src="img/logo-word.png" alt="iSipnayan"></a>
+    </header>
+
+    <main class="page">
+        <div class="page-head">
+            <a class="back" href="landing.html" aria-label="Back">&larr;</a>
+            <div><h1>Edit Profile</h1><p>Update your personal information</p></div>
+        </div>
+
+        <form id="profileForm" class="layout" novalidate>
+            <section class="card">
+                <div class="avatar-row">
+                    <div class="avatar">
+                        <img id="avatarImg" alt="Profile photo" src="">
+                        <span class="cam"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg></span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn-photo" id="changePhoto"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg> Change Photo</button>
+                        <button type="button" class="btn-link" id="removePhoto">Remove</button>
+                        <input type="file" id="photoInput" accept="image/*" hidden>
+                    </div>
+                </div>
+
+                <h2><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v3h16v-3c0-2.8-3.6-5-8-5Z"/></svg> Personal Details</h2>
+                <div class="grid2">
+                    <div class="full"><label class="lbl" for="fullName">Full Name:</label><div class="inp"><input id="fullName" type="text" style="padding-left:.6rem" autocomplete="name"></div></div>
+                    <div class="full"><label class="lbl" for="email">Email Address:</label>
+                        <div class="inp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18a1 1 0 0 1 1 1v.5l-10 6.2L2 6.5V6a1 1 0 0 1 1-1Zm-1 4.1V18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V9.1l-9.5 5.9a1 1 0 0 1-1 0L2 9.1Z"/></svg><input id="email" type="email" autocomplete="email"></div></div>
+                    <div><label class="lbl" for="contact">Contact Number:</label>
+                        <div class="inp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.6 3.6a1 1 0 0 1-.25 1l-2.25 2.2Z"/></svg><input id="contact" type="tel" placeholder="09XXXXXXXXX" autocomplete="tel"></div></div>
+                    <div><label class="lbl" for="birthday">Date of Birth:</label>
+                        <div class="inp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 2v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7Zm-2 8h14v10H5V10Z"/></svg><input id="birthday" type="date"></div></div>
+                    <div><label class="lbl" for="gender">Gender:</label>
+                        <div class="inp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v3h16v-3c0-2.8-3.6-5-8-5Z"/></svg>
+                            <select id="gender"><option value="">Select</option><option>Male</option><option>Female</option><option>Prefer not to say</option></select></div></div>
+                    <div><label class="lbl" for="address">Address <small>(Optional)</small></label>
+                        <div class="inp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg><input id="address" type="text" placeholder="e.g. Cavite Philippines" autocomplete="street-address"></div></div>
+                </div>
+            </section>
+
+            <div>
+                <section class="card">
+                    <h2><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 1 9l11 6 9-4.9V17h2V9L12 3ZM5 13.2V17c0 1.7 3.1 3 7 3s7-1.3 7-3v-3.8l-7 3.8-7-3.8Z"/></svg> Academic information</h2>
+                    <div class="grid2">
+                        <div class="full"><label class="lbl" for="studentId">Student ID</label>
+                            <div class="inp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-3.5 8h7c0-1.9-1.6-3-3.5-3s-3.5 1.1-3.5 3ZM14 9v2h6V9h-6Zm0 3.5v2h6v-2h-6Z"/></svg><input id="studentId" type="text"></div></div>
+                        <div class="full"><label class="lbl" for="gradeSection">Grade &amp; Section:</label>
+                            <div class="inp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h10a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3V4Zm13 3h3v10a3 3 0 0 1-3 3V7Z"/></svg>
+                                <select id="gradeSection"><option value="">Select</option><option>Grade 11 - GAS</option><option>Grade 11 - STEM</option><option>Grade 11 - ABM</option><option>Grade 11 - HUMSS</option><option>Grade 12 - GAS</option><option>Grade 12 - STEM</option><option>Grade 12 - ABM</option><option>Grade 12 - HUMSS</option></select></div></div>
+                        <div class="full"><label class="lbl" for="strand">Strand</label>
+                            <div class="inp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 20V10h3v10H4Zm6.5 0V4h3v16h-3ZM17 20v-7h3v7h-3Z"/></svg>
+                                <select id="strand"><option value="">Select</option><option>GAS (General Academic Strand)</option><option>STEM (Science, Technology, Engineering and Mathematics)</option><option>ABM (Accountancy, Business and Management)</option><option>HUMSS (Humanities and Social Sciences)</option></select></div></div>
+                        <div class="full"><label class="lbl" for="schoolYear">School Year</label>
+                            <div class="inp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 2v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7Zm-2 8h14v10H5V10Z"/></svg>
+                                <select id="schoolYear"></select></div></div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h2>Save Changes</h2>
+                    <div class="save-actions">
+                        <button type="submit" class="btn-save" id="saveBtn"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg> Save Changes</button>
+                        <button type="button" class="btn-cancel" id="cancelBtn"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg> Cancel</button>
+                    </div>
+                    <p class="msg" id="profileMsg"></p>
+                </section>
+            </div>
+        </form>
+    </main>
+
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/profile.js"></script>
+    <script>requireAuth(); initNavDrawer();</script>
+</body>
+<footer class="bottom-footer">All Rights Reserved <span class="sep">|</span> @2026</footer>
+</html>

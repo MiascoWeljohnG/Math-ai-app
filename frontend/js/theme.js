@@ -2,12 +2,12 @@
 // body paints, so there's no flash of the wrong theme). Also exposes
 // toggleTheme() for the nav drawer's light/dark switch.
 (function () {
-    const saved = localStorage.getItem("theme") || "dark";
+    const saved = localStorage.getItem("theme") || "light";
     document.documentElement.setAttribute("data-theme", saved);
 })();
 
 function toggleTheme() {
-    const current = document.documentElement.getAttribute("data-theme") || "dark";
+    const current = document.documentElement.getAttribute("data-theme") || "light";
     const next = current === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
     localStorage.setItem("theme", next);

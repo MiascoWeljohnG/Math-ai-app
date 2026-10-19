@@ -1,0 +1,167 @@
+/* Shared look for the teacher and admin dashboards (colours come from theme.css). */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.45; }
+.page { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+
+/* ---- header ---- */
+.header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;
+          margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.header h1 { font-size: 1.4rem; color: var(--heading); }
+.header-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+
+/* ---- cards ---- */
+.section { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;
+           padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+.section h2 { font-size: 1.05rem; color: var(--heading); display: flex; align-items: center; gap: 0.4rem; }
+.section > h2 { margin-bottom: 1rem; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.hint { color: var(--text-muted); font-size: 0.82rem; }
+.section.danger { border-color: var(--danger); }
+.section.danger h2 { color: var(--danger); }
+
+/* ---- buttons ---- */
+.btn { padding: 0.5rem 1rem; border: 1px solid transparent; border-radius: 8px; cursor: pointer; font: inherit; font-size: 0.9rem;
+       transition: background 0.15s, border-color 0.15s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover:not(:disabled) { background: var(--danger-hover); }
+.btn-secondary { background: transparent; border-color: var(--border); color: var(--text); }
+.btn-secondary:hover:not(:disabled) { background: var(--hover-bg); }
+.btn-sm { padding: 0.3rem 0.75rem; font-size: 0.8rem; }
+.btn-block { width: 100%; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn:focus-visible, .branch-select:focus-visible, textarea:focus-visible, .lesson-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---- form fields ---- */
+.branch-select, textarea { padding: 0.55rem 0.7rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-input);
+                           color: var(--text); font: inherit; font-size: 0.9rem; }
+textarea { width: 100%; resize: vertical; }
+.label { display: block; font-size: 0.8rem; color: var(--text-muted); }
+.field-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.field-row + .btn { margin-top: 1rem; }
+
+/* ---- upload ---- */
+.drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 1.25rem; min-height: 5rem; text-align: center; color: var(--text-muted);
+             cursor: pointer; transition: border-color 0.2s, background 0.2s; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); color: var(--accent); background: var(--hover-bg); }
+.drop-zone .placeholder { margin: auto; font-size: 0.9rem; pointer-events: none; }
+.file-chip { display: flex; align-items: center; gap: 0.5rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 999px;
+             padding: 0.35rem 0.4rem 0.35rem 0.75rem; font-size: 0.8rem; color: var(--text); max-width: 260px; }
+.file-chip.duplicate { border-color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+.file-chip .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-chip .fremove { background: var(--border); border: none; color: var(--text); width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
+                      font-size: 0.7rem; line-height: 1; flex-shrink: 0; }
+.file-chip .fremove:hover { background: var(--danger); color: #fff; }
+.dup-warning { margin-top: 0.6rem; font-size: 0.82rem; color: #b45309; display: none; }
+.dup-warning.show { display: block; }
+
+/* ---- tables ---- */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.88rem; vertical-align: middle; }
+th { color: var(--text-muted); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; white-space: nowrap; }
+tbody tr:hover { background: var(--hover-bg); }
+td.file-name { overflow-wrap: anywhere; min-width: 170px; }
+td.nowrap { white-space: nowrap; }
+.cell-sub { display: block; color: var(--text-muted); font-size: 0.76rem; }
+.tag { display: inline-block; padding: 0.1rem 0.6rem; border-radius: 999px; background: var(--nav-active-bg); color: var(--heading); font-size: 0.75rem; font-weight: 600; }
+.empty { color: var(--text-muted); font-size: 0.88rem; margin-top: 0.75rem; }
+.mini-progress-track { background: var(--border); border-radius: 999px; height: 6px; width: 80px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
+.mini-progress-fill { background: var(--accent); height: 100%; display: block; }
+
+/* ---- status messages ---- */
+.status { margin-top: 1rem; padding: 0.7rem 0.9rem; border-radius: 8px; display: none; font-size: 0.88rem; background: var(--bg-input); border: 1px solid var(--border); }
+.status.success { display: block; background: #e3f4e6; color: #14532d; border-color: #b7dfbf; }
+.status.error { display: block; background: #fde8e8; color: #7f1d1d; border-color: #f3b9b9; }
+[data-theme="dark"] .status.success { background: #0f3a28; color: #86efac; border-color: #1f5c40; }
+[data-theme="dark"] .status.error { background: #4a1717; color: #fca5a5; border-color: #7f2a2a; }
+
+/* ---- teacher: lesson manager ---- */
+.lesson-toolbar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.lesson-layout { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 1.25rem; align-items: start; }
+.side-panel { display: grid; gap: 0.9rem; }
+.panel { border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem; }
+.panel h3 { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 0.6rem; }
+.stack { display: grid; gap: 0.5rem; }
+.check { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; }
+.lesson-list { display: grid; gap: 0.35rem; align-content: start; max-height: 240px; overflow-y: auto; }
+.lesson-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; border-radius: 6px;
+              background: var(--bg-input); border: 1px solid transparent; }
+.lesson-row.active { border-color: var(--accent); background: var(--nav-active-bg); }
+.lesson-row .lesson-edit { flex: 1; overflow-wrap: anywhere; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; font: inherit; font-size: 0.88rem; }
+.lesson-row .lesson-delete { border: 0; background: transparent; color: var(--danger); cursor: pointer; font: inherit; font-size: 0.8rem; }
+.lesson-row .lesson-delete:hover { text-decoration: underline; }
+.lesson-form { display: grid; gap: 0.5rem; position: sticky; top: 1rem; }
+.lesson-form input { width: 100%; padding: 0.65rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font: inherit; }
+.lesson-form textarea { min-height: 340px; }
+.lesson-form .btn { justify-self: start; }
+
+/* ---- admin: modals ---- */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: var(--bg-elevated); border-radius: 12px; padding: 2rem; width: 420px; max-width: 90vw; max-height: 92vh; overflow-y: auto; position: relative; }
+.modal h2 { color: var(--text); margin-bottom: 1.25rem; font-size: 1.2rem; }
+.modal .close-btn { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; line-height: 1; }
+.modal .close-btn:hover { color: var(--text); }
+.modal label { display: block; color: var(--text-muted); font-size: 0.85rem; margin-top: 0.9rem; }
+.modal input { width: 100%; padding: 0.65rem; margin-top: 0.3rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font-size: 0.95rem; }
+.modal button[type="submit"] { width: 100%; padding: 0.7rem; margin-top: 1.5rem; border: none; border-radius: 8px; background: var(--accent); color: white; font-size: 0.95rem; cursor: pointer; }
+.modal button[type="submit"]:hover { background: var(--accent-hover); }
+.field { position: relative; }
+.field input { padding-right: 2.6rem; }
+.field .eye { position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; display: flex; padding: 0.2rem; }
+.field .eye img.eye-icon { width: 20px; height: 20px; object-fit: contain; }
+[data-theme="dark"] .field .eye img.eye-icon { filter: invert(1); }
+
+@media (max-width: 760px) {
+    .page { padding: 1rem 0.75rem 2rem; }
+    .section { padding: 1rem; }
+    .lesson-layout { grid-template-columns: 1fr; }
+    .lesson-form { position: static; }
+}
+
+/* subject deletion requests (admin page) */
+.req-card { border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem; display: grid; gap: 0.35rem; }
+.req-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.3rem; }
+.lesson-toolbar .hint { flex-basis: 100%; }
+
+/* A select is as wide as its longest option; long file names must not stretch the side column over the lesson form */
+.lesson-layout > *, .panel, .stack { min-width: 0; }
+.stack .branch-select { width: 100%; max-width: 100%; text-overflow: ellipsis; }
+
+/* admin notification bell */
+.bell-wrap { position: relative; }
+.bell-btn { position: relative; display: inline-flex; align-items: center; padding: 0.5rem 0.65rem; }
+.bell-badge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--danger); color: #fff;
+              font-size: 0.7rem; font-weight: 700; line-height: 18px; text-align: center; }
+.bell-panel { display: none; position: absolute; right: 0; top: calc(100% + 8px); width: 360px; max-width: 90vw; z-index: 60; background: var(--bg-elevated);
+              border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); overflow: hidden; }
+.bell-panel.open { display: block; }
+.bell-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; color: var(--heading); }
+.bell-head-actions { display: flex; gap: 0.75rem; }
+.link-btn { background: none; border: 0; padding: 0; font: inherit; font-size: 0.78rem; color: var(--accent); cursor: pointer; }
+.link-btn:hover { text-decoration: underline; }
+.bell-list { max-height: 420px; overflow-y: auto; }
+.bell-item { display: block; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--border); padding: 0.7rem 1rem 0.7rem 1.4rem; position: relative;
+             font: inherit; color: var(--text); cursor: pointer; }
+.bell-item:hover { background: var(--hover-bg); }
+.bell-item.unread::before { content: ""; position: absolute; left: 0.6rem; top: 1.05rem; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.bell-item.warn.unread::before { background: #f59e0b; }
+.bell-item .b-title { display: block; font-size: 0.85rem; font-weight: 600; }
+.bell-item .b-msg { display: block; font-size: 0.8rem; color: var(--text-muted); overflow-wrap: anywhere; margin-top: 0.1rem; }
+.bell-item .b-time { display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem; }
+.bell-empty { padding: 0 1rem 1rem; text-align: center; }
+
+/* teacher: "New subject" dialog (a native <dialog>, so it sits above everything else) */
+.subject-dialog { margin: auto; /* the global "* { margin: 0 }" reset removes the dialog's default centering */ background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; width: 460px; max-width: 92vw; max-height: 92vh; overflow-y: auto; }
+.subject-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+.subject-dialog h2 { margin-bottom: 0.5rem; font-size: 1.2rem; }
+.subject-dialog label { display: block; margin-top: 0.8rem; font-size: 0.85rem; color: var(--text-muted); }
+.subject-dialog input[type="text"], .subject-dialog input[type="file"], .subject-dialog textarea { width: 100%; box-sizing: border-box; margin-top: 0.3rem; padding: 0.6rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font: inherit; }
+.subject-dialog textarea { resize: vertical; }
+.subject-dialog .check { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.6rem; color: var(--text); }
+.subject-dialog .hint { margin-top: 0.3rem; }
+.subject-dialog .dialog-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.2rem; }
+.status.info { display: block; }
+.modal select { width: 100%; padding: 0.65rem; margin-top: 0.3rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font-size: 0.9rem; }

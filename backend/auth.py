@@ -48,6 +48,12 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+def require_school_admin(user: User = Depends(get_current_user)) -> User:
+    # A school admin only ever works inside their own school (see routes/school_admin_routes.py).
+    if user.role != "school_admin" or user.school_id is None:
+        raise HTTPException(status_code=403, detail="School admin access required")
+    return user
+
 def require_teacher(user: User = Depends(get_current_user)) -> User:
     if user.role != "teacher":
         raise HTTPException(status_code=403, detail="Teacher access required")

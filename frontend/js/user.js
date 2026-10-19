@@ -16,7 +16,14 @@ function authHeaders() {
         "Authorization": `Bearer ${localStorage.getItem("token")}`,
     };
 }
-
+// Protects LaTeX math brackets from being deleted by the Markdown parser
+function protectMath(text) {
+    return text
+        .replace(/\\\[/g, '\\\\[')
+        .replace(/\\\]/g, '\\\\]')
+        .replace(/\\\(/g, '\\\\(')
+        .replace(/\\\)/g, '\\\\)');
+}
 // --- Sidebar: conversation list ---
 async function loadConversations() {
     try {
@@ -68,7 +75,7 @@ async function openConversation(id) {
             showGreeting();
         } else {
             for (const m of messages) {
-                addMessage(m.content, m.role === "user" ? "user" : "bot");
+                addMessage(m.content, m.role === "user" ? "user" : "bot", m.images);
             }
         }
     } catch (_) {
@@ -86,7 +93,7 @@ function startNewChat() {
 newChatBtn.addEventListener("click", startNewChat);
 
 async function deleteConversation(id) {
-    if (!confirm("Delete this conversation? This can't be undone.")) return;
+    if (!await uiConfirm("Delete this conversation? This can't be undone.", { title: "Delete conversation", okText: "Delete", danger: true })) return;
     try {
         const res = await fetch(`${API}/conversations/${id}`, {
             method: "DELETE",
@@ -144,10 +151,29 @@ input.addEventListener("keydown", (e) => {
     }
 });
 
-function addMessage(text, role) {
+function addMessage(text, role, imageDataUrl) {
     const div = document.createElement("div");
     div.className = `msg ${role}`;
-    div.textContent = text;
+    
+    // Parse Markdown tables/formatting
+    // Change this line:
+    if (role === "bot") text = stripEmoji(text);
+    div.innerHTML = typeof marked !== "undefined" ? marked.parse(protectMath(text)) : text;
+    
+    // Tell MathJax to turn \frac and [ ] into visual math
+    if (typeof MathJax !== "undefined") {
+        MathJax.typesetPromise([div]).catch((err) => console.log(err));
+    }
+
+    const imageUrls = Array.isArray(imageDataUrl) ? imageDataUrl : [imageDataUrl];
+    for (const imageUrl of imageUrls) {
+        if (typeof imageUrl !== "string" || !/^data:image\/(?:jpeg|png|webp);base64,/.test(imageUrl)) continue;
+        const img = document.createElement("img");
+        img.className = "attached";
+        img.src = imageUrl;
+        img.alt = "Attached image";
+        div.appendChild(img);
+    }
     chat.appendChild(div);
     chat.scrollTop = chat.scrollHeight;
     return div;
@@ -188,6 +214,72 @@ function startQueuePolling(thinkingDiv) {
     return () => { stopped = true; clearInterval(interval); };
 }
 
+// --- Image attachment ---
+const attachImageBtn = document.getElementById("attachImageBtn");
+const imageFileInput = document.getElementById("imageFileInput");
+const imagePreviewRow = document.getElementById("imagePreviewRow");
+const imagePreviewThumb = document.getElementById("imagePreviewThumb");
+const removeImageBtn = document.getElementById("removeImageBtn");
+
+let pendingImageDataUrl = null; // full "data:image/...;base64,...." for preview/display
+let pendingImageBase64 = null;  // same, with the data: prefix stripped, for the API
+let pendingImageMimeType = null;
+
+attachImageBtn.addEventListener("click", () => imageFileInput.click());
+
+imageFileInput.addEventListener("change", () => {
+    const file = imageFileInput.files[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        uiAlert("Choose a JPEG, PNG, or WebP image.");
+        imageFileInput.value = "";
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+        // Shrink big phone photos first: smaller uploads are faster and stay under the AI provider's size limit.
+        const img = new Image();
+        img.onload = () => {
+            const MAX_SIDE = 1600;
+            let dataUrl = reader.result, mime = file.type;
+            if (Math.max(img.width, img.height) > MAX_SIDE || file.size > 1500000) {
+                const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
+                const canvas = document.createElement("canvas");
+                canvas.width = Math.round(img.width * scale);
+                canvas.height = Math.round(img.height * scale);
+                const ctx = canvas.getContext("2d");
+                ctx.fillStyle = "#fff"; // JPEG has no transparency
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+                mime = "image/jpeg";
+            }
+            pendingImageDataUrl = dataUrl;
+            pendingImageBase64 = dataUrl.split(",")[1]; // strip "data:image/png;base64,"
+            pendingImageMimeType = mime;
+            imagePreviewThumb.src = pendingImageDataUrl;
+            imagePreviewRow.classList.add("show");
+        };
+        img.onerror = () => uiAlert("Could not read that image. Try another one.");
+        img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+    imageFileInput.value = ""; // allow re-selecting the same file later
+});
+
+removeImageBtn.addEventListener("click", clearPendingImage);
+
+function clearPendingImage() {
+    pendingImageDataUrl = null;
+    pendingImageBase64 = null;
+    pendingImageMimeType = null;
+    imagePreviewRow.classList.remove("show");
+    imagePreviewThumb.src = "";
+}
+
+// Sends the question and streams the answer back token by token via
+// stream-ask.js, instead of waiting for the whole response — this is what
+// makes replies start appearing immediately instead of after a long pause.
 async function sendQuestion() {
     const question = input.value.trim();
     if (!question) return;
@@ -198,51 +290,68 @@ async function sendQuestion() {
         chat.innerHTML = "";
     }
 
-    addMessage(question, "user");
+    addMessage(question, "user", pendingImageDataUrl);
+    const imageToSend = pendingImageBase64 ? [pendingImageBase64] : null;
+    const imageTypesToSend = pendingImageMimeType ? [pendingImageMimeType] : null;
+    clearPendingImage();
     input.value = "";
     sendBtn.disabled = true;
 
     const thinking = showDots();
-    const stopPolling = startQueuePolling(thinking);
+    let stopPolling = null;
+    let streamedText = "";
+    let tokensStarted = false;
 
-    try {
-        const res = await fetch(`${API}/ask`, {
-            method: "POST",
-            headers: authHeaders(),
-            body: JSON.stringify({
-                question: question,
-                conversation_id: activeConversationId,
-            }),
-        });
-
-        stopPolling();
-        const data = await res.json();
-
-        if (!res.ok) {
-            thinking.textContent = data.detail || "Error";
-            return;
+    await streamAsk(
+        {
+            question,
+            conversation_id: activeConversationId,
+            images: imageToSend,
+            image_mime_types: imageTypesToSend,
+        },
+        {
+            onMeta: (event) => {
+                // Still show live queue position for the real wait between
+                // "your turn is queued" and the model actually starting to
+                // generate — tokens haven't started yet at this point.
+                if (event.was_queued) {
+                    stopPolling = startQueuePolling(thinking);
+                }
+                const isNewConversation = activeConversationId === null;
+                activeConversationId = event.conversation_id;
+                if (isNewConversation) {
+                    conversations.unshift({
+                        id: event.conversation_id,
+                        title: event.conversation_title,
+                        created_at: new Date().toISOString(),
+                    });
+                }
+                renderSidebar();
+            },
+            onToken: (text) => {
+                if (!tokensStarted) {
+                    tokensStarted = true;
+                    if (stopPolling) { stopPolling(); stopPolling = null; }
+                    thinking.textContent = ""; 
+                }
+                streamedText += text;
+                // Change this line:
+                thinking.innerHTML = typeof marked !== "undefined" ? marked.parse(protectMath(streamedText)) : streamedText;
+                chat.scrollTop = chat.scrollHeight;
+            },
+            onDone: (event) => {
+                // Render the math fractions once the stream finishes
+                if (typeof MathJax !== "undefined") {
+                    MathJax.typesetPromise([thinking]).catch((err) => console.log(err));
+                }
+            },
+            onError: (detail) => {
+                if (stopPolling) { stopPolling(); stopPolling = null; }
+                thinking.textContent = detail || "Error";
+            },
         }
+    );
 
-        thinking.textContent = data.answer;
-
-        // A brand-new chat just got its server-side conversation created on
-        // this first message — add it to the sidebar now.
-        const isNewConversation = activeConversationId === null;
-        activeConversationId = data.conversation_id;
-        if (isNewConversation) {
-            conversations.unshift({
-                id: data.conversation_id,
-                title: data.conversation_title,
-                created_at: new Date().toISOString(),
-            });
-        }
-        renderSidebar();
-
-    } catch (err) {
-        stopPolling();
-        thinking.textContent = `Network error: ${err.message}`;
-    } finally {
-        sendBtn.disabled = false;
-        input.focus();
-    }
+    sendBtn.disabled = false;
+    input.focus();
 }

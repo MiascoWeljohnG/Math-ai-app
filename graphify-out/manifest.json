@@ -1,0 +1,458 @@
+{
+  "backend/auth.py": {
+    "mtime": 1792425008.9785118,
+    "seen": 1792425622.8464928,
+    "ast_hash": "ae54184e762c40365b952d5c656ea494",
+    "semantic_hash": "ae54184e762c40365b952d5c656ea494"
+  },
+  "backend/classifier.py": {
+    "mtime": 1792425008.988867,
+    "seen": 1792425622.8464954,
+    "ast_hash": "c87ce388079c73977cce9409f2d9e1c6",
+    "semantic_hash": "c87ce388079c73977cce9409f2d9e1c6"
+  },
+  "backend/config.py": {
+    "mtime": 1791855861.4375057,
+    "seen": 1792087267.5433338,
+    "ast_hash": "3df84c636819643eb556cf77b6fcf907",
+    "semantic_hash": "3df84c636819643eb556cf77b6fcf907"
+  },
+  "backend/create_admin.py": {
+    "mtime": 1790718509.3003466,
+    "seen": 1792087267.543335,
+    "ast_hash": "53cf10c23811438f7d9ddcf02f9b69bf",
+    "semantic_hash": "53cf10c23811438f7d9ddcf02f9b69bf"
+  },
+  "backend/database.py": {
+    "mtime": 1791392451.2511568,
+    "seen": 1792087267.5433362,
+    "ast_hash": "f5c94c1263eac26ae8381ccd62fb331e",
+    "semantic_hash": "f5c94c1263eac26ae8381ccd62fb331e"
+  },
+  "backend/main.py": {
+    "mtime": 1792425008.9908762,
+    "seen": 1792425622.8465044,
+    "ast_hash": "beb4de81b9b498aa9774e071d4480ffd",
+    "semantic_hash": "beb4de81b9b498aa9774e071d4480ffd"
+  },
+  "backend/migrations.py": {
+    "mtime": 1791424716.177719,
+    "seen": 1792087267.5433385,
+    "ast_hash": "eba5a73fc29013aa7533f1afd831aa11",
+    "semantic_hash": "eba5a73fc29013aa7533f1afd831aa11"
+  },
+  "backend/models.py": {
+    "mtime": 1792425009.0086143,
+    "seen": 1792425622.8465073,
+    "ast_hash": "ad59b4282a85e15f3724fef4f0889d86",
+    "semantic_hash": "ad59b4282a85e15f3724fef4f0889d86"
+  },
+  "backend/notifications.py": {
+    "mtime": 1791951550.5733175,
+    "seen": 1792087267.5433404,
+    "ast_hash": "5d62877017d37dfc59646ce06b125a8a",
+    "semantic_hash": "5d62877017d37dfc59646ce06b125a8a"
+  },
+  "backend/progress.py": {
+    "mtime": 1792425009.0152469,
+    "seen": 1792425622.84651,
+    "ast_hash": "03d6ca10a6b56a97cf3799e954597e00",
+    "semantic_hash": "03d6ca10a6b56a97cf3799e954597e00"
+  },
+  "backend/rag.py": {
+    "mtime": 1791833557.5638344,
+    "seen": 1792087267.5433424,
+    "ast_hash": "f859bd4034284a7315c961b82e13ee07",
+    "semantic_hash": "f859bd4034284a7315c961b82e13ee07"
+  },
+  "backend/routes/__init__.py": {
+    "mtime": 1791246490.7726,
+    "seen": 1792087267.5433435,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "backend/routes/admin_routes.py": {
+    "mtime": 1792425049.5731275,
+    "seen": 1792425622.846513,
+    "ast_hash": "0ee7ef7647a0afb646d2473c2babacea",
+    "semantic_hash": "0ee7ef7647a0afb646d2473c2babacea"
+  },
+  "backend/routes/auth_routes.py": {
+    "mtime": 1792425049.5856268,
+    "seen": 1792425622.8465142,
+    "ast_hash": "76cd5e636b8a8c02b6e67371bde87482",
+    "semantic_hash": "76cd5e636b8a8c02b6e67371bde87482"
+  },
+  "backend/routes/learning_routes.py": {
+    "mtime": 1792425049.5935035,
+    "seen": 1792425622.846515,
+    "ast_hash": "b32366bcc4ce868efa19af8663f46e01",
+    "semantic_hash": "b32366bcc4ce868efa19af8663f46e01"
+  },
+  "backend/routes/materials_routes.py": {
+    "mtime": 1792425049.6017299,
+    "seen": 1792425622.8465161,
+    "ast_hash": "421aed09f0c72489fe1109dabaf22eb8",
+    "semantic_hash": "421aed09f0c72489fe1109dabaf22eb8"
+  },
+  "backend/routes/notification_routes.py": {
+    "mtime": 1791951513.5903177,
+    "seen": 1792087267.5433486,
+    "ast_hash": "69b75096fc76bd0cdbdf0289ac061332",
+    "semantic_hash": "69b75096fc76bd0cdbdf0289ac061332"
+  },
+  "backend/routes/profile_routes.py": {
+    "mtime": 1790718509.5304794,
+    "seen": 1792087267.5433495,
+    "ast_hash": "8b3f12904a4f1afa201665d74153399e",
+    "semantic_hash": "8b3f12904a4f1afa201665d74153399e"
+  },
+  "backend/routes/subject_deletion_routes.py": {
+    "mtime": 1792425049.6332932,
+    "seen": 1792425622.846524,
+    "ast_hash": "1f500c1d45d664815ba8c25bfc89ab1d",
+    "semantic_hash": "1f500c1d45d664815ba8c25bfc89ab1d"
+  },
+  "backend/routes/subjects_routes.py": {
+    "mtime": 1792425049.6332932,
+    "seen": 1792425622.846525,
+    "ast_hash": "5f465be756992260be5a50cca2bd8d26",
+    "semantic_hash": "5f465be756992260be5a50cca2bd8d26"
+  },
+  "backend/routes/teacher_routes.py": {
+    "mtime": 1792425049.651419,
+    "seen": 1792425622.846526,
+    "ast_hash": "f614393d2c803f8806d116e3d59b5582",
+    "semantic_hash": "f614393d2c803f8806d116e3d59b5582"
+  },
+  "backend/routes/user_routes.py": {
+    "mtime": 1792425049.6574402,
+    "seen": 1792425622.8465269,
+    "ast_hash": "046837d0f15a8e2ba71e180c31e839b0",
+    "semantic_hash": "046837d0f15a8e2ba71e180c31e839b0"
+  },
+  "backend/tests/conftest.py": {
+    "mtime": 1791792580.8661542,
+    "seen": 1792087267.5433543,
+    "ast_hash": "a5999d731ca422140f0bef916dd72a96",
+    "semantic_hash": "a5999d731ca422140f0bef916dd72a96"
+  },
+  "backend/tests/test_classifier.py": {
+    "mtime": 1791745978.482328,
+    "seen": 1792087267.5433555,
+    "ast_hash": "ff451bd887acbb6213f43b95abf0fbc0",
+    "semantic_hash": "ff451bd887acbb6213f43b95abf0fbc0"
+  },
+  "backend/tests/test_learning.py": {
+    "mtime": 1792091375.7915144,
+    "seen": 1792125085.1902142,
+    "ast_hash": "191b0efc2b3b372859bd3bd0c0c7caa3",
+    "semantic_hash": "191b0efc2b3b372859bd3bd0c0c7caa3"
+  },
+  "backend/tests/test_materials.py": {
+    "mtime": 1791787849.3868742,
+    "seen": 1792087267.543357,
+    "ast_hash": "07526b9487350042f5046955c0c5ca0a",
+    "semantic_hash": "07526b9487350042f5046955c0c5ca0a"
+  },
+  "backend/tests/test_quiz.py": {
+    "mtime": 1791782426.9608903,
+    "seen": 1792087267.5433578,
+    "ast_hash": "b20dc6efff283a0c6ccdbb2d0264c872",
+    "semantic_hash": "b20dc6efff283a0c6ccdbb2d0264c872"
+  },
+  "backend/tests/test_subject_workflow.py": {
+    "mtime": 1791792579.443826,
+    "seen": 1792087267.543359,
+    "ast_hash": "a224dc81046e30fb29db2b40319739f4",
+    "semantic_hash": "a224dc81046e30fb29db2b40319739f4"
+  },
+  "frontend/js/admin.js": {
+    "mtime": 1792424973.0924246,
+    "seen": 1792425622.846539,
+    "ast_hash": "d04bd81f84b1c5e5a769e7d9a6739efc",
+    "semantic_hash": "d04bd81f84b1c5e5a769e7d9a6739efc"
+  },
+  "frontend/js/auth.js": {
+    "mtime": 1792424973.1022184,
+    "seen": 1792425622.84654,
+    "ast_hash": "df657397b6c197a0af573ccff66701fa",
+    "semantic_hash": "df657397b6c197a0af573ccff66701fa"
+  },
+  "frontend/js/landing.js": {
+    "mtime": 1792091344.0111046,
+    "seen": 1792125085.1902244,
+    "ast_hash": "dbf98fcf657a40dec83b28bed1c36981",
+    "semantic_hash": "dbf98fcf657a40dec83b28bed1c36981"
+  },
+  "frontend/js/lessons.js": {
+    "mtime": 1791781619.6690676,
+    "seen": 1792087267.5433626,
+    "ast_hash": "b75916de0e1b57d6730bb2d6159cb83b",
+    "semantic_hash": "b75916de0e1b57d6730bb2d6159cb83b"
+  },
+  "frontend/js/markdown-render.js": {
+    "mtime": 1791693808.418329,
+    "seen": 1792087267.5433636,
+    "ast_hash": "28f79a7a633360745f378992ee4c9e6a",
+    "semantic_hash": "28f79a7a633360745f378992ee4c9e6a"
+  },
+  "frontend/js/material-table.js": {
+    "mtime": 1791951671.8988664,
+    "seen": 1792087267.5433643,
+    "ast_hash": "7ffb64b3903550d82229448c0d91d3b0",
+    "semantic_hash": "7ffb64b3903550d82229448c0d91d3b0"
+  },
+  "frontend/js/materials.js": {
+    "mtime": 1791723684.0550354,
+    "seen": 1792087267.5433655,
+    "ast_hash": "cc6bf9f6a3df34a8b7a948cb446a187b",
+    "semantic_hash": "cc6bf9f6a3df34a8b7a948cb446a187b"
+  },
+  "frontend/js/modal.js": {
+    "mtime": 1791829864.9480827,
+    "seen": 1792087267.5433662,
+    "ast_hash": "e541f33a477b1330394d28586b526460",
+    "semantic_hash": "e541f33a477b1330394d28586b526460"
+  },
+  "frontend/js/nav.js": {
+    "mtime": 1792091344.023271,
+    "seen": 1792125085.190234,
+    "ast_hash": "24db46a43f9a4ee311907b26f17dc06a",
+    "semantic_hash": "24db46a43f9a4ee311907b26f17dc06a"
+  },
+  "frontend/js/profile.js": {
+    "mtime": 1790718471.6558042,
+    "seen": 1792087267.543368,
+    "ast_hash": "7fa67fa3011bbe0463e0ce93277011d9",
+    "semantic_hash": "7fa67fa3011bbe0463e0ce93277011d9"
+  },
+  "frontend/js/quiz.js": {
+    "mtime": 1792424973.1108308,
+    "seen": 1792425622.846552,
+    "ast_hash": "fc04dc85323cad1e184c154ab5025759",
+    "semantic_hash": "fc04dc85323cad1e184c154ab5025759"
+  },
+  "frontend/js/reminders.js": {
+    "mtime": 1792091344.046698,
+    "seen": 1792125085.1902401,
+    "ast_hash": "5561359c52bce18e839ae677385f2f1f",
+    "semantic_hash": "5561359c52bce18e839ae677385f2f1f"
+  },
+  "frontend/js/roadmap.js": {
+    "mtime": 1792424973.120152,
+    "seen": 1792425622.8465562,
+    "ast_hash": "eff4283acca1e30b534e802b8b9fb953",
+    "semantic_hash": "eff4283acca1e30b534e802b8b9fb953"
+  },
+  "frontend/js/stream-ask.js": {
+    "mtime": 1791693808.4329977,
+    "seen": 1792087267.5433717,
+    "ast_hash": "2ef51a192866086d64aea90fadc11ac1",
+    "semantic_hash": "2ef51a192866086d64aea90fadc11ac1"
+  },
+  "frontend/js/teacher.js": {
+    "mtime": 1792424973.1442087,
+    "seen": 1792425622.8465593,
+    "ast_hash": "c2c60a9ec207d04d55b4c71440b8cba3",
+    "semantic_hash": "c2c60a9ec207d04d55b4c71440b8cba3"
+  },
+  "frontend/js/theme.js": {
+    "mtime": 1790718471.6976292,
+    "seen": 1792087267.543374,
+    "ast_hash": "9830444d53293128b3e4ce6acbb79675",
+    "semantic_hash": "9830444d53293128b3e4ce6acbb79675"
+  },
+  "frontend/js/topic-picker.js": {
+    "mtime": 1791792540.3752632,
+    "seen": 1792087267.543375,
+    "ast_hash": "195178a11d2a4c09e8339aeb80ae93eb",
+    "semantic_hash": "195178a11d2a4c09e8339aeb80ae93eb"
+  },
+  "frontend/js/user.js": {
+    "mtime": 1791829864.9937575,
+    "seen": 1792087267.543376,
+    "ast_hash": "a3a37e8afe89cbb474e78f72ec914cef",
+    "semantic_hash": "a3a37e8afe89cbb474e78f72ec914cef"
+  },
+  ".github/copilot-instructions.md": {
+    "mtime": 1791302108.278679,
+    "seen": 1792087267.543377,
+    "ast_hash": "02efca7067a99ebdd56164c9028c086b",
+    "semantic_hash": "02efca7067a99ebdd56164c9028c086b"
+  },
+  "frontend/admin.html": {
+    "mtime": 1792424916.0752,
+    "seen": 1792425622.846565,
+    "ast_hash": "3c229e866de4c8f06f102f24a8c39aa4",
+    "semantic_hash": "3c229e866de4c8f06f102f24a8c39aa4"
+  },
+  "frontend/index.html": {
+    "mtime": 1790718471.8523057,
+    "seen": 1792087267.5433786,
+    "ast_hash": "9f78711966a452adee835a8ac887a2f8",
+    "semantic_hash": "9f78711966a452adee835a8ac887a2f8"
+  },
+  "frontend/landing.html": {
+    "mtime": 1792424916.0832365,
+    "seen": 1792425622.8465672,
+    "ast_hash": "2c9965df5998e3854c03a3d00c406e80",
+    "semantic_hash": "2c9965df5998e3854c03a3d00c406e80"
+  },
+  "frontend/lessons.html": {
+    "mtime": 1791781604.380952,
+    "seen": 1792087267.5433805,
+    "ast_hash": "2aeb1baa3037b23f9428d2c71e947376",
+    "semantic_hash": "2aeb1baa3037b23f9428d2c71e947376"
+  },
+  "frontend/materials.html": {
+    "mtime": 1791722951.020562,
+    "seen": 1792087267.5433815,
+    "ast_hash": "ccd35bd1cf45ed28748d032f87fae383",
+    "semantic_hash": "ccd35bd1cf45ed28748d032f87fae383"
+  },
+  "frontend/profile.html": {
+    "mtime": 1791693791.2852092,
+    "seen": 1792087267.5433826,
+    "ast_hash": "0732c0f16aca840d34f08f73f31e1309",
+    "semantic_hash": "0732c0f16aca840d34f08f73f31e1309"
+  },
+  "frontend/quiz.html": {
+    "mtime": 1792424916.0939429,
+    "seen": 1792425622.8465724,
+    "ast_hash": "080d1610c1e777e74d225fa564eb4fa8",
+    "semantic_hash": "080d1610c1e777e74d225fa564eb4fa8"
+  },
+  "frontend/roadmap.html": {
+    "mtime": 1792424916.101027,
+    "seen": 1792425622.8465734,
+    "ast_hash": "e4a047571d5efbec88cde86b487c3635",
+    "semantic_hash": "e4a047571d5efbec88cde86b487c3635"
+  },
+  "frontend/signup.html": {
+    "mtime": 1792424916.1129034,
+    "seen": 1792425622.846575,
+    "ast_hash": "99a17e0cf353fe16fc29ecf4ab1d04f8",
+    "semantic_hash": "99a17e0cf353fe16fc29ecf4ab1d04f8"
+  },
+  "frontend/teacher.html": {
+    "mtime": 1792424916.065384,
+    "seen": 1792425622.8465762,
+    "ast_hash": "dc69fe620465b63419df6b3f6a66f331",
+    "semantic_hash": "dc69fe620465b63419df6b3f6a66f331"
+  },
+  "frontend/user.html": {
+    "mtime": 1791829865.1526833,
+    "seen": 1792087267.5433872,
+    "ast_hash": "4d6f2c30ee26012aaddc8cabc551e829",
+    "semantic_hash": "4d6f2c30ee26012aaddc8cabc551e829"
+  },
+  "frontend/img/hide.svg": {
+    "mtime": 1791659637.5082133,
+    "seen": 1792087267.5433908,
+    "ast_hash": "6955eb390fda2598053158923f87db77",
+    "semantic_hash": "6955eb390fda2598053158923f87db77"
+  },
+  "frontend/img/logo-eye.png": {
+    "mtime": 1790699433.8851333,
+    "seen": 1792087267.5433917,
+    "ast_hash": "65734175a7406340ae814c0fb416f4ad",
+    "semantic_hash": "65734175a7406340ae814c0fb416f4ad"
+  },
+  "frontend/img/logo-word.png": {
+    "mtime": 1790697691.5343792,
+    "seen": 1792087267.5433924,
+    "ast_hash": "1ed2f3b33400289d9d97b6b64d943285",
+    "semantic_hash": "1ed2f3b33400289d9d97b6b64d943285"
+  },
+  "frontend/img/logo.png": {
+    "mtime": 1790697691.5264266,
+    "seen": 1792087267.5433936,
+    "ast_hash": "3a1c81386e13f07397b2a6199b35b61a",
+    "semantic_hash": "3a1c81386e13f07397b2a6199b35b61a"
+  },
+  "frontend/img/view.svg": {
+    "mtime": 1791659626.0392118,
+    "seen": 1792087267.5433943,
+    "ast_hash": "d4ffac9770dd4aac0757afa0081616e6",
+    "semantic_hash": "d4ffac9770dd4aac0757afa0081616e6"
+  },
+  "frontend/js/rankings.js": {
+    "mtime": 1792091342.765611,
+    "seen": 1792125085.1902387,
+    "ast_hash": "0d6e83bd8160f375b903c94b76d6b47f",
+    "semantic_hash": "0d6e83bd8160f375b903c94b76d6b47f"
+  },
+  "backend/routes/school_admin_routes.py": {
+    "mtime": 1792425049.611282,
+    "seen": 1792425622.8465219,
+    "ast_hash": "2fc18486f162acbd9ad435594ce5b101",
+    "semantic_hash": "2fc18486f162acbd9ad435594ce5b101"
+  },
+  "backend/routes/schools_routes.py": {
+    "mtime": 1792425049.6252875,
+    "seen": 1792425622.8465228,
+    "ast_hash": "aebd4752f0553620f1efaaace9dd8363",
+    "semantic_hash": "aebd4752f0553620f1efaaace9dd8363"
+  },
+  "backend/school.py": {
+    "mtime": 1792425008.9566963,
+    "seen": 1792425622.846528,
+    "ast_hash": "f80ec5ff333f19acf4f58c9975a0e15b",
+    "semantic_hash": "f80ec5ff333f19acf4f58c9975a0e15b"
+  },
+  "backend/tests/test_schools.py": {
+    "mtime": 1792425031.65098,
+    "seen": 1792425622.8465369,
+    "ast_hash": "48f3a5d8526f8a7a6e64bc9ce81f2abf",
+    "semantic_hash": "48f3a5d8526f8a7a6e64bc9ce81f2abf"
+  },
+  "frontend/js/registry.js": {
+    "mtime": 1792424973.120152,
+    "seen": 1792425622.846554,
+    "ast_hash": "aecbd1959bac9ea8d2a21566a3856a90",
+    "semantic_hash": "aecbd1959bac9ea8d2a21566a3856a90"
+  },
+  "frontend/js/school-admin.js": {
+    "mtime": 1792424973.1344109,
+    "seen": 1792425622.8465571,
+    "ast_hash": "08ccce017cd29b78190735f4c86cb012",
+    "semantic_hash": "08ccce017cd29b78190735f4c86cb012"
+  },
+  "frontend/school-admin.html": {
+    "mtime": 1792424916.1129034,
+    "seen": 1792425622.8465743,
+    "ast_hash": "c1e9cdcfcb863b35391c81329e42d88c",
+    "semantic_hash": "c1e9cdcfcb863b35391c81329e42d88c"
+  },
+  "backend/adaptive.py": {
+    "mtime": 1792425007.669963,
+    "seen": 1792425622.8464851,
+    "ast_hash": "efda84437a909afe8e9d2a1351df7a02",
+    "semantic_hash": "efda84437a909afe8e9d2a1351df7a02"
+  },
+  "backend/routes/practice_routes.py": {
+    "mtime": 1792425048.2262368,
+    "seen": 1792425622.846519,
+    "ast_hash": "6d9f524e0659658ee7c704694a11cc75",
+    "semantic_hash": "6d9f524e0659658ee7c704694a11cc75"
+  },
+  "backend/tests/test_adaptive.py": {
+    "mtime": 1792425030.2614355,
+    "seen": 1792425622.8465307,
+    "ast_hash": "93656d5c61243d4d60d148c568749bb3",
+    "semantic_hash": "93656d5c61243d4d60d148c568749bb3"
+  },
+  "frontend/js/practice.js": {
+    "mtime": 1792424971.727883,
+    "seen": 1792425622.8465493,
+    "ast_hash": "1672cce3281329bfda5e7def9ad5d5cd",
+    "semantic_hash": "1672cce3281329bfda5e7def9ad5d5cd"
+  },
+  "frontend/practice.html": {
+    "mtime": 1792424914.3851182,
+    "seen": 1792425622.8465703,
+    "ast_hash": "740718c121280bfdf52871db81f93a15",
+    "semantic_hash": "740718c121280bfdf52871db81f93a15"
+  }
+}

@@ -9,12 +9,17 @@ function authHeaders() {
     return { "Authorization": `Bearer ${localStorage.getItem("token")}` };
 }
 
+// Ensure markdown doesn't break math brackets
+function protectMath(text) {
+    if (!text) return "";
+    return text
+        .replace(/\\\[/g, '\\\\[')         .replace(/\\\]/g, '\\\\]')
+        .replace(/\\\(/g, '\\\\(')         .replace(/\\\)/g, '\\\\)');
+}
+
 let currentFilename = null;
-// The conversation for the currently open document. Every question is sent
-// with the open file's name, so the AI only sees excerpts from that file.
 let readingConversationId = null;
 
-// --- Load the file list (with branch filter) ---
 const BRANCH_FILTERS = ["All", "Algebra", "Geometry", "Statistics", "Calculus", "General"];
 const branchFilterEl = document.getElementById("branchFilter");
 let allFiles = [];
@@ -66,20 +71,38 @@ async function loadFiles() {
 }
 loadFiles();
 
-// --- Preview a file (fetched as a blob, since the file endpoint needs an
-// Authorization header a plain <iframe src="..."> can't send) ---
 async function selectFile(filename, displayName, btnEl) {
     document.querySelectorAll(".file-item").forEach(b => b.classList.remove("active"));
     btnEl.classList.add("active");
     currentFilename = filename;
-    // Each document gets its own conversation, so questions about one file
-    // never carry history from another.
-    readingConversationId = null;
+    
+    // NEW: Retrieve any saved conversation ID for this specific file
+    const savedConvos = JSON.parse(localStorage.getItem("material_convos") || "{}");
+    readingConversationId = savedConvos[filename] || null;
+    
     askLog.innerHTML = "";
     const note = document.createElement("div");
     note.className = "ask-note";
     note.textContent = `Ask anything about "${displayName}" — you can also ask about specific pages, like "what's on page 6?"`;
     askLog.appendChild(note);
+    
+    // NEW: If we found a past conversation for this file, fetch and display the history
+    if (readingConversationId) {
+        try {
+            const res = await fetch(`${API}/conversations/${readingConversationId}/messages`, { headers: authHeaders() });
+            if (res.ok) {
+                const messages = await res.json();
+                for (const m of messages) {
+                    addAskMessage(m.content, m.role === "user" ? "user" : "bot");
+                }
+            } else {
+                readingConversationId = null; // Clear if the server doesn't recognize it
+            }
+        } catch (_) {
+            readingConversationId = null;
+        }
+    }
+    
     viewerHeader.textContent = displayName;
     pdfPane.innerHTML = `<div class="pdf-placeholder">Loading ${displayName}...</div>`;
 
@@ -92,8 +115,6 @@ async function selectFile(filename, displayName, btnEl) {
         if (blob.type === "application/pdf" || displayName.toLowerCase().endsWith(".pdf")) {
             pdfPane.innerHTML = `<iframe src="${url}" title="${displayName}"></iframe>`;
         } else {
-            // Browsers can't render .docx/.txt inline the way they do PDFs —
-            // offer a direct download instead of a blank frame.
             pdfPane.innerHTML = `<div class="pdf-placeholder">Preview isn't available for this file type.<br><a href="${url}" download="${displayName}" style="color:#93c5fd; margin-top:0.5rem; display:inline-block;">Download ${displayName}</a></div>`;
         }
     } catch (_) {
@@ -101,11 +122,16 @@ async function selectFile(filename, displayName, btnEl) {
     }
 }
 
-// --- Ask panel ---
 function addAskMessage(text, role) {
     const div = document.createElement("div");
     div.className = `ask-msg ${role}`;
-    div.textContent = text;
+    
+    // Parse Markdown and Math
+    div.innerHTML = typeof marked !== "undefined" ? marked.parse(protectMath(text)) : text;
+    if (typeof MathJax !== "undefined") {
+        MathJax.typesetPromise([div]).catch((err) => console.log(err));
+    }
+    
     askLog.appendChild(div);
     askLog.scrollTop = askLog.scrollHeight;
 }
@@ -123,21 +149,42 @@ async function sendAskQuestion() {
     askLog.appendChild(thinkingDiv);
     askLog.scrollTop = askLog.scrollHeight;
 
+    let streamedText = "";
+    let tokensStarted = false;
+
     try {
-        const res = await fetch(`${API}/ask`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...authHeaders() },
-            body: JSON.stringify({ question, conversation_id: readingConversationId, material_filename: currentFilename }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-            thinkingDiv.textContent = data.detail || "Error";
-            return;
-        }
-        readingConversationId = data.conversation_id;
-        thinkingDiv.textContent = data.answer;
-    } catch (err) {
-        thinkingDiv.textContent = `Network error: ${err.message}`;
+        await streamAsk(
+            { question, conversation_id: readingConversationId, material_filename: currentFilename },
+            {
+                onMeta: (event) => {
+                    readingConversationId = event.conversation_id;
+                    
+                    // NEW: Save the generated conversation ID tied to this specific file
+                    const savedConvos = JSON.parse(localStorage.getItem("material_convos") || "{}");
+                    savedConvos[currentFilename] = readingConversationId;
+                    localStorage.setItem("material_convos", JSON.stringify(savedConvos));
+                },
+                onToken: (text) => {
+                    if (!tokensStarted) {
+                        tokensStarted = true;
+                        thinkingDiv.textContent = "";
+                    }
+                    streamedText += text;
+                    // Render markdown live as it types
+                    thinkingDiv.innerHTML = typeof marked !== "undefined" ? marked.parse(protectMath(streamedText)) : streamedText;
+                    askLog.scrollTop = askLog.scrollHeight;
+                },
+                onDone: (event) => {
+                    // Render math fractions once the stream finishes
+                    if (typeof MathJax !== "undefined") {
+                        MathJax.typesetPromise([thinkingDiv]).catch((err) => console.log(err));
+                    }
+                },
+                onError: (detail) => {
+                    thinkingDiv.textContent = detail || "Error";
+                },
+            }
+        );
     } finally {
         askSendBtn.disabled = false;
         askInput.focus();

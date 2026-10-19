@@ -1,8 +1,11 @@
-import hashlib
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-# The four branches shown on the landing page and tracked (as mock data) per
-# student. Add a real branch here once it exists — everything that reads
-# progress goes through this one list.
+from models import Lesson, LessonCompletion, Subject, User
+from school import visible_subjects
+
+# The four branches shown on the landing page. The teacher dashboard has one
+# column per branch, in this order.
 BRANCHES = ["Algebra", "Geometry", "Statistics", "Calculus"]
 
 # What a file can be tagged as when uploaded. "General" covers material that
@@ -10,24 +13,33 @@ BRANCHES = ["Algebra", "Geometry", "Statistics", "Calculus"]
 UPLOAD_BRANCHES = BRANCHES + ["General"]
 
 
-def mock_progress(username: str, branch: str) -> int:
-    """
-    Deterministic placeholder progress percentage (0-100) for a given
-    student + branch. This is NOT real lesson-completion tracking — there is
-    no lessons/completions table yet, so this stands in for one. It's
-    deterministic (same student+branch always gives the same number) so the
-    UI doesn't look like it's flickering random values on every reload, and
-    a student's landing page and their teacher's dashboard always agree.
-
-    To replace with real tracking later: build a table of
-    (student_id, branch, lesson_id, completed_at), compute the real
-    percentage from it, and swap the body of this function — every caller
-    (landing page progress bars, teacher dashboard) already goes through
-    here, so nothing else needs to change.
-    """
-    digest = hashlib.md5(f"{username}:{branch}".encode()).hexdigest()
-    return int(digest[:4], 16) % 101
-
-
-def progress_for_user(username: str) -> list[dict]:
-    return [{"branch": b, "percent": mock_progress(username, b)} for b in BRANCHES]
+def progress_for_user(db: Session, user: User) -> list[dict]:
+    """Real progress: lessons this user marked complete / all lessons, per subject
+    they can see (their school's shared subjects, plus their own personal ones)."""
+    subjects = (
+        db.query(Subject)
+        .filter(visible_subjects(user))
+        .order_by(Subject.id.asc())
+        .all()
+    )
+    totals = dict(db.query(Lesson.subject_id, func.count(Lesson.id)).group_by(Lesson.subject_id).all())
+    done = dict(
+        db.query(Lesson.subject_id, func.count(LessonCompletion.id))
+        .join(LessonCompletion, LessonCompletion.lesson_id == Lesson.id)
+        .filter(LessonCompletion.user_id == user.id)
+        .group_by(Lesson.subject_id)
+        .all()
+    )
+    result = []
+    for subject in subjects:
+        total = totals.get(subject.id, 0)
+        completed = done.get(subject.id, 0)
+        result.append({
+            "subject_id": subject.id,
+            "branch": subject.name,
+            "is_personal": subject.owner_user_id is not None,
+            "completed": completed,
+            "total": total,
+            "percent": round(completed * 100 / total) if total else 0,
+        })
+    return result

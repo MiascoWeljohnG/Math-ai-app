@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Quiz — iSipnayan</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap">
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/app-shell.css">
+
+    <!-- Same MathJax setup as the lessons page, so $...$ in questions renders -->
+    <script>
+      window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] } };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        :root, [data-theme="light"] { --q-mint: #c9fce4; --q-panel: #eefbf4; --q-green: #006b1b; --q-ink: #0b4a12; --q-on-green: #ffffff; }
+        [data-theme="dark"] { --q-mint: #1b3a26; --q-panel: #14261a; --q-green: #6fd070; --q-ink: #bff0b8; --q-on-green: #08210f; }
+
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Roboto', 'Segoe UI', sans-serif; }
+        main { width: 100%; max-width: 1100px; margin: 0 auto; padding: 1.4rem 1.5rem 3rem; }
+        [hidden] { display: none !important; }
+
+        .card { background: var(--bg-elevated); border: 1px solid var(--field-border); border-radius: 14px; box-shadow: 1px 2px 8px rgba(0,0,0,0.12); }
+        .btn { padding: 0.55rem 1.4rem; border: 1px solid var(--q-green); border-radius: 999px; background: var(--q-mint); color: var(--q-ink); font: 700 0.95rem 'Roboto', sans-serif; cursor: pointer; text-decoration: none; display: inline-block; text-align: center; }
+        .btn:hover:not(:disabled) { background: var(--q-green); color: var(--q-on-green); }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .btn.primary { background: var(--q-green); color: var(--q-on-green); }
+        .btn.primary:hover:not(:disabled) { filter: brightness(1.12); }
+        .muted { color: var(--text-muted); }
+
+        .track { width: 100%; height: 12px; border-radius: 999px; background: rgba(0,0,0,0.13); overflow: hidden; }
+        .fill { height: 100%; width: 0%; border-radius: 999px; background: var(--q-green); transition: width 0.4s ease; }
+
+        /* ---- centred screens: generating / start / error / results ---- */
+        .screen { max-width: 640px; margin: 2rem auto 0; padding: 2rem; }
+        .screen h1 { margin: 0 0 0.4rem; font-size: 1.6rem; font-weight: 900; color: var(--heading); }
+        .screen .row { display: flex; justify-content: space-between; margin-top: 0.4rem; font-size: 0.85rem; }
+        .facts { list-style: none; margin: 1.2rem 0; padding: 0; display: grid; gap: 0.5rem; }
+        .facts li { display: flex; gap: 0.6rem; align-items: baseline; }
+        .facts strong { min-width: 7.5rem; }
+        .actions { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 1.4rem; }
+        .link-btn { background: none; border: none; padding: 0; color: var(--text-muted); text-decoration: underline; cursor: pointer; font: inherit; font-size: 0.85rem; }
+        .error { color: var(--danger); }
+
+        /* ---- the quiz itself (layout from the mockup) ---- */
+        .layout { display: grid; grid-template-columns: 1fr 300px; gap: 1.2rem; align-items: stretch; }
+        .q-card { padding: 2rem; display: flex; flex-direction: column; min-height: 420px; }
+        .q-box { background: var(--q-mint); border-radius: 12px; padding: 1.2rem 1.5rem 1.6rem; }
+        .q-label { margin: 0 0 0.6rem; font-weight: 900; color: var(--q-ink); font-size: 1.05rem; }
+        .q-text { text-align: center; font-weight: 900; font-size: 1.5rem; color: var(--q-ink); overflow-wrap: anywhere; }
+        .q-text mjx-container { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+        .options { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 2rem; margin-top: 2rem; }
+        .opt { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.8rem; border: 1px solid var(--q-green); border-radius: 8px; background: var(--q-mint); color: var(--q-ink); font-weight: 700; cursor: pointer; position: relative; overflow-wrap: anywhere; }
+        .opt input { position: absolute; opacity: 0; }
+        .opt .dot { flex: none; width: 1.15rem; height: 1.15rem; border: 2px solid var(--q-green); border-radius: 50%; background: var(--bg-elevated); display: grid; place-items: center; }
+        .opt.selected .dot { background: var(--q-green); }
+        .opt.selected .dot::after { content: ""; width: 0.3rem; height: 0.55rem; border: solid var(--q-on-green); border-width: 0 2px 2px 0; transform: translateY(-1px) rotate(45deg); }
+        .opt:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+        .opt:hover { filter: brightness(0.97); }
+        .answer-wrap { margin-top: 2rem; }
+        .answer-wrap input { width: 100%; padding: 0.8rem 1rem; border: 1px solid var(--q-green); border-radius: 8px; background: var(--q-mint); color: var(--q-ink); font: 700 1.1rem 'Roboto', sans-serif; }
+        .answer-wrap input:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+        .answer-wrap small { display: block; margin-top: 0.4rem; color: var(--text-muted); }
+        .q-nav { display: none; gap: 0.8rem; margin-top: auto; padding-top: 1.5rem; }
+
+        .panel { background: var(--q-panel); border: 1px solid var(--field-border); border-radius: 14px; box-shadow: 1px 2px 8px rgba(0,0,0,0.12); padding: 1.2rem 1.2rem 1rem; display: flex; flex-direction: column; }
+        .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+        .panel h2 { margin: 0; font-size: 1.6rem; font-weight: 900; color: var(--q-ink); }
+        .badge { padding: 0.3rem 0.9rem; border-radius: 999px; background: var(--q-green); color: var(--q-on-green); font-weight: 900; font-size: 0.7rem; text-transform: uppercase; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .difficulty { margin: 0.1rem 0 0; font-weight: 700; font-size: 0.8rem; color: var(--q-green); }
+        .stat { border-top: 1px solid var(--border); padding: 0.8rem 0; margin-top: 0.8rem; }
+        .stat-line { display: flex; justify-content: space-between; align-items: center; font-weight: 900; color: var(--q-ink); }
+        .stat-line .icon { margin-right: 0.35rem; font-size: 1.15rem; }
+        .stat .track { margin-top: 0.4rem; }
+        #timeLeft.low { color: var(--danger); }
+        #violationCount { color: var(--danger); }
+        .panel-nav { margin-top: auto; display: flex; justify-content: space-between; gap: 0.6rem; padding-top: 1rem; }
+        .panel-nav .btn { flex: 1; padding: 0.4rem 0.5rem; }
+
+        /* ---- results ---- */
+        .score { font-size: 2.6rem; font-weight: 900; color: var(--heading); margin: 0.2rem 0; }
+        .banner { margin: 0.8rem 0; padding: 0.8rem 1rem; border-radius: 8px; font-weight: 700; border: 1px solid; }
+        .banner.pass { color: var(--q-ink); background: var(--q-mint); border-color: var(--q-green); }
+        .banner.fail { color: var(--danger); border-color: var(--danger); }
+        .notice { margin: 0.8rem 0; padding: 0.7rem 1rem; border: 1px solid var(--danger); border-radius: 8px; color: var(--danger); font-weight: 700; }
+        .review { margin-top: 1.4rem; display: grid; gap: 0.8rem; }
+        .review-item { padding: 0.8rem 1rem; border: 1px solid var(--border); border-left-width: 5px; border-radius: 8px; background: var(--bg-input); overflow-wrap: anywhere; }
+        .review-item.ok { border-left-color: var(--q-green); }
+        .review-item.bad { border-left-color: var(--danger); }
+        .review-item p { margin: 0.25rem 0; }
+        .why { color: var(--text-muted); font-size: 0.9rem; }
+        #screenResult { max-width: 760px; }
+
+        dialog.modal { margin: auto; padding: 1.5rem; border: 1px solid var(--field-border); border-radius: 12px; background: var(--bg-elevated); color: var(--text); width: 420px; max-width: 90vw; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+        dialog.modal::backdrop { background: rgba(0,0,0,0.55); }
+        dialog.modal h2 { margin: 0 0 0.6rem; color: var(--danger); }
+        dialog.modal.neutral h2 { color: var(--heading); }
+        dialog.modal p { line-height: 1.5; margin: 0; }
+
+        .extra { margin-top: 1.4rem; padding: 1rem 1.2rem; border: 1px solid var(--field-border); border-radius: 12px; background: var(--bg-elevated); }
+        .extra h2 { margin: 0 0 0.6rem; font-size: 1.05rem; color: var(--heading); }
+        .breakdown-body { line-height: 1.6; overflow-wrap: anywhere; }
+        .breakdown-body mjx-container { max-width: 100%; overflow-x: auto; }
+        .board-list { margin: 0; padding-left: 1.4rem; line-height: 1.9; }
+        .board-list li.you { font-weight: 700; color: var(--accent); }
+
+        @media (max-width: 820px) {
+            .layout { grid-template-columns: 1fr; }
+            .panel { order: -1; }
+            .panel-nav { display: none; }
+            .q-nav { display: flex; }
+            .q-nav .btn { flex: 1; }
+            .q-card { padding: 1.2rem; min-height: 0; }
+            .options { grid-template-columns: 1fr; gap: 0.7rem; }
+            .q-text { font-size: 1.25rem; }
+            .screen { padding: 1.4rem; }
+        }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+        <a class="brand" href="landing.html"><img class="brand-eye" src="img/logo-eye.png" alt=""><img class="brand-word" src="img/logo-word.png" alt="iSipnayan"></a>
+    </header>
+
+    <main>
+        <!-- 1. The AI is writing the quiz -->
+        <section id="screenLoading" class="card screen" hidden>
+            <h1>Writing your quiz…</h1>
+            <p class="muted" id="loadingStatus" aria-live="polite">Reading the lesson</p>
+            <div class="track" role="progressbar" aria-label="Quiz generation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="genTrack"><div class="fill" id="genFill"></div></div>
+            <div class="row muted"><span>This can take a minute.</span><span id="genPct">0%</span></div>
+        </section>
+
+        <!-- 2. Quiz is ready; nothing is timed until Start -->
+        <section id="screenStart" class="card screen" hidden>
+            <h1 id="startTitle">Quiz</h1>
+            <p class="muted" id="startSubtitle"></p>
+            <ul class="facts">
+                <li><strong>Questions</strong><span id="factCount"></span></li>
+                <li><strong>Types</strong><span>Multiple choice, true or false, identification and exact-number answers</span></li>
+                <li><strong>Difficulty</strong><span id="factDifficulty"></span></li>
+                <li><strong>Time limit</strong><span id="factTime"></span></li>
+                <li><strong>Passing score</strong><span id="factPass"></span></li>
+                <li><strong>Violations</strong><span id="factViolations"></span></li>
+            </ul>
+            <div class="actions">
+                <button class="btn primary" id="startBtn" type="button">Start quiz</button>
+                <a class="btn" id="startSkip" href="lessons.html">Not now</a>
+            </div>
+            <p style="margin:1rem 0 0"><button class="link-btn" id="regenBtn" type="button" hidden>Write a new quiz for this lesson</button></p>
+        </section>
+
+        <!-- 3. The quiz -->
+        <section id="screenQuiz" class="layout" hidden>
+            <div class="card q-card">
+                <div class="q-box">
+                    <p class="q-label" id="qLabel"></p>
+                    <div class="q-text" id="qText"></div>
+                </div>
+                <div id="qAnswer"></div>
+                <div class="q-nav">
+                    <button class="btn js-back" type="button">Back</button>
+                    <button class="btn js-next" type="button">Next</button>
+                </div>
+            </div>
+            <aside class="panel" aria-label="Quiz status">
+                <div class="panel-head">
+                    <h2 id="panelTitle">QUIZ</h2>
+                    <span class="badge" id="panelSubject"></span>
+                </div>
+                <p class="difficulty" id="panelDifficulty"></p>
+                <div class="stat">
+                    <div class="stat-line" style="font-size:0.85rem"><span id="panelProgressText">Question 1 / 10</span></div>
+                    <div class="track"><div class="fill" id="panelProgressFill"></div></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-line">
+                        <span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Time left</span>
+                        <span id="timeLeft">00:00</span>
+                    </div>
+                </div>
+                <div class="stat">
+                    <div class="stat-line">
+                        <span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>Violation</span>
+                        <span id="violationCount" aria-live="polite">0 / 5</span>
+                    </div>
+                </div>
+                <div class="panel-nav">
+                    <button class="btn js-back" type="button">BACK</button>
+                    <button class="btn js-next" type="button">Next</button>
+                </div>
+            </aside>
+        </section>
+
+        <!-- 4. Results -->
+        <section id="screenResult" class="card screen" hidden>
+            <h1>Quiz finished</h1>
+            <div class="score" id="resultScore"></div>
+            <p class="muted" id="resultSub"></p>
+            <div class="banner" id="resultBanner"></div>
+            <div class="notice" id="resultNotice" hidden></div>
+            <div class="actions">
+                <a class="btn primary" id="nextLessonBtn" href="lessons.html" hidden>Next lesson</a>
+                <a class="btn" id="backToLessonBtn" href="lessons.html">Back to the lesson</a>
+                <a class="btn" id="practiceBtn" href="practice.html" hidden>Practice set</a>
+            </div>
+            <p class="muted" id="resultTime" hidden></p>
+            <section class="extra" id="breakdown" hidden>
+                <h2>Let's go through it step by step</h2>
+                <p class="muted" id="breakdownStatus" role="status"></p>
+                <div class="breakdown-body" id="breakdownBody"></div>
+                <button class="btn" id="breakdownRetry" type="button" hidden>Try again</button>
+            </section>
+            <section class="extra" id="board" hidden>
+                <h2>Leaderboard</h2>
+                <ol class="board-list" id="boardList"></ol>
+            </section>
+            <div class="review" id="review"></div>
+        </section>
+
+        <!-- Something went wrong -->
+        <section id="screenError" class="card screen" hidden>
+            <h1>Something went wrong</h1>
+            <p class="error" id="errorText"></p>
+            <div class="actions">
+                <button class="btn primary" id="retryBtn" type="button">Try again</button>
+                <a class="btn" id="errorBack" href="lessons.html">Back to lessons</a>
+            </div>
+        </section>
+    </main>
+
+    <!-- Tab-switch warning -->
+    <dialog id="warnModal" class="modal">
+        <h2>Warning: violation <span id="warnCount"></span></h2>
+        <p id="warnText"></p>
+        <div class="actions"><button class="btn primary" id="warnOk" type="button">Back to the quiz</button></div>
+    </dialog>
+
+    <!-- Submitting with blank answers -->
+    <dialog id="confirmModal" class="modal neutral">
+        <h2>Submit your quiz?</h2>
+        <p id="confirmText"></p>
+        <div class="actions">
+            <button class="btn" id="confirmCancel" type="button">Keep working</button>
+            <button class="btn primary" id="confirmOk" type="button">Submit</button>
+        </div>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/markdown-render.js"></script>
+    <script src="js/quiz.js"></script>
+    <script>requireAuth(); initNavDrawer();</script>
+    <footer class="bottom-footer">All Rights Reserved <span class="sep">|</span> @2026</footer>
+</body>
+</html>
