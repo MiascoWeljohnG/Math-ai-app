@@ -5,3 +5,5 @@ python-dotenv
 groq
 google-genai
 pdfplumber
+sqlalchemy
+psycopg2-binary
