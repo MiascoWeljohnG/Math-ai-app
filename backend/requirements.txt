@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+python-dotenv
+groq
+google-genai
+pdfplumber
+pdftotext
