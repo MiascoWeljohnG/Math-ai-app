@@ -5,4 +5,3 @@ python-dotenv
 groq
 google-genai
 pdfplumber
-pdftotext
