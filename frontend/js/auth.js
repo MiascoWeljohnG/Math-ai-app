@@ -1,6 +1,6 @@
 const API = (location.hostname === "localhost" || location.hostname === "127.0.0.1")
     ? "http://localhost:8000"
-    : "https://YOUR-SERVICE.onrender.com"; // <-- replace with your Render URL
+    : "https://isipnayan.onrender.com"; // <-- replace with your Render URL
 
 // Where each role lands after login (and where it is sent when it opens a page that isn't its own)
 function homeFor(role) {
