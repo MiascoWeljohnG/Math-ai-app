@@ -1,6 +1,6 @@
 const API = (location.hostname === "localhost" || location.hostname === "127.0.0.1")
     ? "http://localhost:8000"
-    : "https://isipnayan.onrender.com"; // <-- replace with your Render URL
+    : "https://isipnayan.onrender.com"; // Render backend
 
 // Where each role lands after login (and where it is sent when it opens a page that isn't its own)
 function homeFor(role) {
@@ -84,6 +84,7 @@ if (registerForm) {
         return `${y}-${pad(mo)}-${pad(d)}`;
     }
 
+    if (dobText && dobBtn && dobPop) {  // custom DOB widget; plain <input type="date"> still works without it
     dobText.addEventListener("input", () => {   // auto-insert the slashes while typing
         const dg = dobText.value.replace(/\D/g, "").slice(0, 8);
         const f = dg.slice(0, 2) + (dg.length > 2 ? "/" + dg.slice(2, 4) : "") + (dg.length > 4 ? "/" + dg.slice(4) : "");
@@ -152,6 +153,7 @@ if (registerForm) {
         if (!dobPop.hidden && !dobPop.contains(e.target) && !dobBtn.contains(e.target)) closeCal(false);
     });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !dobPop.hidden) closeCal(true); });
+    }  // end custom date-of-birth widget
 
     const schoolRow = document.getElementById("schoolRow"), schoolSelect = document.getElementById("regSchool");
     Promise.all([
@@ -177,7 +179,7 @@ if (registerForm) {
 
         const fail = (msg) => { errorEl.textContent = msg; errorEl.className = "form-msg error"; };
 
-        if (dobText.value.trim() && !birthday) return fail("Please enter a valid date of birth (MM/DD/YYYY).");
+        if (dobText && dobText.value.trim() && !birthday) return fail("Please enter a valid date of birth (MM/DD/YYYY).");
         if (!student_id || !full_name || !email || !birthday || !password || !confirm) return fail("Please fill in all fields.");
         if (!schoolRow.hidden && !schoolSelect.value) return fail("Please choose your school.");
         if (!/^\S+@\S+\.\S+$/.test(email)) return fail("Please enter a valid email address.");
