@@ -306,8 +306,7 @@ def store_uploaded_materials(
     storage_ids: Optional[list[str]] = None,
 ) -> list[str]:
     vault_dir = Path(config.CHROMA_VAULT_DIR).expanduser()
-    if not vault_dir.is_dir():
-        raise FileNotFoundError(f"Uploads folder does not exist: {vault_dir}")
+    vault_dir.mkdir(parents=True, exist_ok=True)
     if storage_ids is not None and len(storage_ids) != len(files):
         raise ValueError("Each uploaded material must have one storage ID")
 
@@ -357,8 +356,7 @@ def ingest_uploaded_materials(
 def ingest_uploads(uploads_path: str, branch: str = "General"):
     vault_collection = chroma_client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
     vault_dir = Path(uploads_path).expanduser()
-    if not vault_dir.is_dir():
-        raise FileNotFoundError(f"Uploads folder does not exist: {vault_dir}")
+    vault_dir.mkdir(parents=True, exist_ok=True)
     materials_dir = vault_dir / "Uploaded Materials"
     vault_files = [
         path for path in (materials_dir.rglob("*") if materials_dir.is_dir() else [])

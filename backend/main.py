@@ -43,6 +43,7 @@ ingest_uploads(config.CHROMA_VAULT_DIR)
 
 # Uploaded documents live and are retrieved from the uploads folder; discard the
 # legacy-only collection after its documents have been migrated successfully.
+chroma_client.get_or_create_collection(name=config.CHROMA_COLLECTION)
 chroma_client.delete_collection(config.CHROMA_COLLECTION)
 chroma_client.get_or_create_collection(name=config.CHROMA_COLLECTION)
 
