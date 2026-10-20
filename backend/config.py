@@ -9,7 +9,23 @@ SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+# File storage. "auto" = Google Drive when the four GOOGLE_*/DRIVE_* values below are set, otherwise the
+# local uploads folder (fine for development, but Render's disk is wiped on every redeploy/restart).
+# "drive" = always Drive (a missing value is reported as an error instead of silently using the disk),
+# "local" = always the uploads folder.
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "auto").lower()
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN", "")
+DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "")
+
+# Embeddings (used to index uploads). "ollama" = local dev. "gemini" = hosted, REQUIRED on Render,
+# because Render has no Ollama server to talk to.
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
+EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "50"))
 OLLAMA_MODEL = "gemma4:e4b"
 
 CHROMA_PERSIST_DIR = "./chroma_db"

@@ -1,5 +1,7 @@
 import asyncio
 import hashlib
+import logging
+import time
 import json
 import io
 import re
@@ -10,15 +12,66 @@ import ollama
 from pathlib import Path, PurePosixPath
 from typing import Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.embeddings import Embeddings
 from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 
 import config
 
+log = logging.getLogger(__name__)
+
 chroma_client = chromadb.PersistentClient(path=config.CHROMA_PERSIST_DIR)
 collection = chroma_client.get_or_create_collection(name=config.CHROMA_COLLECTION)
 
-embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=config.OLLAMA_BASE_URL)
+
+
+class GeminiEmbeddings(Embeddings):
+    """Hosted embeddings through Gemini's OpenAI-compatible endpoint, so no Ollama server is needed."""
+
+    def __init__(self, model: str, api_key: str, base_url: str, batch_size: int = 50, max_retries: int = 3):
+        self.model = model
+        self.api_key = api_key
+        self.url = base_url.rstrip("/") + "/embeddings"
+        self.batch_size = max(1, batch_size)
+        self.max_retries = max_retries
+
+    def _embed(self, texts: list[str]) -> list[list[float]]:
+        if not self.api_key:
+            raise RuntimeError("GEMINI_API_KEY is not set on the server, so uploads can't be indexed")
+        vectors: list[list[float]] = []
+        with httpx.Client(timeout=60) as client:
+            for start in range(0, len(texts), self.batch_size):
+                batch = texts[start:start + self.batch_size]
+                for attempt in range(self.max_retries + 1):
+                    response = client.post(
+                        self.url,
+                        headers={"Authorization": f"Bearer {self.api_key}"},
+                        json={"model": self.model, "input": batch},
+                    )
+                    # rate limit / temporary server trouble: wait and try again
+                    if response.status_code in (429, 500, 502, 503) and attempt < self.max_retries:
+                        time.sleep(2 ** attempt)
+                        continue
+                    break
+                if response.status_code >= 400:
+                    raise RuntimeError(f"Embedding request failed ({response.status_code}): {response.text[:200]}")
+                rows = sorted(response.json()["data"], key=lambda row: row.get("index", 0))
+                vectors.extend(row["embedding"] for row in rows)
+        return vectors
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return self._embed(texts)
+
+    def embed_query(self, text: str) -> list[float]:
+        return self._embed([text])[0]
+
+
+if config.EMBEDDING_PROVIDER == "gemini":
+    embeddings = GeminiEmbeddings(
+        config.EMBEDDING_MODEL, config.GEMINI_API_KEY, config.GEMINI_BASE_URL, config.EMBEDDING_BATCH_SIZE,
+    )
+else:
+    embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=config.OLLAMA_BASE_URL)
 _async_ollama_client = ollama.AsyncClient(host=config.OLLAMA_BASE_URL)
 _chat_semaphore = asyncio.Semaphore(config.MAX_CONCURRENT_CHATS)
 _waiting_count = 0
@@ -258,6 +311,19 @@ def extract_text_from_bytes(filename: str, contents: bytes) -> list[tuple[int, s
     raise ValueError(f"Unsupported material file type: {suffix or '(no extension)'}")
 
 def _index_files(vault_files: list[Path], vault_dir: Path, branch: str = "General") -> tuple[int, set[str]]:
+    """Index files that sit in the local uploads folder."""
+    documents = []
+    for vault_file in vault_files:
+        rel_path = vault_file.relative_to(vault_dir)
+        note_branch = rel_path.parts[1] if len(rel_path.parts) > 2 else branch
+        documents.append((rel_path.as_posix(), note_branch, vault_file.name, vault_file.read_bytes()))
+    return _index_documents(documents)
+
+
+def _index_documents(documents: list[tuple[str, str, str, bytes]]) -> tuple[int, set[str]]:
+    """Chunk, embed and store files given as (source, branch, file name, bytes). `source` is the stable key
+    the chunks are filed under (and later searched by); it is the same string whether the original lives
+    on disk or in Google Drive."""
     vault_collection = chroma_client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000, chunk_overlap=100,
@@ -268,13 +334,10 @@ def _index_files(vault_files: list[Path], vault_dir: Path, branch: str = "Genera
     all_metadatas = []
     all_ids = []
 
-    for vault_file in vault_files:
-        rel_path = vault_file.relative_to(vault_dir)
-        source = rel_path.as_posix()
+    for source, note_branch, file_name, contents in documents:
         path_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
         note_type = "uploaded_material"
-        note_branch = rel_path.parts[1] if len(rel_path.parts) > 2 else branch
-        pages = extract_text_from_bytes(vault_file.name, vault_file.read_bytes())
+        pages = extract_text_from_bytes(file_name, contents)
 
         for page_number, page_text, tables in pages:
             content = "\n\n".join([page_text, *tables]).strip()
@@ -300,19 +363,15 @@ def _index_files(vault_files: list[Path], vault_dir: Path, branch: str = "Genera
 
     return len(all_chunks), set(all_ids)
 
-def store_uploaded_materials(
-    files: list[tuple[str, bytes]],
-    branch: str,
-    storage_ids: Optional[list[str]] = None,
-) -> list[str]:
-    vault_dir = Path(config.CHROMA_VAULT_DIR).expanduser()
-    vault_dir.mkdir(parents=True, exist_ok=True)
+def _safe_branch(branch: str) -> str:
+    return re.sub(r"[^A-Za-z0-9 _-]", "", branch).strip() or "General"
+
+
+def _prepare_uploads(files: list[tuple[str, bytes]], storage_ids: Optional[list[str]] = None) -> list[tuple[str, bytes, str]]:
+    """Validate uploads (name, type, readable text) before anything is stored anywhere.
+    Returns (safe file name, bytes, storage id) for each; raises ValueError for a bad file."""
     if storage_ids is not None and len(storage_ids) != len(files):
         raise ValueError("Each uploaded material must have one storage ID")
-
-    safe_branch = re.sub(r"[^A-Za-z0-9 _-]", "", branch).strip() or "General"
-    output_dir = vault_dir / "Uploaded Materials" / safe_branch
-    stored_paths = []
     prepared_files = []
 
     for index, (filename, contents) in enumerate(files):
@@ -329,6 +388,20 @@ def store_uploaded_materials(
             raise ValueError(f"No readable text found in uploaded file: {display_name}")
         storage_id = storage_ids[index] if storage_ids is not None else uuid.uuid4().hex
         prepared_files.append((safe_name, contents, storage_id))
+    return prepared_files
+
+
+def store_uploaded_materials(
+    files: list[tuple[str, bytes]],
+    branch: str,
+    storage_ids: Optional[list[str]] = None,
+) -> list[str]:
+    """Local-disk storage: write validated uploads into the uploads folder."""
+    vault_dir = Path(config.CHROMA_VAULT_DIR).expanduser()
+    vault_dir.mkdir(parents=True, exist_ok=True)
+    prepared_files = _prepare_uploads(files, storage_ids)
+    output_dir = vault_dir / "Uploaded Materials" / _safe_branch(branch)
+    stored_paths = []
 
     output_dir.mkdir(parents=True, exist_ok=True)
     for safe_name, contents, storage_id in prepared_files:
@@ -338,19 +411,98 @@ def store_uploaded_materials(
 
     return stored_paths
 
+class StoredPath(str):
+    """The name an upload is filed under (what `Material.filename` holds). It is a plain str, so every
+    caller that only wants the name keeps working; `drive_file_id` is set when the original went to Drive."""
+    drive_file_id: Optional[str] = None
+
+    def __new__(cls, path: str, drive_file_id: Optional[str] = None):
+        obj = super().__new__(cls, path)
+        obj.drive_file_id = drive_file_id
+        return obj
+
+
+def _ingest_to_drive(files: list[tuple[str, bytes]], branch: str, storage_ids: Optional[list[str]]) -> list[StoredPath]:
+    """Validate, put the originals in Google Drive, then index them. Either everything lands or nothing does:
+    if indexing (or a later upload) fails, the Drive files already uploaded are trashed again."""
+    import drive_storage
+
+    prepared = _prepare_uploads(files, storage_ids)
+    safe_branch = _safe_branch(branch)
+    uploaded: list[tuple[StoredPath, str, bytes]] = []
+    try:
+        for safe_name, contents, storage_id in prepared:
+            drive_name = f"{storage_id}_{safe_name}"
+            file_id = drive_storage.upload_bytes(drive_name, contents)
+            uploaded.append((StoredPath(f"Uploaded Materials/{safe_branch}/{drive_name}", file_id), safe_name, contents))
+        _index_documents([(str(stored), safe_branch, safe_name, contents) for stored, safe_name, contents in uploaded])
+    except Exception:
+        for stored, _, _ in uploaded:
+            try:
+                drive_storage.delete_file(stored.drive_file_id)
+            except Exception:
+                log.warning("Couldn't remove Drive file %s after a failed upload", stored.drive_file_id)
+        raise
+    return [stored for stored, _, _ in uploaded]
+
+
+def sync_drive_index(materials: list[tuple[str, str, str]], force: bool = False) -> dict:
+    """Make the vector store match the files in Drive. `materials` is (filename, branch, drive file id) for
+    every Material row stored in Drive. Files with no chunks yet are downloaded and indexed (all of them
+    after a Render restart, which wipes the index); with `force`, every file is re-indexed. Chunks of files
+    that no longer have a row are dropped. A file that can't be fetched is skipped and reported, not fatal."""
+    import drive_storage
+
+    vault_collection = chroma_client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
+    wanted = {_material_index_source(filename) for filename, _, _ in materials}
+    chunks = 0
+    indexed_files = 0
+    failed: list[str] = []
+
+    for filename, branch, file_id in materials:
+        source = _material_index_source(filename)
+        if not force and vault_collection.get(where={"source": source}, limit=1)["ids"]:
+            continue
+        try:
+            contents = drive_storage.download_bytes(file_id)
+            count, _ = _index_documents([(source, branch, PurePosixPath(source).name, contents)])
+            chunks += count
+            indexed_files += 1
+        except Exception as exc:
+            log.warning("Couldn't index %s from Drive: %s", filename, exc)
+            failed.append(filename)
+
+    existing = vault_collection.get(where={"type": "uploaded_material"}, include=["metadatas"])
+    stale = [
+        doc_id for doc_id, metadata in zip(existing["ids"], existing["metadatas"])
+        if (metadata or {}).get("source") not in wanted
+    ]
+    if stale:
+        vault_collection.delete(ids=stale)
+    return {"chunks": chunks, "indexed_files": indexed_files, "failed": failed, "removed_chunks": len(stale)}
+
+
 def ingest_uploaded_materials(
     files: list[tuple[str, bytes]],
     branch: str = "General",
     storage_ids: Optional[list[str]] = None,
 ) -> list[str]:
+    import drive_storage
+    if drive_storage.enabled():
+        return _ingest_to_drive(files, branch, storage_ids)
     stored_paths = store_uploaded_materials(files, branch, storage_ids)
     vault_dir = Path(config.CHROMA_VAULT_DIR).expanduser()
     material_paths = [vault_dir / PurePosixPath(path) for path in stored_paths]
-    _index_files(
-        material_paths,
-        vault_dir,
-        branch,
-    )
+    try:
+        _index_files(
+            material_paths,
+            vault_dir,
+            branch,
+        )
+    except Exception:
+        for path in material_paths:   # no half-saved uploads: a file with no index and no DB record is an orphan
+            path.unlink(missing_ok=True)
+        raise
     return stored_paths
 
 def ingest_uploads(uploads_path: str, branch: str = "General"):
@@ -393,6 +545,16 @@ def _page_request(question: str):
 
 def _material_index_source(filename: str) -> str:
     return PurePosixPath(filename.replace("\\", "/")).as_posix()
+
+
+def delete_material_chunks(filename: str) -> int:
+    """Remove the AI's chunks for one uploaded file (every page). Returns how many were removed.
+    (admin_routes.delete_file already called this, but it was never defined, so deleting a file always failed.)"""
+    vault_collection = chroma_client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
+    ids = vault_collection.get(where={"source": _material_index_source(filename)})["ids"]
+    if ids:
+        vault_collection.delete(ids=ids)
+    return len(ids)
 
 def _chunks_for_pages(source: str, start: int, end: int, limit: int = 8):
     vector_store = Chroma(

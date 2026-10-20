@@ -92,6 +92,7 @@ class Material(Base):
     uploaded_by = Column(String, nullable=False)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     school_id = Column(Integer, nullable=True, index=True)   # the uploader's school
+    drive_file_id = Column(String, nullable=True)   # Google Drive file id of the original; None = a file on local disk
 
 
 class Subject(Base):

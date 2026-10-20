@@ -14,6 +14,7 @@ rag.py is imported inside the functions on purpose: it pulls in Chroma/Ollama, a
 this module's import light is what lets the parsing code be tested without them.
 """
 import json
+import logging
 import re
 from pathlib import Path
 
@@ -283,13 +284,20 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
         except (ValueError, FileNotFoundError) as exc:
             db.commit()   # keep the records of groups that were already saved
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            # Without this, the error escapes as a bare 500 that carries no CORS headers, and the
+            # browser can only report "Failed to fetch". An HTTPException reaches the page intact.
+            db.commit()
+            logging.getLogger(__name__).exception("Upload failed while saving/indexing")
+            raise HTTPException(status_code=502, detail=f"The upload failed: {str(exc)[:200]}") from exc
         for (original_name, _), stored_path in zip(group, stored):
             db.add(Material(
-                filename=stored_path,
+                filename=str(stored_path),
                 display_name=Path(original_name.replace("\\", "/")).name,
                 branch=target,
                 uploaded_by=username,
                 school_id=school_id,
+                drive_file_id=getattr(stored_path, "drive_file_id", None),   # set when the original went to Google Drive
             ))
             if original_name in picked:   # the AI wasn't sure, so a person chose the topic
                 notify_admins(db, "manual_topic", "Topic chosen by a person",

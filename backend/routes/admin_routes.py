@@ -13,6 +13,7 @@ from notifications import notify_admins
 from classifier import AUTO, ingest_with_detection
 from routes.materials_routes import material_summary
 import config
+import drive_storage
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -62,6 +63,12 @@ def delete_file(filename: str, user=Depends(require_admin), db: Session = Depend
     if material is None:
         raise HTTPException(status_code=404, detail="File not found")
 
+    if material.drive_file_id:
+        try:   # first, so a Drive failure leaves everything as it was and the delete can simply be retried
+            drive_storage.delete_file(material.drive_file_id)
+        except drive_storage.DriveStorageError as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
+
     delete_material_chunks(material.filename)
     vault_dir = Path(config.CHROMA_VAULT_DIR).expanduser().resolve()
     target = (vault_dir / material.filename).resolve()
@@ -80,6 +87,14 @@ def clear_knowledge_base(user=Depends(require_admin), db: Session = Depends(get_
     """Wipes the vector store, uploaded files, and their branch
     records together, so the materials list and the AI's searchable content
     can never disagree about what exists."""
+    # Drive first: if any file can't be removed nothing else is touched, and running this again
+    # is safe (a file that's already gone from Drive counts as removed).
+    for drive_file_id in [row[0] for row in db.query(Material.drive_file_id).filter(Material.drive_file_id.isnot(None)).all()]:
+        try:
+            drive_storage.delete_file(drive_file_id)
+        except drive_storage.DriveStorageError as exc:
+            raise HTTPException(status_code=502, detail=f"Nothing was cleared: {exc}")
+
     import chromadb
     client = chromadb.PersistentClient(path=config.CHROMA_PERSIST_DIR)
     try:

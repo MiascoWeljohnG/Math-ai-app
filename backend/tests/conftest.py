@@ -4,6 +4,9 @@ import os
 import sys
 import types
 
+# Never let a test touch the real Google Drive, even when the Drive credentials are in your .env.
+os.environ["STORAGE_BACKEND"] = "local"
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest

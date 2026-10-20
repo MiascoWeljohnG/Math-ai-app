@@ -17,3 +17,6 @@ ollama
 langchain-text-splitters
 langchain-ollama
 langchain-community
+google-api-python-client
+google-auth
+google-auth-httplib2

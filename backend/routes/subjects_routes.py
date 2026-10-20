@@ -18,7 +18,7 @@ from database import get_db
 from models import Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, Subject, User
 from classifier import check_relevance, choose_subject, document_text, read_upload, relevant_text, sample_text, summarize_document
 from rag import ask_stream, generate_text
-from routes.materials_routes import _vault_material_path
+from routes.materials_routes import material_bytes
 from school import in_school, shared_subjects, visible_subjects
 
 router = APIRouter(prefix="/subjects", tags=["subjects"])
@@ -540,9 +540,8 @@ async def _read_material(db: Session, filename: str, user: User) -> tuple[Materi
     material = db.query(Material).filter(Material.filename == filename, in_school(Material.school_id, user.school_id)).first()
     if material is None:
         raise HTTPException(status_code=404, detail="File not found")
-    path = _vault_material_path(material.filename)
     try:
-        text = await run_in_threadpool(lambda: document_text(path.name, path.read_bytes()))
+        text = await run_in_threadpool(lambda: document_text(Path(material.filename).name, material_bytes(material)))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return material, text
