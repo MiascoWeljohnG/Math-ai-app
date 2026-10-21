@@ -23,7 +23,10 @@
 
         <form id="authForm">
             <input class="plain-field" type="text" id="username" placeholder="Username" required autocomplete="username">
-            <input class="plain-field" type="password" id="password" placeholder="Password" required autocomplete="current-password">
+            <div class="pw-wrap">
+                <input class="plain-field" type="password" id="password" placeholder="Password" required autocomplete="current-password">
+                <button type="button" class="eye" data-target="password" aria-label="Show password"></button>
+            </div>
 
             <p class="form-msg" id="error"></p>
             <button type="submit" class="btn-primary" id="submitBtn">LOGIN</button>
@@ -32,7 +35,7 @@
         <p class="switch-line">Don't have an account? <a href="signup.html">Sign up</a></p>
     </main>
 
-    <script src="js/auth.js"></script>
+    <script src="js/auth.js?v=2"></script>
     <script>
         document.getElementById("themeToggleWrap").innerHTML = themeSwitchHTML("indexThemeSwitch");
         wireThemeSwitch("indexThemeSwitch");

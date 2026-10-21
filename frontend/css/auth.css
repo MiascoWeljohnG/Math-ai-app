@@ -98,15 +98,23 @@ body {
     position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer;
     color: #222; display: flex; padding: 0.2rem;
 }
-.field .eye svg { width: 20px; height: 20px; }
 
-/* Eye icons are black SVGs in <img>, so invert them on the dark theme */
-.field .eye img.eye-icon { 
-    width: 20px; 
-    height: 20px; 
-    object-fit: contain; 
+/* Password eye: inline SVG, coloured through currentColor so it follows the theme */
+.field .eye, .pw-wrap .eye { color: #222; }
+[data-theme="dark"] .field .eye, [data-theme="dark"] .pw-wrap .eye { color: var(--text); }
+.eye .eye-icon { width: 20px; height: 20px; display: block; pointer-events: none; }
+.eye:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+/* Login page: password box with the eye inside it */
+.pw-wrap { position: relative; }
+.pw-wrap .plain-field { padding-right: 2.6rem; }
+.login-card .pw-wrap .plain-field { margin-bottom: 0; }
+.login-card .pw-wrap { margin-bottom: 0.95rem; }
+.pw-wrap .eye {
+    position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; display: flex; padding: 0.2rem;
 }
-[data-theme="dark"] .field .eye img.eye-icon { filter: invert(1); }
+
 /* Date of birth: type it, or pick from a calendar that has separate Month and Year dropdowns */
 .field .dob-cal { position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer;
     color: var(--text); display: flex; padding: 0.2rem; }
@@ -161,7 +169,3 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     filter: invert(0.85); /* Turns the right calendar icon light in dark mode */
 }
 
-[data-theme="dark"] .field .eye img,
-[data-theme="dark"] .field .eye img.eye-icon {
-    filter: invert(0.85); /* Ensures password eye icons stay bright in dark mode */
-}
