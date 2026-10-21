@@ -113,8 +113,9 @@ async function deleteConversation(id) {
 function showGreeting() {
     const div = document.createElement("div");
     div.className = "msg bot";
-    const username = localStorage.getItem("username") || "there";
-    div.textContent = `Hi ${username}! I'm your math assistant. Ask me anything — a problem, a concept, or just say hi!`;
+    const fullName = localStorage.getItem("full_name") || "";
+    const firstName = fullName.split(" ")[0] || localStorage.getItem("username") || "there";
+    div.textContent = `Hi ${firstName}! I'm your math assistant. Ask me anything — a problem, a concept, or just say hi!`;
     chat.appendChild(div);
 }
 
@@ -240,9 +241,9 @@ imageFileInput.addEventListener("change", () => {
         // Shrink big phone photos first: smaller uploads are faster and stay under the AI provider's size limit.
         const img = new Image();
         img.onload = () => {
-            const MAX_SIDE = 1024;
+            const MAX_SIDE = 1600;
             let dataUrl = reader.result, mime = file.type;
-            if (true) {  // Always compress
+            if (Math.max(img.width, img.height) > MAX_SIDE || file.size > 1500000) {
                 const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
                 const canvas = document.createElement("canvas");
                 canvas.width = Math.round(img.width * scale);
@@ -251,7 +252,7 @@ imageFileInput.addEventListener("change", () => {
                 ctx.fillStyle = "#fff"; // JPEG has no transparency
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+                dataUrl = canvas.toDataURL("image/jpeg", 0.9);
                 mime = "image/jpeg";
             }
             pendingImageDataUrl = dataUrl;
