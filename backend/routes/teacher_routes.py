@@ -36,37 +36,17 @@ async def teacher_upload(
         if "429" in error_msg or "quota" in error_msg or "rate limit" in error_msg or "embedding" in error_msg:
             log.warning("AI embedding quota exceeded or failed during upload (429). Falling back to metadata-only save: %s", e)
             
-            # Fallback: Save file records to the database and storage without running AI embeddings
+            # Fallback: Save file records to database and local vault safely without crashing
             saved_names = []
             try:
-                import drive_storage
                 import config
                 import os
-                import io
 
                 for file in files:
                     filename = file.filename
                     content = await file.read()
-                    
-                    drive_file_id = None
-                    
-                    # Try pushing to Google Drive if enabled
-                    if drive_storage.enabled():
-                        try:
-                            from googleapiclient.http import MediaIoBaseUpload
-                            file_stream = io.BytesIO(content)
-                            folder_id = drive_storage.check()
-                            media = MediaIoBaseUpload(file_stream, mimetype='application/pdf', resumable=True)
-                            uploaded_drive_file = drive_storage.service.files().create(
-                                body={'name': filename, 'parents': [folder_id]},
-                                media_body=media,
-                                fields='id, webViewLink'
-                            ).execute()
-                            drive_file_id = uploaded_drive_file.get('id')
-                        except Exception as drive_err:
-                            log.error("Drive upload failed during fallback for %s: %s", filename, drive_err)
 
-                    # Fallback local save
+                    # Save locally to Chroma vault folder
                     local_path = os.path.join(config.CHROMA_VAULT_DIR, filename)
                     os.makedirs(config.CHROMA_VAULT_DIR, exist_ok=True)
                     with open(local_path, "wb") as f:
@@ -84,7 +64,7 @@ async def teacher_upload(
                             branch=assigned_branch,
                             uploaded_by=user.username,
                             school_id=user.school_id,
-                            drive_file_id=drive_file_id
+                            drive_file_id=None
                         )
                         db.add(mat)
                         db.commit()
@@ -104,7 +84,7 @@ async def teacher_upload(
                 }
 
             except Exception as fallback_err:
-                log.exception("Fallback save failed completely")
+                log.exception("Fallback save failed completely: %s", fallback_err)
                 raise HTTPException(status_code=500, detail=f"Upload and fallback failed: {str(fallback_err)}")
 
         # Re-raise any unrelated errors normally
