@@ -60,7 +60,7 @@ def roadmap(
         previous = None   # (lesson, its level, its reading minutes): what the lesson before this one looked like
         for lesson in lessons:
             t = tries.get(lesson.id, {"attempts": 0, "best": None, "passed": False})
-            is_done = t["passed"] or (lesson.id in read and lesson.id not in difficulty)
+            is_done = t["passed"] or (lesson.id in read and lesson.id not in difficulty and t["attempts"] == 0)
             done += is_done
             status = "done" if is_done else ("upcoming" if any(r["status"] == "next" for r in rows) else "next")
             level = mastery_level(t["attempts"], t["best"], t["passed"])   # see adaptive.py for the rules

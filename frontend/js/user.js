@@ -44,7 +44,7 @@ function renderSidebar() {
         return;
     }
     for (const c of conversations) {
-        const item = document.createElement("div");
+        const item = document("div");
         item.className = "convo-item" + (c.id === activeConversationId ? " active" : "");
         item.innerHTML = `<span class="title">${escapeHtml(c.title)}</span><button class="del-btn" title="Delete">&times;</button>`;
         item.querySelector(".title").addEventListener("click", () => openConversation(c.id));
@@ -71,12 +71,12 @@ async function openConversation(id) {
         const res = await fetch(`${API}/conversations/${id}/messages`, { headers: authHeaders() });
         if (!res.ok) return;
         const messages = await res.json();
-        if (messages.length === 0) {
-            showGreeting();
-        } else {
+        if (messages.length > 0) {
             for (const m of messages) {
                 addMessage(m.content, m.role === "user" ? "user" : "bot", m.images);
             }
+        } else {
+            showGreeting();
         }
     } catch (_) {
         showGreeting();
@@ -130,7 +130,7 @@ function showGreeting() {
         sessionStorage.removeItem("landingPendingQuestion");
         await loadConversations();
         startNewChat();
-        input.value = pendingQuestion;
+        input.value = pendingAuestion;
         sendQuestion();
         return;
     }
@@ -240,9 +240,9 @@ imageFileInput.addEventListener("change", () => {
         // Shrink big phone photos first: smaller uploads are faster and stay under the AI provider's size limit.
         const img = new Image();
         img.onload = () => {
-            const MAX_SIDE = 1600;
+            const MAX_SIDE = 1024;
             let dataUrl = reader.result, mime = file.type;
-            if (Math.max(img.width, img.height) > MAX_SIDE || file.size > 1500000) {
+            if (true) {  // Always compress
                 const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
                 const canvas = document.createElement("canvas");
                 canvas.width = Math.round(img.width * scale);
@@ -251,7 +251,7 @@ imageFileInput.addEventListener("change", () => {
                 ctx.fillStyle = "#fff"; // JPEG has no transparency
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+                dataUrl = canvas.toDataURL("image/jpeg", 0.7);
                 mime = "image/jpeg";
             }
             pendingImageDataUrl = dataUrl;
