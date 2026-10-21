@@ -96,6 +96,8 @@ async def teacher_upload(
                     "message": f"Saved {len(saved_names)} file(s) successfully (AI indexing skipped due to token quota). Use 'Re-index' later.",
                     "saved_names": saved_names,
                     "savedNames": saved_names,
+                    "uploaded": [{"filename": name, "branch": branch if branch != AUTO else "General", "auto_detected": False} for name in saved_names],
+                    "needs_topic": [],
                     "unclassified": [],
                     "files": [],
                     "branches": []
