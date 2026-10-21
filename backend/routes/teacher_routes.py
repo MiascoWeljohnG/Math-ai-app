@@ -91,11 +91,14 @@ async def teacher_upload(
                     
                     saved_names.append(filename)
 
-                # Return both snake_case and camelCase keys to perfectly match frontend expectations
+                # Return full structure including empty lists to prevent frontend .map() errors
                 return {
                     "message": f"Saved {len(saved_names)} file(s) successfully (AI indexing skipped due to token quota). Use 'Re-index' later.",
                     "saved_names": saved_names,
-                    "savedNames": saved_names
+                    "savedNames": saved_names,
+                    "unclassified": [],
+                    "files": [],
+                    "branches": []
                 }
 
             except Exception as fallback_err:
