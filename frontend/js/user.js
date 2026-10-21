@@ -295,63 +295,63 @@ async function sendQuestion() {
     const imageTypesToSend = pendingImageMimeType ? [pendingImageMimeType] : null;
     clearPendingImage();
     input.value = "";
-    sendBtn.disabled = true;
 
-    const thinking = showDots();
-    let stopPolling = null;
-    let streamedText = "";
-    let tokensStarted = false;
+    await withButtonLoading(sendBtn, async () => {
+        const thinking = showDots();
+        let stopPolling = null;
+        let streamedText = "";
+        let tokensStarted = false;
 
-    await streamAsk(
-        {
-            question,
-            conversation_id: activeConversationId,
-            images: imageToSend,
-            image_mime_types: imageTypesToSend,
-        },
-        {
-            onMeta: (event) => {
-                // Still show live queue position for the real wait between
-                // "your turn is queued" and the model actually starting to
-                // generate — tokens haven't started yet at this point.
-                if (event.was_queued) {
-                    stopPolling = startQueuePolling(thinking);
-                }
-                const isNewConversation = activeConversationId === null;
-                activeConversationId = event.conversation_id;
-                if (isNewConversation) {
-                    conversations.unshift({
-                        id: event.conversation_id,
-                        title: event.conversation_title,
-                        created_at: new Date().toISOString(),
-                    });
-                }
-                renderSidebar();
+        await streamAsk(
+            {
+                question,
+                conversation_id: activeConversationId,
+                images: imageToSend,
+                image_mime_types: imageTypesToSend,
             },
-            onToken: (text) => {
-                if (!tokensStarted) {
-                    tokensStarted = true;
+            {
+                onMeta: (event) => {
+                    // Still show live queue position for the real wait between
+                    // "your turn is queued" and the model actually starting to
+                    // generate — tokens haven't started yet at this point.
+                    if (event.was_queued) {
+                        stopPolling = startQueuePolling(thinking);
+                    }
+                    const isNewConversation = activeConversationId === null;
+                    activeConversationId = event.conversation_id;
+                    if (isNewConversation) {
+                        conversations.unshift({
+                            id: event.conversation_id,
+                            title: event.conversation_title,
+                            created_at: new Date().toISOString(),
+                        });
+                    }
+                    renderSidebar();
+                },
+                onToken: (text) => {
+                    if (!tokensStarted) {
+                        tokensStarted = true;
+                        if (stopPolling) { stopPolling(); stopPolling = null; }
+                        thinking.textContent = ""; 
+                    }
+                    streamedText += text;
+                    // Change this line:
+                    thinking.innerHTML = typeof marked !== "undefined" ? marked.parse(protectMath(streamedText)) : streamedText;
+                    chat.scrollTop = chat.scrollHeight;
+                },
+                onDone: (event) => {
+                    // Render the math fractions once the stream finishes
+                    if (typeof MathJax !== "undefined") {
+                        MathJax.typesetPromise([thinking]).catch((err) => console.log(err));
+                    }
+                },
+                onError: (detail) => {
                     if (stopPolling) { stopPolling(); stopPolling = null; }
-                    thinking.textContent = ""; 
-                }
-                streamedText += text;
-                // Change this line:
-                thinking.innerHTML = typeof marked !== "undefined" ? marked.parse(protectMath(streamedText)) : streamedText;
-                chat.scrollTop = chat.scrollHeight;
-            },
-            onDone: (event) => {
-                // Render the math fractions once the stream finishes
-                if (typeof MathJax !== "undefined") {
-                    MathJax.typesetPromise([thinking]).catch((err) => console.log(err));
-                }
-            },
-            onError: (detail) => {
-                if (stopPolling) { stopPolling(); stopPolling = null; }
-                thinking.textContent = detail || "Error";
-            },
-        }
-    );
+                    thinking.textContent = detail || "Error";
+                },
+            }
+        );
+    });
 
-    sendBtn.disabled = false;
     input.focus();
 }

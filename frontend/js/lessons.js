@@ -304,11 +304,12 @@ generateBtn.addEventListener("click", async () => {
     const file = generateFile.files[0];
     if (!topic && !file) return;
     const subjectId = activeSubjectId;
-    generateBtn.disabled = true;
+
     generateStatus.textContent = file
         ? "Reading your file and writing the lesson… this can take a minute."
         : "Writing your lesson… this can take a minute.";
-    try {
+
+    await withButtonLoading(generateBtn, async () => {
         let result = await postGenerate(subjectId, topic, file, false);
         if (result.status === "mismatch") {
             generateStatus.textContent = "";
@@ -326,9 +327,7 @@ generateBtn.addEventListener("click", async () => {
             await selectSubject(subjectId);
             await selectLesson(result.id);
         }
-    } catch (error) {
+    }).catch(error => {
         generateStatus.textContent = error.message;
-    } finally {
-        generateBtn.disabled = false;
-    }
+    });
 });

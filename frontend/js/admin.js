@@ -209,9 +209,8 @@ async function uploadFiles() {
     statusEl.className = "status";
     statusEl.textContent = "Uploading & ingesting...";
     statusEl.style.display = "block";
-    uploadBtn.disabled = true;
 
-    try {
+    await withButtonLoading(uploadBtn, async () => {
         const branch = document.getElementById("branchSelect").value;
         const { message, savedNames } = await uploadWithTopics(`${API}/admin/upload`, getHeaders(), selectedFiles, branch);
 
@@ -220,12 +219,10 @@ async function uploadFiles() {
         selectedFiles = selectedFiles.filter(f => !savedNames.has(f.name));   // unfiled files stay selected
         renderChips();
         loadFiles();
-    } catch (err) {
+    }).catch(err => {
         statusEl.className = "status error";
         statusEl.textContent = err.message;
-    } finally {
-        uploadBtn.disabled = false;
-    }
+    });
 }
 
 // --- Notification Modal ---

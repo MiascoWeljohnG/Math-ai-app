@@ -68,9 +68,8 @@ async function uploadFiles() {
     statusEl.className = "status";
     statusEl.textContent = "Uploading & ingesting...";
     statusEl.style.display = "block";
-    uploadBtn.disabled = true;
 
-    try {
+    await withButtonLoading(uploadBtn, async () => {
         const branch = document.getElementById("branchSelect").value;
         const { message, savedNames } = await uploadWithTopics(`${API}/teacher/upload`, getHeaders(), selectedFiles, branch);
 
@@ -80,11 +79,10 @@ async function uploadFiles() {
         renderChips();
         loadMyFiles();
         loadMaterialOptions();
-    } catch (err) {
+    }).catch(err => {
         statusEl.className = "status error";
         statusEl.textContent = err.message;
-        uploadBtn.disabled = selectedFiles.length === 0;
-    }
+    });
 }
 
 // --- Files this teacher uploaded (the server only returns their own) ---
@@ -304,9 +302,9 @@ async function draftLesson() {
         showLessonStatus("Enter a topic to draft first.", "error");
         return;
     }
-    draftBtn.disabled = true;
-    draftBtn.textContent = "Drafting…";
-    try {
+
+    await withButtonLoading(draftBtn, async () => {
+        draftBtn.textContent = "Drafting…";
         const response = await fetch(
             `${API}/subjects/${activeLessonSubjectId}/lessons/draft`,
             {
@@ -320,12 +318,11 @@ async function draftLesson() {
         lessonContentInput.value = result.draft_content;
         if (!lessonTitleInput.value) lessonTitleInput.value = topic;
         showLessonStatus("Draft ready. Review it before saving.", "success");
-    } catch (error) {
+    }).catch(error => {
         showLessonStatus(error.message, "error");
-    } finally {
-        draftBtn.disabled = false;
-        draftBtn.textContent = "AI draft";
-    }
+    });
+    
+    draftBtn.textContent = "AI draft";
 }
 
 async function saveLesson() {
@@ -376,17 +373,15 @@ async function lessonPost(path, body) {
 
 async function suggestOutline() {
     if (activeLessonSubjectId === null) return showLessonStatus("Choose a subject first.", "error");
-    outlineBtn.disabled = true;
-    showLessonStatus("Planning the course… this can take a minute.", "");
-    try {
+    
+    await withButtonLoading(outlineBtn, async () => {
+        showLessonStatus("Planning the course… this can take a minute.", "");
         const { titles } = await lessonPost("outline", { count: 6 });
         outlineInput.value = titles.join("\n");
         showLessonStatus("Edit the list if you like, then press Generate & save all.", "success");
-    } catch (error) {
+    }).catch(error => {
         showLessonStatus(error.message, "error");
-    } finally {
-        outlineBtn.disabled = false;
-    }
+    });
 }
 
 // One request per lesson so a slow local model never hits a timeout.
@@ -395,9 +390,9 @@ async function generateAll() {
     if (activeLessonSubjectId === null) return showLessonStatus("Choose a subject first.", "error");
     const titles = outlineInput.value.split("\n").map(line => line.trim()).filter(Boolean);
     if (!titles.length) return showLessonStatus("Add at least one lesson title first.", "error");
-    generateAllBtn.disabled = true;
-    let quizFailures = 0;
-    try {
+    
+    await withButtonLoading(generateAllBtn, async () => {
+        let quizFailures = 0;
         for (let i = 0; i < titles.length; i++) {
             showLessonStatus(`Writing lesson ${i + 1} of ${titles.length}: ${titles[i]}…`, "");
             const lesson = await lessonPost("generate", { topic: titles[i] });
@@ -414,11 +409,9 @@ async function generateAll() {
         }
         const quizNote = quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "";
         showLessonStatus(`Done. ${titles.length} lesson(s) saved.${quizNote} Review them before students see them.`, quizFailures ? "error" : "success");
-    } catch (error) {
+    }).catch(error => {
         showLessonStatus(error.message, "error");
-    } finally {
-        generateAllBtn.disabled = false;
-    }
+    });
 }
 
 async function reindexUploads() {
@@ -529,14 +522,19 @@ async function createSubject() {
     const file = subjectFileInput.files[0];
     const writeLessons = Boolean(file) && subjectLessonsInput.checked;
     const withQuiz = subjectQuizInput.checked;
-    subjectCreateBtn.disabled = true;
+    
     let subject;
-    try {
-        subject = await postJson(`${API}/subjects/shared`, { name, description: subjectDescInput.value.trim() || null });
-    } catch (error) {
-        subjectCreateBtn.disabled = false;
-        return showSubjectStatus(error.message, "error");   // e.g. 'A subject called "Algebra" already exists'
-    }
+    await withButtonLoading(subjectCreateBtn, async () => {
+        try {
+            subject = await postJson(`${API}/subjects/shared`, { name, description: subjectDescInput.value.trim() || null });
+        } catch (error) {
+            showSubjectStatus(error.message, "error");   // e.g. 'A subject called "Algebra" already exists'
+            throw error;
+        }
+    }).catch(() => { return; });
+    
+    if (!subject) return;
+
     subjectDialog.close();
     await loadLessonSubjects(subject.id);
     startNewLesson();
@@ -639,9 +637,11 @@ async function postJson(url, body) {
 async function generateFromFile() {
     const filename = materialSelect.value;
     if (!filename) return showLessonStatus("Choose an uploaded file first.", "error");
-    fromFileBtn.disabled = lessonSubjectSelect.disabled = true;
-    let written = 0, total = 0;
-    try {
+    
+    lessonSubjectSelect.disabled = true;
+    
+    await withButtonLoading(fromFileBtn, async () => {
+        let written = 0, total = 0;
         showLessonStatus("Reading the file and finding its branch… this can take a minute.", "");
         const plan = await postJson(`${API}/subjects/analyze-material`, { filename, count: 5 });
         if (plan.status === "not_math") {
@@ -683,10 +683,9 @@ async function generateFromFile() {
         const where = plan.status === "new" ? `the new subject "${subjectName}"` : `"${subjectName}"`;
         showLessonStatus(`Done. ${written} lesson(s) saved to ${where}.${quizNote} Review them before students see them.`, quizFailures ? "error" : "success");
         loadStudents();
-    } catch (error) {
-        const progress = written ? ` ${written} of ${total} lesson(s) were saved before it stopped.` : "";
-        showLessonStatus(error.message + progress, "error");
-    } finally {
-        fromFileBtn.disabled = lessonSubjectSelect.disabled = false;
-    }
+    }).catch(error => {
+        showLessonStatus(error.message, "error");
+    }).finally(() => {
+        lessonSubjectSelect.disabled = false;
+    });
 }
