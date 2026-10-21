@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import RegisteredStudent, School, User
 from auth import hash_password, verify_password, create_access_token
+from notifications import notify_admins
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -21,10 +22,24 @@ class RegisterRequest(BaseModel):
     student_id: str
     full_name: str
     email: str
-    birthday: str   # YYYY-MM-DD
+    birthday: str # YYYY-MM-DD
     password: str
-    school_id: Optional[int] = None   # required once the main admin has added any school
+    school_id: Optional[int] = None # required once the main admin has added any school
 
+class AccessRequest(BaseModel):
+    student_id: str
+    full_name: str
+    email: str
+
+@router.post("/request-access")
+def request_access(req: AccessRequest, db: Session = Depends(get_db)):
+    student_id = req.student_id.strip()
+    full_name = " ".join(req.full_name.split())
+    email = req.email.strip()
+    
+    message = f"Student '{full_name}' with ID '{student_id}' (Email: {email}) is trying to register but their number is not in the system."
+    notify_admins(db, "access_request", "New Student Registration Request", message)
+    return {"message": "Access request sent to admins"}
 
 @router.post("/register")
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
@@ -45,13 +60,11 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if born > date.today():
         raise HTTPException(400, "Birthday cannot be in the future")
 
-    # Once the admins have registered any student numbers, only those can sign up, and the student joins
-    # the school their number is listed under. Before that, students pick their school themselves.
     school_id = None
     if db.query(RegisteredStudent).count():
         registered = db.query(RegisteredStudent).filter(RegisteredStudent.student_number == student_id).first()
         if registered is None:
-            raise HTTPException(400, "This Student ID is not registered. Please check it, or ask your school.")
+            raise HTTPException(400, "This Student ID is not registered.")
         school_id = registered.school_id
     elif db.query(School).count():
         if req.school_id is None or not db.query(School).filter(School.id == req.school_id).first():
@@ -62,8 +75,6 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == student_id).first():
         raise HTTPException(400, "An account with this Student ID already exists")
 
-    # Keep first/last name filled in too, so the admin and teacher tables
-    # (which still read those columns) keep showing sensible names.
     parts = full_name.split(" ")
     first_name = " ".join(parts[:-1]) if len(parts) > 1 else full_name
     last_name = parts[-1] if len(parts) > 1 else ""
@@ -102,5 +113,5 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "role": user.role,
         "full_name": display_name,
         "school_id": user.school_id,
-        "school_name": school.name if school else None,   # None = the main pool
+        "school_name": school.name if school else None,
     }
