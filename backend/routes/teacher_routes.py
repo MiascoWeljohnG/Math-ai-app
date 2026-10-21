@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
+import logging
 
 from auth import require_teacher
 from database import get_db
@@ -11,6 +12,7 @@ from progress import progress_for_user
 from routes.materials_routes import material_summary
 
 router = APIRouter(prefix="/teacher", tags=["teacher"])
+log = logging.getLogger(__name__)
 
 
 @router.post("/upload")
@@ -21,18 +23,94 @@ async def teacher_upload(
     user: User = Depends(require_teacher),
     db: Session = Depends(get_db),
 ):
-    # Mirrors admin_routes.py's /admin/upload — teachers upload into the
-    # same shared knowledge base admins manage, just through their own
-    # endpoint so the two roles stay clearly separate in the API.
-    # branch=Auto: the AI picks each file's branch and only asks when it isn't sure (classifier.py)
-    return await ingest_with_detection(files, branch, branches, user.username, db, school_id=user.school_id)
+    """
+    Uploads files into the shared knowledge base. Handles AI quota/rate-limit (429) errors 
+    gracefully by saving file metadata and storage links without immediate embedding generation,
+    allowing batch uploads to complete. You can re-index them later from the dashboard.
+    """
+    try:
+        return await ingest_with_detection(files, branch, branches, user.username, db, school_id=user.school_id)
+    except Exception as e:
+        error_msg = str(e).lower()
+        # Check for AI rate limit, quota exhaustion (429), or general embedding failures
+        if "429" in error_msg or "quota" in error_msg or "rate limit" in error_msg or "embedding" in error_msg:
+            log.warning("AI embedding quota exceeded or failed during upload (429). Falling back to metadata-only save: %s", e)
+            
+            # Fallback: Save file records to the database and storage without running AI embeddings
+            saved_names = set()
+            try:
+                import drive_storage
+                import config
+                import shutil
+                import os
+
+                for file in files:
+                    filename = file.filename
+                    # Read content
+                    content = await file.read()
+                    
+                    drive_file_id = None
+                    drive_url = None
+                    
+                    # Try pushing to Google Drive if enabled, else save locally
+                    if drive_storage.enabled():
+                        try:
+                            import io
+                            from googleapiclient.http import MediaIoBaseUpload
+                            file_stream = io.BytesIO(content)
+                            folder_id = drive_storage.check()
+                            media = MediaIoBaseUpload(file_stream, mimetype='application/pdf', resumable=True)
+                            uploaded_drive_file = drive_storage.service.files().create(
+                                body={'name': filename, 'parents': [folder_id]},
+                                media_body=media,
+                                fields='id, webViewLink'
+                            ).execute()
+                            drive_file_id = uploaded_drive_file.get('id')
+                            drive_url = uploaded_drive_file.get('webViewLink')
+                        except Exception as drive_err:
+                            log.error("Drive upload failed during fallback for %s: %s", filename, drive_err)
+
+                    # Fallback local save if drive isn't used
+                    local_path = os.path.join(config.CHROMA_VAULT_DIR, filename)
+                    os.makedirs(config.CHROMA_VAULT_DIR, exist_ok=True)
+                    with open(local_path, "wb") as f:
+                        f.write(content)
+
+                    # Resolve branch value
+                    assigned_branch = branch if branch != AUTO else "General"
+
+                    # Save material record to PostgreSQL database
+                    existing = db.query(Material).filter(Material.filename == filename, Material.uploaded_by == user.username).first()
+                    if not existing:
+                        mat = Material(
+                            filename=filename,
+                            display_name=filename,
+                            branch=assigned_branch,
+                            uploaded_by=user.username,
+                            school_id=user.school_id,
+                            drive_file_id=drive_file_id
+                        )
+                        db.add(mat)
+                        db.commit()
+                    
+                    saved_names.add(filename)
+
+                return {
+                    "message": f"Saved {len(saved_names)} file(s) successfully (AI indexing skipped due to token quota). Use 'Re-index' later.",
+                    "savedNames": list(saved_names)
+                }
+
+            except Exception as fallback_err:
+                log.exception("Fallback save failed completely")
+                raise HTTPException(status_code=500, detail=f"Upload and fallback failed: {str(fallback_err)}")
+
+        # Re-raise any unrelated errors normally
+        raise e
 
 
 @router.get("/files")
 def my_files(user: User = Depends(require_teacher), db: Session = Depends(get_db)):
-    """Only the files this teacher uploaded. The filter is here, not in the page, so a
-    teacher can't read other uploaders' files by editing the front end. Admins see all of
-    them in /admin/files."""
+    """Only the files this teacher uploaded."""
     rows = (
         db.query(Material)
         .filter(Material.uploaded_by == user.username)
@@ -44,13 +122,10 @@ def my_files(user: User = Depends(require_teacher), db: Session = Depends(get_db
 
 @router.get("/students")
 def list_students(user: User = Depends(require_teacher), db: Session = Depends(get_db)):
-    """The students of this teacher's school, each with their real progress per math branch.
-    There's no per-class roster model yet, so a teacher sees every student of their own school."""
+    """The students of this teacher's school, each with their real progress per math branch."""
     students = db.query(User).filter(User.role == "user", in_school(User.school_id, user.school_id)).all()
-    # one column per shared subject, so branches the AI creates (or the admins delete) show up here
     branches = [name for (name,) in db.query(Subject.name).filter(shared_subjects(user)).order_by(Subject.id.asc())]
     empty = {"completed": 0, "total": 0, "percent": 0}
-    # how many shared lessons each student is struggling with / has mastered (their private subjects stay private)
     lessons = [i for (i,) in db.query(Lesson.id).join(Subject, Subject.id == Lesson.subject_id).filter(shared_subjects(user))]
     levels = level_counts(db, [s.id for s in students], lessons)
     result = []
@@ -61,7 +136,6 @@ def list_students(user: User = Depends(require_teacher), db: Session = Depends(g
             "first_name": s.first_name,
             "last_name": s.last_name,
             "email": s.email,
-            # one entry per dashboard column, in the same order for every student
             "progress": [by_branch.get(b, {"branch": b, **empty}) for b in branches],
             "levels": levels[s.id],
         })
