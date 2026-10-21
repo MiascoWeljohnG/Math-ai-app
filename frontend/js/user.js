@@ -44,7 +44,7 @@ function renderSidebar() {
         return;
     }
     for (const c of conversations) {
-        const item = document("div");
+        const item = document.createElement("div");
         item.className = "convo-item" + (c.id === activeConversationId ? " active" : "");
         item.innerHTML = `<span class="title">${escapeHtml(c.title)}</span><button class="del-btn" title="Delete">&times;</button>`;
         item.querySelector(".title").addEventListener("click", () => openConversation(c.id));
@@ -71,12 +71,12 @@ async function openConversation(id) {
         const res = await fetch(`${API}/conversations/${id}/messages`, { headers: authHeaders() });
         if (!res.ok) return;
         const messages = await res.json();
-        if (messages.length > 0) {
+        if (messages.length === 0) {
+            showGreeting();
+        } else {
             for (const m of messages) {
                 addMessage(m.content, m.role === "user" ? "user" : "bot", m.images);
             }
-        } else {
-            showGreeting();
         }
     } catch (_) {
         showGreeting();
@@ -113,9 +113,8 @@ async function deleteConversation(id) {
 function showGreeting() {
     const div = document.createElement("div");
     div.className = "msg bot";
-    const fullName = localStorage.getItem("full_name") || "";
-    const firstName = fullName.split(" ")[0] || localStorage.getItem("username") || "there";
-    div.textContent = `Hi ${firstName}! I'm your math assistant. Ask me anything — a problem, a concept, or just say hi!`;
+    const username = localStorage.getItem("username") || "there";
+    div.textContent = `Hi ${username}! I'm your math assistant. Ask me anything — a problem, a concept, or just say hi!`;
     chat.appendChild(div);
 }
 
@@ -131,7 +130,7 @@ function showGreeting() {
         sessionStorage.removeItem("landingPendingQuestion");
         await loadConversations();
         startNewChat();
-        input.value = pendingAuestion;
+        input.value = pendingQuestion;
         sendQuestion();
         return;
     }

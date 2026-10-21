@@ -80,10 +80,7 @@
                 <div class="panel">
                     <h3>Generate a whole course</h3>
                     <div class="stack">
-                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.6rem;">
-  <input type="number" id="lessonCount" class="branch-select" value="6" min="1" max="20" style="width: 70px;" aria-label="Number of lessons">
-  <button class="btn btn-secondary btn-block" type="button" id="outlineBtn" onclick="suggestOutline()" style="flex: 1;">Suggest lessons</button>
-</div>
+                        <button class="btn btn-secondary btn-block" type="button" id="outlineBtn" onclick="suggestOutline()">Suggest 6 lessons</button>
                         <textarea id="outlineInput" rows="6" aria-label="Lesson titles, one per line" placeholder="One lesson title per line. Edit freely, then generate."></textarea>
                         <label class="check"><input type="checkbox" id="withQuizInput" checked> Also create a quiz for each lesson</label>
                         <button class="btn btn-primary btn-block" type="button" id="generateAllBtn" onclick="generateAll()">Generate &amp; save all</button>
@@ -137,6 +134,7 @@
     <div class="section">
         <div class="section-head">
             <h2>Reminders</h2>
+            <p class="hint">Notes students see on their Roadmap page. Pick one student or everyone.</p>
         </div>
         <div class="stack">
             <label for="reminderTarget" class="label">Send to</label>
