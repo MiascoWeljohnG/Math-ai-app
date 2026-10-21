@@ -37,25 +37,22 @@ async def teacher_upload(
             log.warning("AI embedding quota exceeded or failed during upload (429). Falling back to metadata-only save: %s", e)
             
             # Fallback: Save file records to the database and storage without running AI embeddings
-            saved_names = set()
+            saved_names = []
             try:
                 import drive_storage
                 import config
-                import shutil
                 import os
+                import io
 
                 for file in files:
                     filename = file.filename
-                    # Read content
                     content = await file.read()
                     
                     drive_file_id = None
-                    drive_url = None
                     
-                    # Try pushing to Google Drive if enabled, else save locally
+                    # Try pushing to Google Drive if enabled
                     if drive_storage.enabled():
                         try:
-                            import io
                             from googleapiclient.http import MediaIoBaseUpload
                             file_stream = io.BytesIO(content)
                             folder_id = drive_storage.check()
@@ -66,11 +63,10 @@ async def teacher_upload(
                                 fields='id, webViewLink'
                             ).execute()
                             drive_file_id = uploaded_drive_file.get('id')
-                            drive_url = uploaded_drive_file.get('webViewLink')
                         except Exception as drive_err:
                             log.error("Drive upload failed during fallback for %s: %s", filename, drive_err)
 
-                    # Fallback local save if drive isn't used
+                    # Fallback local save
                     local_path = os.path.join(config.CHROMA_VAULT_DIR, filename)
                     os.makedirs(config.CHROMA_VAULT_DIR, exist_ok=True)
                     with open(local_path, "wb") as f:
@@ -93,11 +89,13 @@ async def teacher_upload(
                         db.add(mat)
                         db.commit()
                     
-                    saved_names.add(filename)
+                    saved_names.append(filename)
 
+                # Return both snake_case and camelCase keys to perfectly match frontend expectations
                 return {
                     "message": f"Saved {len(saved_names)} file(s) successfully (AI indexing skipped due to token quota). Use 'Re-index' later.",
-                    "savedNames": list(saved_names)
+                    "saved_names": saved_names,
+                    "savedNames": saved_names
                 }
 
             except Exception as fallback_err:
