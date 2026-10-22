@@ -100,7 +100,7 @@ async function selectSubject(subjectId, { openList = true } = {}) {
     
     const placeholder = document.createElement("p");
     placeholder.className = "lesson-empty";
-    placeholder.textContent = "Subject selected. Double-click the subject button above to pick a lesson.";
+    placeholder.textContent = "Subject selected. Tap the subject button above again to pick a lesson.";
     lessonContent.appendChild(placeholder);
 
     try {

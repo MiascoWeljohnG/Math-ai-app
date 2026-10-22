@@ -1,5 +1,8 @@
-const API = (location.hostname === "localhost" || location.hostname === "127.0.0.1")
-    ? "http://localhost:8000"
+// A phone on the same Wi-Fi opens this site through the PC's LAN address (e.g. 192.168.1.20), so
+// private addresses talk to the backend on that same machine; anything else uses the Render backend.
+const IS_LOCAL_HOST = /^(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(location.hostname);
+const API = IS_LOCAL_HOST
+    ? `http://${location.hostname}:8000`
     : "https://isipnayan.onrender.com"; // Render backend
 
 // Where each role lands after login (and where it is sent when it opens a page that isn't its own)
