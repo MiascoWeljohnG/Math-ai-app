@@ -1,0 +1,184 @@
+/* Login + Create Account screens */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Roboto:wght@400;500;700;900&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+    font-family: 'Poppins', 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    position: relative; overflow-x: hidden; padding: 1.5rem;
+}
+.theme-toggle-wrap { position: fixed; top: 1rem; right: 1rem; z-index: 20; }
+
+/* ---------- Colourful blobs ---------- */
+.blob { position: fixed; border-radius: 50%; z-index: 0; pointer-events: none; }
+.blob.b-green  { width: clamp(170px, 26vw, 240px); height: clamp(180px, 28vw, 260px); top: 9%; right: 27%;
+    background: radial-gradient(circle at 28% 45%, #43e9f5 0%, #74df9f 38%, #5fe062 78%); }
+.blob.b-yellow { width: clamp(120px, 20vw, 190px); height: clamp(120px, 20vw, 190px); top: 44%; right: -3%;
+    background: radial-gradient(circle at 40% 30%, #fbe06a 0%, #efc02a 55%, #e0a70d 100%); }
+.blob.b-red    { width: clamp(200px, 30vw, 300px); height: clamp(240px, 42vw, 380px); left: -8%; bottom: -10%;
+    background: radial-gradient(circle at 12% 70%, #f6858c 0%, #e35555 45%, #c62828 100%); }
+.blob.b-lime   { width: clamp(260px, 46vw, 440px); height: clamp(220px, 36vw, 360px); right: -9%; bottom: -14%;
+    background: radial-gradient(circle at 68% 65%, #a3f59a 0%, #6fd352 50%, #55b833 100%); opacity: 0.95; }
+.blob.b-pink   { width: clamp(110px, 19vw, 170px); height: clamp(110px, 19vw, 170px); left: 60%; bottom: -7%;
+    background: radial-gradient(circle at 48% 50%, #ff5fa8 0%, #ff9f71 55%, #ffb04a 100%); }
+[data-theme="dark"] .blob { opacity: 0.55; }
+
+/* ---------- Faint math glyphs (sign-up background) ---------- */
+.glyph { position: fixed; z-index: 0; color: var(--text); opacity: 0.06; font-family: Georgia, serif; font-weight: 700; pointer-events: none; user-select: none; }
+
+/* ---------- Cards ---------- */
+.auth-card {
+    position: relative; z-index: 2; background: var(--card-cream);
+    border: 1px solid #b9b9a4; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+}
+.login-card { width: min(360px, 100%); padding: 1.6rem 2rem 1.4rem; text-align: center; }
+.login-card .logo { width: 150px; height: auto; display: block; margin: 0 auto 0.35rem; }
+.tagline { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: 0.8rem; margin-bottom: 1.5rem; color: var(--text); }
+.tagline .num { color: #1c7c1c; }
+.tagline .fut { color: #c62828; }
+
+.plain-field, .field input, .field select {
+    width: 100%; border: 1px solid var(--field-border); border-radius: 10px;
+    background: transparent; color: var(--text); font: 500 0.82rem 'Poppins', sans-serif;
+    padding: 0.7rem 0.9rem; outline: none;
+}
+.plain-field::placeholder, .field input::placeholder { color: var(--text-muted); }
+.plain-field:focus, .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(101,150,79,0.25); }
+.login-card .plain-field { margin-bottom: 0.95rem; }
+
+.btn-primary {
+    width: 100%; border: none; border-radius: 8px; background: var(--accent); color: #fff;
+    font: 600 0.8rem 'Poppins', sans-serif; letter-spacing: 0.08em; padding: 0.6rem 1rem; cursor: pointer;
+    transition: background 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+}
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn-outline {
+    width: 100%; border: 1px solid var(--field-border); border-radius: 8px; background: transparent; color: var(--heading);
+    font: 600 0.8rem 'Poppins', sans-serif; padding: 0.6rem 1rem; cursor: pointer; text-decoration: none;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+}
+.btn-outline:hover { background: var(--hover-bg); }
+
+.switch-line { margin-top: 0.7rem; font-size: 0.78rem; color: var(--text); }
+.switch-line a { color: #0b5d0b; font-weight: 600; text-decoration: none; }
+.switch-line a:hover { text-decoration: underline; }
+
+.form-msg { font-size: 0.78rem; margin: 0 0 0.8rem; display: none; text-align: left; }
+.form-msg.error { color: var(--danger); display: block; }
+.form-msg.ok { color: #1c7c1c; display: block; }
+
+/* ---------- Create Account ---------- */
+.signup-wrap { position: relative; z-index: 2; width: min(1000px, 100%); display: flex; align-items: center; justify-content: center; gap: 3rem; }
+.signup-logo { flex: 0 0 auto; }
+.signup-logo img { width: clamp(150px, 20vw, 210px); height: auto; display: block; }
+.signup-card { flex: 0 1 560px; width: 100%; padding: 1.5rem 2.4rem 1.6rem; position: relative; }
+.signup-card h1 { font: 700 1.9rem 'Roboto', sans-serif; color: var(--heading); margin-bottom: 1rem; }
+.signup-card .close-x {
+    position: absolute; top: 0.9rem; right: 1.1rem; background: none; border: none; color: var(--text);
+    font-size: 1.7rem; line-height: 1; cursor: pointer; text-decoration: none;
+}
+.signup-card .close-x:hover { color: var(--danger); }
+.signup-card label.lbl { display: block; font: 700 0.9rem 'Roboto', sans-serif; color: var(--heading); margin: 0.65rem 0 0.25rem; }
+.field { position: relative; }
+.field .ico { 
+    position: absolute; 
+    left: 0.75rem; 
+    top: 50%; 
+    transform: translateY(-50%); 
+    width: 18px; 
+    height: 18px; 
+    color: var(--text-muted); /* Updated from #555 so it uses theme colors */
+    pointer-events: none; 
+}
+.field input { padding-left: 2.6rem; padding-right: 2.6rem; font-size: 0.78rem; }
+.field .eye {
+    position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer;
+    color: #222; display: flex; padding: 0.2rem;
+}
+
+/* Password eye: inline SVG, coloured through currentColor so it follows the theme */
+.field .eye, .pw-wrap .eye { color: #222; }
+[data-theme="dark"] .field .eye, [data-theme="dark"] .pw-wrap .eye { color: var(--text); }
+.eye .eye-icon { width: 20px; height: 20px; display: block; pointer-events: none; }
+.eye:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+/* Login page: password box with the eye inside it */
+.pw-wrap { position: relative; }
+.pw-wrap .plain-field { padding-right: 2.6rem; }
+.login-card .pw-wrap .plain-field { margin-bottom: 0; }
+.login-card .pw-wrap { margin-bottom: 0.95rem; }
+.pw-wrap .eye {
+    position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer; display: flex; padding: 0.2rem;
+}
+
+/* Date of birth: type it, or pick from a calendar that has separate Month and Year dropdowns */
+.field .dob-cal { position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer;
+    color: var(--text); display: flex; padding: 0.2rem; }
+.field .dob-cal svg { width: 20px; height: 20px; }
+.dob-pop { position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; width: min(300px, 100%); padding: 0.7rem;
+    background: var(--bg-elevated); color: var(--text); border: 1px solid var(--field-border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.22); }
+.dob-pop[hidden] { display: none; }
+.dob-head { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.5rem; }
+.dob-pop .dob-head select { flex: 1; min-width: 0; width: auto; padding: 0.35rem 0.4rem; border-radius: 6px; cursor: pointer;
+    background: var(--bg-elevated); color: var(--text); border: 1px solid var(--field-border); font: 600 0.78rem 'Poppins', sans-serif; }
+.dob-pop select option { background: var(--bg-elevated); color: var(--text); }
+.dob-nav { flex: none; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    background: none; border: 1px solid var(--field-border); border-radius: 6px; color: var(--text); }
+.dob-nav:hover:not(:disabled) { background: var(--hover-bg); }
+.dob-nav:disabled { opacity: 0.35; cursor: not-allowed; }
+.dob-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.dob-grid .dow { font: 600 0.68rem 'Poppins', sans-serif; color: var(--text-muted); padding: 0.25rem 0; }
+.dob-day { aspect-ratio: 1; border: none; background: none; border-radius: 50%; color: var(--text); font: 500 0.78rem 'Poppins', sans-serif; cursor: pointer; }
+.dob-day:hover:not(:disabled) { background: var(--hover-bg); }
+.dob-day.today { box-shadow: inset 0 0 0 1px var(--accent); }
+.dob-day.sel, .dob-day.sel:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.dob-day:disabled { opacity: 0.3; cursor: not-allowed; }
+.dob-day:focus-visible, .dob-nav:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.terms { display: flex; align-items: center; gap: 0.6rem; margin: 0.9rem 0 0.8rem; font: 500 0.78rem 'Roboto', sans-serif; color: var(--text-muted); }
+.terms input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
+.terms b { color: var(--heading); }
+.divider { display: flex; align-items: center; gap: 0.75rem; margin: 0.85rem 0; font: 500 0.75rem 'Roboto', sans-serif; color: var(--text-muted); }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+@media (max-width: 760px) {
+    .signup-wrap { flex-direction: column; gap: 1rem; }
+    .signup-card { padding: 1.3rem 1.3rem 1.4rem; }
+}
+/* Increase the size of the native calendar icon */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    transform: scale(1.4); /* Adjust this number up or down for your preferred size */
+    cursor: pointer;
+}
+/* ---------- Dark Mode Icon Fixes ---------- */
+[data-theme="dark"] .field .ico {
+    color: var(--heading); /* Brightens user, email, calendar, and lock SVG icons */
+}
+
+/* Calendar picker icon size + dark mode invert */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    transform: scale(1.3);
+    cursor: pointer;
+}
+
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.85); /* Turns the right calendar icon light in dark mode */
+}
+
+
+/* Browser autofill (Edge/Chrome) paints fields pale blue, which hides the light eye icon in dark mode.
+   Keep the theme background and text colour instead. */
+.plain-field:-webkit-autofill,
+.plain-field:-webkit-autofill:hover,
+.plain-field:-webkit-autofill:focus,
+.field input:-webkit-autofill,
+.field input:-webkit-autofill:hover,
+.field input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--text);
+    caret-color: var(--text);
+    transition: background-color 9999s ease-in-out 0s;
+}

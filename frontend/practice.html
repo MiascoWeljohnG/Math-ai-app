@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Practice set</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap">
+    <link rel="stylesheet" href="css/theme.css">
+    <!-- Same MathJax setup as the quiz page, so $...$ in questions renders -->
+    <script>
+      window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] } };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        :root, [data-theme="light"] { --q-mint: #c9fce4; --q-green: #006b1b; --q-ink: #0b4a12; --q-on-green: #ffffff; }
+        [data-theme="dark"] { --q-mint: #1b3a26; --q-green: #6fd070; --q-ink: #bff0b8; --q-on-green: #08210f; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Roboto', 'Segoe UI', sans-serif; }
+        .wrap { max-width: 760px; margin: 1.5rem auto; padding: 0 1rem 3rem; }
+        a { color: var(--q-green); }
+        .card { background: var(--bg-elevated); border: 1px solid var(--field-border); border-radius: 14px; box-shadow: 1px 2px 8px rgba(0,0,0,0.12); padding: 1.4rem; }
+        h1 { margin: 0 0 0.2rem; font-size: 1.5rem; color: var(--q-green); }
+        .muted { color: var(--text-muted); font-size: 0.9rem; margin: 0.2rem 0 0.8rem; }
+        .btn { display: inline-block; padding: 0.55rem 1.4rem; border: 1px solid var(--q-green); border-radius: 999px; background: var(--q-mint); color: var(--q-ink); font: 700 0.95rem 'Roboto', sans-serif; cursor: pointer; text-decoration: none; margin: 0.4rem 0.4rem 0 0; }
+        .btn:hover { background: var(--q-green); color: var(--q-on-green); }
+        .btn.primary { background: var(--q-green); color: var(--q-on-green); }
+        .q { margin: 1.1rem 0; padding: 0.9rem 1rem; border: 1px solid var(--field-border); border-radius: 10px; }
+        .q-text { margin: 0 0 0.6rem; font-weight: 700; }
+        .choice { display: block; margin: 0.3rem 0; cursor: pointer; }
+        .q input[type="text"] { width: 100%; max-width: 20rem; padding: 0.5rem 0.7rem; border-radius: 8px; border: 1px solid var(--field-border); background: var(--bg); color: var(--text); font: inherit; }
+        .q.ok { border-color: var(--q-green); }
+        .q.bad { border-color: #c0392b; }
+        .q .why { color: var(--text-muted); font-size: 0.9rem; margin: 0.3rem 0 0; }
+        .score { font-size: 1.3rem; font-weight: 700; margin: 0.5rem 0; }
+        .error { color: #c0392b; }
+    </style>
+</head>
+<body>
+<main class="wrap">
+    <p><a id="backLink" href="roadmap.html">&larr; Back to the roadmap</a></p>
+    <section class="card">
+        <h1 id="title">Practice set</h1>
+        <p class="muted" id="subtitle"></p>
+        <p id="blurb"></p>
+        <p class="muted" id="status">Loading…</p>
+        <div id="questions"></div>
+        <div id="actions">
+            <button class="btn primary" id="checkBtn" type="button" hidden>Check my answers</button>
+            <button class="btn" id="retryBtn" type="button" hidden>Try again</button>
+        </div>
+        <div id="result" hidden>
+            <p class="score" id="score"></p>
+            <a class="btn primary" id="quizLink" href="quiz.html">Take the quiz again</a>
+            <a class="btn" id="lessonLink" href="lessons.html">Review the lesson</a>
+        </div>
+    </section>
+</main>
+
+    <script src="js/auth.js"></script>
+    <script src="js/practice.js"></script>
+    <script>requireAuth();</script>
+</body>
+</html>

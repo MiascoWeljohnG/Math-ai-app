@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>iSipnayan — Home</title>
+    
+<!-- Load the MathJax library -->
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap">
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/app-shell.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Roboto', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        /* ---- Hero carousel ---- */
+        .hero {
+            position: relative; min-height: 210px; display: flex; align-items: center; overflow: hidden;
+            background:
+                radial-gradient(circle at 12% 20%, rgba(255,214,102,.55) 0 60px, transparent 61px),
+                radial-gradient(circle at 88% 78%, rgba(255,150,150,.45) 0 80px, transparent 81px),
+                radial-gradient(circle at 72% 18%, rgba(120,200,255,.4) 0 55px, transparent 56px),
+                linear-gradient(120deg, #eaf4dd 0%, #f6efd2 50%, #e6f1f4 100%);
+        }
+        [data-theme="dark"] .hero { background: linear-gradient(120deg, #17301d, #1d3324 55%, #163040); }
+        .hero::after { /* faint maths glyphs */
+            content: "π  ∑  √  ÷  f(x)  ∫  %"; position: absolute; right: 3%; bottom: 8%; font: 700 2.2rem Georgia, serif;
+            letter-spacing: 0.6rem; color: rgba(0,0,0,0.07); white-space: nowrap; pointer-events: none;
+        }
+        [data-theme="dark"] .hero::after { color: rgba(255,255,255,0.07); }
+        .slide { display: none; padding: 2rem 12%; width: 100%; animation: fade .5s ease; }
+        .slide.active { display: block; }
+        @keyframes fade { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: none; } }
+        .slide h2 { font-size: clamp(1.4rem, 3.2vw, 2rem); font-weight: 700; color: #1f2a20; text-transform: uppercase; letter-spacing: 0.01em; }
+        .slide p { margin-top: 0.4rem; color: #3d4a3f; max-width: 34rem; line-height: 1.5; }
+        [data-theme="dark"] .slide h2 { color: #eaf6ea; }
+        [data-theme="dark"] .slide p { color: #c3d6c4; }
+        .dots { position: absolute; bottom: 0.7rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.5rem; }
+        .dots button { width: 9px; height: 9px; border-radius: 50%; border: none; background: rgba(0,0,0,0.25); cursor: pointer; padding: 0; }
+        .dots button.active { background: #1f2a20; }
+        [data-theme="dark"] .dots button { background: rgba(255,255,255,.3); }
+        [data-theme="dark"] .dots button.active { background: #fff; }
+
+        /* ---- Progress ---- */
+        .content { max-width: 1080px; margin: 0 auto; padding: 1.6rem 1.5rem 3rem; }
+        .section-title { text-align: center; font: 700 0.95rem 'Roboto', sans-serif; letter-spacing: 0.04em; margin-bottom: 1.2rem; color: var(--text); }
+        /* grid-auto-rows: 1fr makes every row as tall as the tallest tile, so the
+           "Add personal subject" tile is always exactly the size of a subject tile. */
+        .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); grid-auto-rows: 1fr; gap: 1.25rem; }
+        .tile {
+            background: var(--card-tile); border: 1px solid #d9d6a8; border-radius: 4px; padding: 1.1rem 1.1rem 1.3rem;
+            cursor: pointer; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: transform 0.15s, box-shadow 0.15s; display: flex; flex-direction: column; align-items: center;
+        }
+        [data-theme="dark"] .tile { border-color: var(--border); }
+        .tile:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.14); }
+        .tile:focus-visible { outline: 3px solid var(--accent); }
+        .tile-icon { width: 46px; height: 46px; color: #111; margin-bottom: 0.4rem; }
+        [data-theme="dark"] .tile-icon { color: var(--text); }
+        .tile-name { font: 700 0.95rem 'Roboto', sans-serif; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 0.6rem; overflow-wrap: anywhere; }
+        .tile-progress-track { width: 100%; background: rgba(0,0,0,0.12); border-radius: 999px; height: 7px; overflow: hidden; }
+        .tile-progress-fill { background: #1c9a2b; height: 100%; border-radius: 999px; width: 0%; transition: width 0.5s ease; }
+        .tile-progress-meta { width: 100%; display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.68rem; margin-top: 3px; color: var(--text-muted); }
+        .tile-desc { margin-top: 0.8rem; font-size: 0.72rem; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+
+        /* Personal-subject actions */
+        .tile-actions { margin-top: auto; padding-top: 0.9rem; display: flex; gap: 0.5rem; width: 100%; }
+        .tile-btn { flex: 1; padding: 0.45rem 0.5rem; border: 1px solid var(--field-border); border-radius: 6px; background: var(--bg-elevated); color: var(--text); font: 700 0.72rem 'Roboto', sans-serif; cursor: pointer; }
+        .tile-btn:hover { background: var(--hover-bg); }
+        .tile-btn.danger:hover { background: var(--danger); border-color: var(--danger); color: #fff; }
+        .tile-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .tile-btn.primary:hover { background: var(--accent-hover); }
+        .tile-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* "+ Add personal subject" — same size as a subject tile (see .tiles) */
+        .tile.add-subject-tile { font: inherit; color: var(--text); border: 1px dashed var(--accent); justify-content: center; width: 100%; }
+        .tile.add-subject-tile:hover { background: var(--hover-bg); }
+        .add-subject-tile .tile-name, .add-subject-tile .tile-desc { display: block; }
+        .add-icon { width: 46px; height: 46px; margin-bottom: 0.4rem; border: 2px dashed var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.9rem; line-height: 1; color: var(--accent-hover); }
+
+        /* Add-subject dialog */
+        .subject-dialog { margin: auto; /* the page-wide "* { margin: 0 }" reset would otherwise pin the dialog to the top-left */ width: min(420px, 92vw); padding: 1.4rem 1.5rem; border: 1px solid var(--field-border); border-radius: 10px; background: var(--card-cream); color: var(--text); box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+        .subject-dialog::backdrop { background: rgba(0,0,0,0.45); }
+        .subject-dialog h3 { font: 700 1.2rem 'Roboto', sans-serif; color: var(--heading); margin-bottom: 0.9rem; }
+        .subject-dialog label { display: block; margin-top: 0.7rem; font: 700 0.8rem 'Roboto', sans-serif; }
+        .subject-dialog label small { font-weight: 400; color: var(--text-muted); }
+        .subject-dialog input, .subject-dialog textarea { display: block; width: 100%; margin-top: 0.25rem; padding: 0.6rem 0.7rem; border: 1px solid var(--field-border); border-radius: 8px; background: var(--bg-elevated); color: var(--text); font: 400 0.9rem 'Roboto', sans-serif; resize: vertical; }
+        .subject-dialog input:focus, .subject-dialog textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(101,150,79,0.25); }
+        .subject-dialog label.lessons-check { display: flex; align-items: center; gap: 0.5rem; font-weight: 500; }
+        .subject-dialog label.lessons-check input { display: inline-block; width: auto; margin: 0; }
+        .dialog-note { min-height: 1.1rem; margin-top: 0.4rem; font-size: 0.75rem; color: var(--text-muted); }
+        .dialog-error { min-height: 1.1rem; margin-top: 0.6rem; font-size: 0.78rem; color: var(--danger); }
+        .dialog-actions { display: flex; gap: 0.6rem; margin-top: 0.4rem; }
+        .dialog-actions .tile-btn { padding: 0.6rem; font-size: 0.8rem; }
+
+        /* Roadmap summary + rankings */
+        .panel-title { margin-top: 2.2rem; }
+        .panel { background: var(--bg-elevated); border: 1px solid var(--field-border); border-radius: 12px; padding: 1rem 1.2rem; margin-top: 0.8rem; }
+        .panel-note { margin: 0.4rem 0; font-size: 0.8rem; color: var(--text-muted); }
+        .panel-link { display: inline-block; margin-top: 0.6rem; font-weight: 700; font-size: 0.85rem; color: var(--accent-hover); text-decoration: none; }
+        .panel-link:hover { text-decoration: underline; }
+        .panel-bar { display: flex; align-items: center; gap: 0.6rem; }
+        .panel-bar label { font: 700 0.8rem 'Roboto', sans-serif; }
+        .panel-bar select { padding: 0.45rem 0.6rem; border: 1px solid var(--field-border); border-radius: 8px; background: var(--bg); color: var(--text); font: 400 0.85rem 'Roboto', sans-serif; }
+        .roadmap-list { list-style: none; margin: 0; padding: 0; }
+        .roadmap-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.8rem; padding: 0.55rem 0; border-bottom: 1px solid var(--border); }
+        .roadmap-list li:last-child { border-bottom: 0; }
+        .roadmap-list .rm-branch { font-weight: 700; min-width: 6.5rem; }
+        .roadmap-list .rm-meta { font-size: 0.8rem; color: var(--text-muted); }
+        .roadmap-list a { color: var(--text); font-weight: 500; overflow-wrap: anywhere; }
+        .table-scroll { overflow-x: auto; }
+        .rank-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+        .rank-table th, .rank-table td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        .rank-table td:nth-child(2) { white-space: normal; overflow-wrap: anywhere; }
+        .rank-table th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+        .rank-table tr.you td { font-weight: 700; color: var(--accent-hover); background: var(--hover-bg); }
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+        <a class="brand" href="landing.html"><img class="brand-eye" src="img/logo-eye.png" alt=""><img class="brand-word" src="img/logo-word.png" alt="iSipnayan"></a>
+        <span class="tag" id="schoolBadge" style="display:none; margin-left:auto;"></span>
+    </header>
+
+    <section class="hero" aria-roledescription="carousel">
+        <div class="slide active"><h2 id="helloTitle">Hello, Welcome</h2><p>Pick a topic below or open the iChatbot to start practicing.</p></div>
+        <div class="slide"><h2>Ask the iChatbot</h2><p>Stuck on a problem? Get step-by-step help, any time.</p></div>
+        <div class="slide"><h2>Browse your Modules</h2><p>Read the course materials your teachers uploaded.</p></div>
+        <div class="slide"><h2>Keep your profile updated</h2><p>Add your grade, strand and contact details on the Profile page.</p></div>
+        <div class="dots" id="dots"></div>
+    </section>
+
+    <main class="content">
+        <h2 class="section-title">TRACK YOUR PROGRESS</h2>
+        <div class="tiles" id="tilesGrid">
+            <div class="tile" data-branch="Statistics" tabindex="0">
+                <svg class="tile-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10h-10V2Z"/><path d="M14 2.2V10h7.8A10 10 0 0 0 14 2.2Z"/></svg>
+                <div class="tile-name">Statistics</div>
+                <div class="tile-progress-track"><div class="tile-progress-fill"></div></div>
+                <div class="tile-progress-meta"><span class="tile-lessons"></span><span class="tile-progress-pct">Loading...</span></div>
+                <p class="tile-desc">Statistics is the branch of applied mathematics that deals with collecting, analyzing, and presenting data.</p>
+            </div>
+            <div class="tile" data-branch="Algebra" tabindex="0">
+                <svg class="tile-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3Zm3.2 4.6h1.6V6.4H9.4V5H7.8V3.8H6.2V5H5v1.4h1.2v1.2ZM13 3h8v8h-8V3Zm1.6 4.7h4.8V6.3h-4.8v1.4ZM3 13h8v8H3v-8Zm1.6 1.6 4.8 4.8 1-1-4.8-4.8-1 1Zm0 3.8 1 1 4.8-4.8-1-1-4.8 4.8ZM13 13h8v8h-8v-8Zm1.6 2.4h4.8v1.4h-4.8v-1.4Zm0 2.8h4.8v1.4h-4.8v-1.4Z"/></svg>
+                <div class="tile-name">Algebra</div>
+                <div class="tile-progress-track"><div class="tile-progress-fill"></div></div>
+                <div class="tile-progress-meta"><span class="tile-lessons"></span><span class="tile-progress-pct">Loading...</span></div>
+                <p class="tile-desc">Algebra is a branch of mathematics that uses symbols to represent unknown numbers and express relationships between quantities.</p>
+            </div>
+            <div class="tile" data-branch="Calculus" tabindex="0">
+                <svg class="tile-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3c-2 0-3 1-3.4 3.2L9 17c-.4 2.3-1.5 3.6-3.5 3.6"/><path d="M13 9h4M15 7v4M14 17h5"/></svg>
+                <div class="tile-name">Calculus</div>
+                <div class="tile-progress-track"><div class="tile-progress-fill"></div></div>
+                <div class="tile-progress-meta"><span class="tile-lessons"></span><span class="tile-progress-pct">Loading...</span></div>
+                <p class="tile-desc">Calculus is the branch of mathematics that studies continuous change through rates of change and accumulation of quantities.</p>
+            </div>
+            <div class="tile" data-branch="Geometry" tabindex="0">
+                <svg class="tile-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3 5.9 3.3L12 10.9 6.1 7.6 12 4.3ZM5 9.3l6 3.4v6.9l-6-3.3V9.3Zm8 10.3v-6.9l6-3.4v7l-6 3.3Z"/></svg>
+                <div class="tile-name">Geometry</div>
+                <div class="tile-progress-track"><div class="tile-progress-fill"></div></div>
+                <div class="tile-progress-meta"><span class="tile-lessons"></span><span class="tile-progress-pct">Loading...</span></div>
+                <p class="tile-desc">Geometry is the branch of mathematics that studies shapes, sizes, angles and the properties of space.</p>
+            </div>
+        </div>
+
+        <h2 class="section-title panel-title">YOUR ROADMAP</h2>
+        <section class="panel" id="roadmapPanel">
+            <ul class="roadmap-list" id="roadmapList"><li class="panel-note">Loading your roadmap…</li></ul>
+            <a class="panel-link" href="roadmap.html">See the full roadmap and study plan &rarr;</a>
+        </section>
+
+        <h2 class="section-title panel-title">STUDENT RANKINGS</h2>
+        <section class="panel" id="rankingsPanel">
+            <div class="panel-bar">
+                <label for="rankBranch">Branch</label>
+                <select id="rankBranch"></select>
+            </div>
+            <p class="panel-note">Ranked by lessons passed, then average best score, then total time.</p>
+            <div class="table-scroll">
+                <table class="rank-table">
+                    <thead><tr><th>#</th><th>Student</th><th>Lessons passed</th><th>Avg score</th><th>Time</th></tr></thead>
+                    <tbody id="rankBody"></tbody>
+                </table>
+            </div>
+            <p class="panel-note" id="rankEmpty" hidden></p>
+        </section>
+    </main>
+
+    <dialog class="subject-dialog" id="addSubjectDialog" aria-labelledby="addSubjectTitle">
+        <form id="addSubjectForm" novalidate>
+            <h3 id="addSubjectTitle">Add personal subject</h3>
+            <label for="newSubjectFile">Start from a file <small>(PDF or DOCX, optional)</small>
+                <input type="file" id="newSubjectFile" accept=".pdf,.docx,.txt">
+            </label>
+            <button type="button" class="tile-btn" id="autoFillSubject" style="margin-top:0.5rem; width:100%;" disabled>Generate name &amp; description from file</button>
+            <p class="dialog-note" id="autoFillStatus" aria-live="polite"></p>
+            <label class="lessons-check" id="makeLessonsRow" hidden>
+                <input type="checkbox" id="makeLessons" checked>
+                Also create lessons from this file <small>(can take a few minutes)</small>
+            </label>
+            <label for="newSubjectName">Name
+                <input type="text" id="newSubjectName" maxlength="80" placeholder="e.g. Trigonometry" autocomplete="off">
+            </label>
+            <label for="newSubjectDesc">Description <small>(optional)</small>
+                <textarea id="newSubjectDesc" maxlength="500" rows="3" placeholder="What do you want to study?"></textarea>
+            </label>
+            <p class="dialog-error" id="addSubjectError" role="alert"></p>
+            <div class="dialog-actions">
+                <button type="button" class="tile-btn" id="cancelAddSubject">Cancel</button>
+                <button type="submit" class="tile-btn primary" id="saveAddSubject">Add subject</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/rankings.js"></script>
+    <script src="js/landing.js"></script>
+    <script>requireAuth(); initNavDrawer();</script>
+</body>
+<footer class="bottom-footer">All Rights Reserved <span class="sep">|</span> @2026</footer>
+</html>

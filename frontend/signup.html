@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>iSipnayan — Create Account</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+    <div class="theme-toggle-wrap" id="themeToggleWrap"></div>
+
+    <!-- faint maths glyphs + blobs, like the mockup -->
+    <span class="glyph" style="left:2%;top:4%;font-size:5rem">π</span>
+    <span class="glyph" style="left:14%;top:12%;font-size:3rem;font-style:italic">f(x)</span>
+    <span class="glyph" style="left:0;top:30%;font-size:4rem">=</span>
+    <span class="glyph" style="left:27%;top:6%;font-size:5rem">÷</span>
+    <span class="glyph" style="left:9%;top:74%;font-size:5rem">∑</span>
+    <span class="glyph" style="right:2%;top:6%;font-size:5rem">√</span>
+    <span class="blob b-red" style="bottom:-34%;left:-10%"></span>
+    <span class="blob b-yellow" style="top:auto;bottom:-6%;right:-4%"></span>
+    <span class="blob b-lime"></span>
+    <span class="blob b-pink"></span>
+
+    <div class="signup-wrap">
+        <div class="signup-logo"><img src="img/logo.png" alt="iSipnayan"></div>
+
+        <main class="auth-card signup-card">
+            <a class="close-x" href="index.html" aria-label="Close">&times;</a>
+            <h1>Create Account</h1>
+
+            <form id="registerForm" novalidate>
+                <label class="lbl" for="regStudentId">Student ID Number</label>
+                <div class="field">
+                    <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v3h16v-3c0-2.8-3.6-5-8-5Z"/></svg>
+                    <input type="text" id="regStudentId" placeholder="Enter your Student Number" autocomplete="username" inputmode="numeric">
+                </div>
+
+                <label class="lbl" for="regFullName">Full name</label>
+                <div class="field">
+                    <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v3h16v-3c0-2.8-3.6-5-8-5Z"/></svg>
+                    <input type="text" id="regFullName" placeholder="Enter your Full Name" autocomplete="name">
+                </div>
+
+                <div id="schoolRow" hidden>
+                    <label class="lbl" for="regSchool">School</label>
+                    <div class="field">
+                        <select id="regSchool"></select>
+                    </div>
+                </div>
+
+                <label class="lbl" for="regEmail">Email Address</label>
+                <div class="field">
+                    <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18a1 1 0 0 1 1 1v.5l-10 6.2L2 6.5V6a1 1 0 0 1 1-1Zm-1 4.1V18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V9.1l-9.5 5.9a1 1 0 0 1-1 0L2 9.1Z"/></svg>
+                    <input type="email" id="regEmail" placeholder="Enter your Email Address" autocomplete="email">
+                </div>
+
+<label class="lbl" for="regBirthday">Date of Birth</label>
+<div class="field">
+    <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M7 2v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9V2H7Zm-2 8h14v10H5V10Z"/></svg>
+    <input type="date" id="regBirthday" autocomplete="bday" style="padding-right: 0.8rem;">
+</div>
+
+                <label class="lbl" for="regPassword">Password</label>
+                <div class="field">
+                    <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2Zm-8-2a3 3 0 0 1 6 0v2H9V7Zm3 10a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"/></svg>
+                    <input type="password" id="regPassword" placeholder="Create a Password" autocomplete="new-password">
+                    <button type="button" class="eye" data-target="regPassword" aria-label="Show password"></button>
+                </div>
+
+                <label class="lbl" for="regConfirm">Confirm Password</label>
+                <div class="field">
+                    <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2Zm-8-2a3 3 0 0 1 6 0v2H9V7Zm3 10a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z"/></svg>
+                    <input type="password" id="regConfirm" placeholder="Confirm your Password" autocomplete="new-password">
+                    <button type="button" class="eye" data-target="regConfirm" aria-label="Show password"></button>
+                </div>
+
+                <label class="terms"><input type="checkbox" id="regTerms"> <span>I agree to the <b>Terms of Service</b> and <b>Privacy Policy</b></span></label>
+
+                <p class="form-msg" id="regError"></p>
+                <button type="submit" class="btn-primary" id="regSubmit">Create Account <span aria-hidden="true">&rarr;</span></button>
+
+                <div class="divider">Already have an account?</div>
+                <a class="btn-outline" href="index.html">Sign In <span aria-hidden="true">&rarr;</span></a>
+            </form>
+        </main>
+    </div>
+
+    <script src="js/auth.js?v=2"></script>
+    <script>
+        document.getElementById("themeToggleWrap").innerHTML = themeSwitchHTML("signupThemeSwitch");
+        wireThemeSwitch("signupThemeSwitch");
+    </script>
+</body>
+</html>
