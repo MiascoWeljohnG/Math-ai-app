@@ -24,38 +24,63 @@ async def teacher_upload(
     db: Session = Depends(get_db),
 ):
     """
-    Uploads files into the shared knowledge base. Handles AI quota/rate-limit (429) errors 
-    gracefully by saving file metadata and storage links without immediate embedding generation,
-    allowing batch uploads to complete. You can re-index them later from the dashboard.
+    Primary ingestion route with dual-storage fallback.
+    If the AI provider triggers a rate limit or quota error (429), the exception is caught,
+    and files are safely written to local disk, Google Drive, and PostgreSQL.
     """
     try:
+        # Standard Pipeline: AI Embedding + Storage
         return await ingest_with_detection(files, branch, branches, user.username, db, school_id=user.school_id)
+        
     except Exception as e:
         error_msg = str(e).lower()
-        # Check for AI rate limit, quota exhaustion (429), or general embedding failures
+        
+        # Intercept AI rate limits, quota exhaustion (429), or general embedding API failures
         if "429" in error_msg or "quota" in error_msg or "rate limit" in error_msg or "embedding" in error_msg:
-            log.warning("AI embedding quota exceeded or failed during upload (429). Falling back to metadata-only save: %s", e)
+            log.warning("AI embedding quota exceeded (429). Triggering dual-storage fallback: %s", e)
             
-            # Fallback: Save file records to database and local vault safely without crashing
             saved_names = []
             try:
+                # Lazy imports to prevent circular dependencies during app startup
                 import config
                 import os
+                import io
+                import drive_storage
+                from googleapiclient.http import MediaIoBaseUpload
 
                 for file in files:
                     filename = file.filename
                     content = await file.read()
+                    drive_file_id = None
+                    
+                    # 1. Cloud Storage Pipeline (Google Drive)
+                    if drive_storage.enabled():
+                        try:
+                            file_stream = io.BytesIO(content)
+                            folder_id = drive_storage.check()
+                            media = MediaIoBaseUpload(file_stream, mimetype='application/pdf', resumable=True)
+                            
+                            uploaded_drive_file = drive_storage.service.files().create(
+                                body={'name': filename, 'parents': [folder_id]},
+                                media_body=media,
+                                fields='id'
+                            ).execute()
+                            
+                            drive_file_id = uploaded_drive_file.get('id')
+                            log.info("Fallback Drive upload successful for %s", filename)
+                        except Exception as drive_err:
+                            log.error("Drive upload failed during fallback for %s: %s", filename, drive_err)
 
-                    # Save locally to Chroma vault folder
+                    # 2. Local Ephemeral Storage Pipeline (Required for future Chroma Indexing)
                     local_path = os.path.join(config.CHROMA_VAULT_DIR, filename)
                     os.makedirs(config.CHROMA_VAULT_DIR, exist_ok=True)
                     with open(local_path, "wb") as f:
                         f.write(content)
 
-                    # Resolve branch value
+                    # Determine branch assignment
                     assigned_branch = branch if branch != AUTO else "General"
 
-                    # Save material record to PostgreSQL database
+                    # 3. Relational Storage Pipeline (PostgreSQL)
                     existing = db.query(Material).filter(Material.filename == filename, Material.uploaded_by == user.username).first()
                     if not existing:
                         mat = Material(
@@ -64,19 +89,21 @@ async def teacher_upload(
                             branch=assigned_branch,
                             uploaded_by=user.username,
                             school_id=user.school_id,
-                            drive_file_id=None
+                            drive_file_id=drive_file_id
                         )
                         db.add(mat)
                         db.commit()
+                        log.info("Database record created for %s", filename)
                     
                     saved_names.append(filename)
 
-                # Return full structure including empty lists to prevent frontend .map() errors
+                # 4. Frontend Compatibility Payload
+                # All array keys must be present to prevent JavaScript .map() 'undefined' exceptions
                 return {
                     "message": f"Saved {len(saved_names)} file(s) successfully (AI indexing skipped due to token quota). Use 'Re-index' later.",
                     "saved_names": saved_names,
                     "savedNames": saved_names,
-                    "uploaded": [{"filename": name, "branch": branch if branch != AUTO else "General", "auto_detected": False} for name in saved_names],
+                    "uploaded": [{"filename": name, "branch": assigned_branch, "auto_detected": False} for name in saved_names],
                     "needs_topic": [],
                     "unclassified": [],
                     "files": [],
@@ -84,16 +111,16 @@ async def teacher_upload(
                 }
 
             except Exception as fallback_err:
-                log.exception("Fallback save failed completely: %s", fallback_err)
+                log.exception("Catastrophic failure in fallback storage pipeline: %s", fallback_err)
                 raise HTTPException(status_code=500, detail=f"Upload and fallback failed: {str(fallback_err)}")
 
-        # Re-raise any unrelated errors normally
+        # If the error is completely unrelated to AI quotas, fail normally
         raise e
 
 
 @router.get("/files")
 def my_files(user: User = Depends(require_teacher), db: Session = Depends(get_db)):
-    """Only the files this teacher uploaded."""
+    """Retrieve only the material files uploaded by the authenticated teacher."""
     rows = (
         db.query(Material)
         .filter(Material.uploaded_by == user.username)
@@ -105,12 +132,14 @@ def my_files(user: User = Depends(require_teacher), db: Session = Depends(get_db
 
 @router.get("/students")
 def list_students(user: User = Depends(require_teacher), db: Session = Depends(get_db)):
-    """The students of this teacher's school, each with their real progress per math branch."""
+    """Retrieve students bound to the teacher's school, calculating real-time progress per branch."""
     students = db.query(User).filter(User.role == "user", in_school(User.school_id, user.school_id)).all()
     branches = [name for (name,) in db.query(Subject.name).filter(shared_subjects(user)).order_by(Subject.id.asc())]
+    
     empty = {"completed": 0, "total": 0, "percent": 0}
     lessons = [i for (i,) in db.query(Lesson.id).join(Subject, Subject.id == Lesson.subject_id).filter(shared_subjects(user))]
     levels = level_counts(db, [s.id for s in students], lessons)
+    
     result = []
     for s in students:
         by_branch = {p["branch"]: p for p in progress_for_user(db, s) if not p["is_personal"]}
