@@ -26,7 +26,7 @@ async def teacher_upload(
     """
     Primary ingestion route with dual-storage fallback.
     If the AI provider triggers a rate limit or quota error (429), the exception is caught,
-    and files are safely written to local disk, Google Drive, and PostgreSQL.
+    and files are safely written to local disk, Google Drive, and PostgreSQL using the correct internal naming.
     """
     try:
         # Standard Pipeline: AI Embedding + Storage
@@ -41,16 +41,26 @@ async def teacher_upload(
             
             saved_names = []
             try:
-                # Lazy imports to prevent circular dependencies during app startup
                 import config
                 import os
                 import io
+                import uuid
                 import drive_storage
                 from googleapiclient.http import MediaIoBaseUpload
 
                 for file in files:
-                    filename = file.filename
+                    # CRITICAL FIX: Rewind the file cursor to the beginning because the failing AI pipeline already read it
+                    await file.seek(0)
                     content = await file.read()
+                    
+                    original_name = file.filename
+                    assigned_branch = branch if branch != AUTO else "General"
+                    
+                    # Generate the exact internal filepath structure your system expects
+                    unique_id = uuid.uuid4().hex
+                    drive_filename = f"{unique_id}_{original_name}"
+                    internal_filename = f"Uploaded Materials/{assigned_branch}/{drive_filename}"
+                    
                     drive_file_id = None
                     
                     # 1. Cloud Storage Pipeline (Google Drive)
@@ -61,44 +71,41 @@ async def teacher_upload(
                             media = MediaIoBaseUpload(file_stream, mimetype='application/pdf', resumable=True)
                             
                             uploaded_drive_file = drive_storage.service.files().create(
-                                body={'name': filename, 'parents': [folder_id]},
+                                body={'name': drive_filename, 'parents': [folder_id]},
                                 media_body=media,
                                 fields='id'
                             ).execute()
                             
                             drive_file_id = uploaded_drive_file.get('id')
-                            log.info("Fallback Drive upload successful for %s", filename)
+                            log.info("Fallback Drive upload successful for %s", original_name)
                         except Exception as drive_err:
-                            log.error("Drive upload failed during fallback for %s: %s", filename, drive_err)
+                            log.error("Drive upload failed during fallback for %s: %s", original_name, drive_err)
 
-                    # 2. Local Ephemeral Storage Pipeline (Required for future Chroma Indexing)
-                    local_path = os.path.join(config.CHROMA_VAULT_DIR, filename)
-                    os.makedirs(config.CHROMA_VAULT_DIR, exist_ok=True)
+                    # 2. Local Ephemeral Storage Pipeline
+                    local_path = os.path.join(config.CHROMA_VAULT_DIR, internal_filename)
+                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
                     with open(local_path, "wb") as f:
                         f.write(content)
 
-                    # Determine branch assignment
-                    assigned_branch = branch if branch != AUTO else "General"
-
                     # 3. Relational Storage Pipeline (PostgreSQL)
-                    existing = db.query(Material).filter(Material.filename == filename, Material.uploaded_by == user.username).first()
+                    # We check against the display name just in case it was uploaded previously
+                    existing = db.query(Material).filter(Material.display_name == original_name, Material.uploaded_by == user.username).first()
                     if not existing:
                         mat = Material(
-                            filename=filename,
-                            display_name=filename,
+                            filename=internal_filename,    # Fixed: "Uploaded Materials/Algebra/uuid_file.pdf"
+                            display_name=original_name,    # Fixed: "file.pdf"
                             branch=assigned_branch,
                             uploaded_by=user.username,
                             school_id=user.school_id,
-                            drive_file_id=drive_file_id
+                            drive_file_id=drive_file_id    # Fixed: Will no longer be NULL
                         )
                         db.add(mat)
                         db.commit()
-                        log.info("Database record created for %s", filename)
+                        log.info("Database record created for %s", internal_filename)
                     
-                    saved_names.append(filename)
+                    saved_names.append(original_name)
 
                 # 4. Frontend Compatibility Payload
-                # All array keys must be present to prevent JavaScript .map() 'undefined' exceptions
                 return {
                     "message": f"Saved {len(saved_names)} file(s) successfully (AI indexing skipped due to token quota). Use 'Re-index' later.",
                     "saved_names": saved_names,
