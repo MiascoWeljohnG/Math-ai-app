@@ -230,25 +230,35 @@ function buildCompleteFooter(subjectId, lesson) {
 
     button.addEventListener("click", async () => {
         const next = !lesson.completed;
+        
+        // FIX: If the user is trying to mark the lesson as complete, just open the quiz modal.
+        // The actual database completion will be handled after they pass the quiz.
+        if (next) {
+            askReadyForQuiz(subjectId, lesson.id);
+            return; // Exit the function early so we don't trigger the API call or UI update below.
+        }
+
+        // The logic below will now ONLY run if the user is clicking to undo a completed lesson.
         button.disabled = true;
         error.textContent = "";
         try {
             const response = await fetch(`${API}/subjects/${subjectId}/lessons/${lesson.id}/completion`, {
                 method: "PUT",
                 headers: { ...lessonAuthHeaders(), "Content-Type": "application/json" },
-                body: JSON.stringify({ completed: next }),
+                body: JSON.stringify({ completed: false }), // Always false here since it's an undo action
             });
             if (!response.ok) throw new Error("Couldn't save your progress. Please try again.");
-            lesson.completed = next;
+            
+            lesson.completed = false;
             paint();
+            
             // Keep the list + bar in step
             if (activeSubjectId === subjectId) {
                 const listed = activeLessons.find(item => item.id === lesson.id);
-                if (listed) listed.completed = next;
+                if (listed) listed.completed = false;
                 renderLessonList(activeLessons);
                 updateSubjectProgress();
             }
-            if (next) askReadyForQuiz(subjectId, lesson.id);
         } catch (err) {
             error.textContent = err.message;
         } finally {
