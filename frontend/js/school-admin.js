@@ -15,8 +15,7 @@ function renderUsers() {
     const filter = document.getElementById("roleFilter").value;
     const users = filter === "all" ? allUsers : allUsers.filter(u => u.role === filter);
     document.querySelector("#usersTable tbody").innerHTML = users.map(u => {
-        const name = u.full_name || [u.first_name, u.last_name].filter(Boolean).join(" ");
-        return `<tr><td>${esc(u.username)}</td><td>${esc(name)}</td><td>${esc(u.email)}</td><td>${esc(u.role.replace("_", " "))}</td><td>${esc(u.created)}</td></tr>`;
+        return `<tr><td>${esc(u.username)}</td><td>${esc(u.last_name)}</td><td>${esc(u.first_name)}</td><td>${esc(u.middle_name)}</td><td>${esc(u.email)}</td><td>${esc(u.role.replace("_", " "))}</td><td>${esc(u.created)}</td></tr>`;
     }).join("");
     document.getElementById("userCount").textContent = `Showing ${users.length} of ${allUsers.length}`;
 }
@@ -45,7 +44,7 @@ initRegistry("/school-admin");
 // --- Add a teacher to this school ---
 const teacherModal = document.getElementById("teacherModal");
 const teacherStatus = document.getElementById("teacherStatus");
-const teacherFields = ["teacherUsername", "teacherFirstName", "teacherLastName", "teacherEmail", "teacherBirthday", "teacherPassword"];
+const teacherFields = ["teacherUsername", "teacherLastName", "teacherFirstName", "teacherMiddleName", "teacherEmail", "teacherBirthday", "teacherPassword"];
 document.getElementById("teacherBirthday").max = new Date().toISOString().slice(0, 10);
 document.getElementById("openTeacherModalBtn").addEventListener("click", () => teacherModal.classList.add("active"));
 document.getElementById("closeTeacherModal").addEventListener("click", () => teacherModal.classList.remove("active"));
@@ -53,12 +52,12 @@ teacherModal.addEventListener("click", (e) => { if (e.target === teacherModal) t
 
 document.getElementById("teacherForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const [username, first_name, last_name, email, birthday, password] = teacherFields.map(id => document.getElementById(id).value.trim());
+    const [username, last_name, first_name, middle_name, email, birthday, password] = teacherFields.map(id => document.getElementById(id).value.trim());
     try {
         const res = await fetch(`${API}/school-admin/create-teacher`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...getHeaders() },
-            body: JSON.stringify({ username, first_name, last_name, email, birthday, password }),
+            body: JSON.stringify({ username, last_name, first_name, middle_name, email, birthday, password }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail);

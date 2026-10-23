@@ -3,11 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#003a00">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
     <title>School Admin Dashboard</title>
     <script src="js/theme.js"></script>
     <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
     <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
 <body>
@@ -16,8 +19,6 @@
         <h1>School Admin <span class="tag" id="schoolBadge" style="display:none;"></span></h1>
         <div class="header-actions">
             <button class="btn btn-secondary" id="openTeacherModalBtn">+ Add Teacher</button>
-            <span id="themeSwitchWrap"></span>
-            <button class="btn btn-danger" onclick="logout()">Logout</button>
         </div>
     </div>
 
@@ -35,7 +36,7 @@
         </div>
         <div class="table-wrap">
             <table id="usersTable">
-                <thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead>
+                <thead><tr><th>Username</th><th>Last Name</th><th>First Name</th><th>Middle Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
@@ -78,8 +79,9 @@
             <h2>Add Teacher Account</h2>
             <form id="teacherForm">
                 <label>Username</label><input type="text" id="teacherUsername" required>
-                <label>First name</label><input type="text" id="teacherFirstName" required>
                 <label>Last name</label><input type="text" id="teacherLastName" required>
+                <label>First name</label><input type="text" id="teacherFirstName" required>
+                <label>Middle name <span class="opt">(optional)</span></label><input type="text" id="teacherMiddleName">
                 <label>Email</label><input type="email" id="teacherEmail" required>
                 <label>Birthday</label><input type="date" id="teacherBirthday" required>
                 <label>Temporary password</label><input type="password" id="teacherPassword" required minlength="6">
@@ -92,13 +94,13 @@
 
     <script src="js/modal.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
     <script src="js/material-table.js"></script>
     <script src="js/registry.js"></script>
     <script src="js/school-admin.js"></script>
     <script>
         requireRole("school_admin");
-        document.getElementById("themeSwitchWrap").innerHTML = themeSwitchHTML("schoolAdminThemeSwitch");
-        wireThemeSwitch("schoolAdminThemeSwitch");
+        initNavDrawer({ staff: true });
     </script>
 </body>
 </html>

@@ -3,39 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#003a00">
-    <title>iSipnayan — Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>IsipNayan — Login</title>
     <script src="js/theme.js"></script>
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
-<body>
+<body class="auth-page">
     <div class="theme-toggle-wrap" id="themeToggleWrap"></div>
 
-    <span class="blob b-green"></span>
-    <span class="blob b-yellow"></span>
-    <span class="blob b-red"></span>
-    <span class="blob b-lime"></span>
-    <span class="blob b-pink"></span>
 
-    <main class="auth-card login-card">
-        <img class="logo" src="img/logo.png" alt="iSipnayan">
-        <p class="tagline">Where <span class="num">Numbers</span> meet the <span class="fut">Future</span></p>
+    <div class="auth-shell">
+    <aside class="auth-aside">
+        <a class="brand-lockup" href="index.html"><span class="brand-mark" aria-hidden="true"></span>IsipNayan</a>
+        <div>
+            <h1>Math that meets you where you are.</h1>
+            <p class="lead">An AI tutor, a roadmap built around your gaps, and quizzes that tell you exactly what to review next.</p>
+        </div>
+        <div class="trail" aria-hidden="true">
+            <h2>Your roadmap · Algebra</h2><small>Basic to advanced, prerequisites included</small>
+            <div class="tn done"><span>&#10003;</span>One-step equations</div>
+            <div class="tn now"><span>4</span><b>Solving linear equations</b></div>
+            <div class="tn"><span>5</span>Systems of equations</div>
+            <div class="tn lock"><span>6</span>Quadratic equations</div>
+        </div>
+    </aside>
+        <main class="auth-card login-card">
+            <h2 class="auth-title">Welcome back</h2>
+            <p class="sub">Sign in to pick up where you left off.</p>
 
-        <form id="authForm">
-            <input class="plain-field" type="text" id="username" placeholder="Username" required autocomplete="username">
-            <div class="pw-wrap">
-                <input class="plain-field" type="password" id="password" placeholder="Password" required autocomplete="current-password">
-                <button type="button" class="eye" data-target="password" aria-label="Show password"></button>
-            </div>
+            <form id="authForm">
+                <label class="lbl-login" for="username">Username</label>
+                <input class="plain-field" type="text" id="username" placeholder="Your username" required autocomplete="username">
+                <label class="lbl-login" for="password">Password</label>
+                <div class="pw-wrap">
+                    <input class="plain-field" type="password" id="password" placeholder="Your password" required autocomplete="current-password">
+                    <button type="button" class="eye" data-target="password" aria-label="Show password"></button>
+                </div>
 
-            <p class="form-msg" id="error"></p>
-            <button type="submit" class="btn-primary" id="submitBtn">LOGIN</button>
-        </form>
+                <p class="form-msg" id="error" role="alert"></p>
+                <button type="submit" class="btn-primary" id="submitBtn">Sign in</button>
+            </form>
 
-        <p class="switch-line">Don't have an account? <a href="signup.html">Sign up</a></p>
-    </main>
+            <p class="switch-line">New to IsipNayan? <a href="signup.html">Create an account</a></p>
+        </main>
+    </div>
 
     <script src="js/auth.js?v=2"></script>
     <script>

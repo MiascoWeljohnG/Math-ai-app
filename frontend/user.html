@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#003a00">
-    <title>iSipnayan — Ask</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>IsipNayan — Ask</title>
     
     <!-- MathJax Configuration -->
     <script>
@@ -29,7 +30,7 @@
         html, body { height: 100%; }
         
         /* Flexbox on body forces the header, body-row, and footer to stack perfectly */
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        body { font-family: var(--font-body); background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
         /* The page is: sticky app header on top, then a row of [sidebar | chat] filling the rest of the screen. */
         .body-row { flex: 1; display: flex; min-height: 0; }
@@ -93,6 +94,7 @@
             30% { transform: translateY(-8px); }
         }
     </style>
+    <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
 <body>
@@ -100,7 +102,7 @@
         <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu">
             <span></span><span></span><span></span>
         </button>
-        <a class="brand" href="landing.html"><img class="brand-eye" src="img/logo-eye.png" alt=""><img class="brand-word" src="img/logo-word.png" alt="iSipnayan"></a>
+        <a class="brand-lockup" href="landing.html"><span class="brand-mark" aria-hidden="true"></span>IsipNayan</a>
     </header>
 
     <div class="body-row">

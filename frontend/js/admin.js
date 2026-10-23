@@ -38,7 +38,7 @@ function renderUsers() {
     const users = allUsers.filter(u => (filter === "all" || u.role === filter) && inSchool(u));
     const tbody = document.querySelector("#usersTable tbody");
     tbody.innerHTML = users.map(u =>
-        `<tr><td>${esc(u.username)}</td><td>${esc(u.first_name)}</td><td>${esc(u.last_name)}</td><td>${esc(u.email)}</td><td>${esc(u.birthday)}</td><td>${esc(u.school || "Main")}</td><td>${esc(u.role.replace("_", " "))}</td><td>${esc(u.created)}</td></tr>`
+        `<tr><td>${esc(u.username)}</td><td>${esc(u.last_name)}</td><td>${esc(u.first_name)}</td><td>${esc(u.middle_name)}</td><td>${esc(u.email)}</td><td>${esc(u.birthday)}</td><td>${esc(u.school || "Main")}</td><td>${esc(u.role.replace("_", " "))}</td><td>${esc(u.created)}</td></tr>`
     ).join("");
     document.getElementById("userCount").textContent = `Showing ${users.length} of ${allUsers.length}`;
 }
@@ -287,16 +287,17 @@ function clearKB() {
 // --- Create teacher account ---
 async function createTeacher() {
     const username = document.getElementById("teacherUsername").value.trim();
-    const first_name = document.getElementById("teacherFirstName").value.trim();
     const last_name = document.getElementById("teacherLastName").value.trim();
+    const first_name = document.getElementById("teacherFirstName").value.trim();
+    const middle_name = document.getElementById("teacherMiddleName").value.trim();
     const email = document.getElementById("teacherEmail").value.trim();
     const birthday = document.getElementById("teacherBirthday").value;
     const password = document.getElementById("teacherPassword").value;
     const statusEl = document.getElementById("teacherStatus");
 
-    if (!username || !password || !birthday) {
+    if (!username || !last_name || !first_name || !password || !birthday) {
         statusEl.className = "status error";
-        statusEl.textContent = "Username, birthday and password are required.";
+        statusEl.textContent = "Username, last name, first name, birthday and password are required.";
         return;
     }
 
@@ -304,14 +305,14 @@ async function createTeacher() {
         const res = await fetch(`${API}/admin/create-teacher`, {
             method: "POST",
             headers: { "Content-Type": "application/json", ...getHeaders() },
-            body: JSON.stringify({ username, first_name, last_name, email, birthday, password, school_id: schoolIdOf("teacherSchool") }),
+            body: JSON.stringify({ username, last_name, first_name, middle_name, email, birthday, password, school_id: schoolIdOf("teacherSchool") }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail);
 
         statusEl.className = "status success";
         statusEl.textContent = data.message;
-        ["teacherUsername", "teacherFirstName", "teacherLastName", "teacherEmail", "teacherBirthday", "teacherPassword"].forEach(id => {
+        ["teacherUsername", "teacherLastName", "teacherFirstName", "teacherMiddleName", "teacherEmail", "teacherBirthday", "teacherPassword"].forEach(id => {
             document.getElementById(id).value = "";
         });
         loadUsers();
@@ -332,16 +333,17 @@ document.getElementById("teacherBirthday").max = new Date().toISOString().slice(
 // --- Create admin account ---
 async function createAdmin() {
     const username = document.getElementById("adminUsername").value.trim();
-    const first_name = document.getElementById("adminFirstName").value.trim();
     const last_name = document.getElementById("adminLastName").value.trim();
+    const first_name = document.getElementById("adminFirstName").value.trim();
+    const middle_name = document.getElementById("adminMiddleName").value.trim();
     const email = document.getElementById("adminEmail").value.trim();
     const birthday = document.getElementById("adminBirthday").value;
     const password = document.getElementById("adminPassword").value;
     const statusEl = document.getElementById("adminStatus");
 
-    if (!username || !password || !birthday) {
+    if (!username || !last_name || !first_name || !password || !birthday) {
         statusEl.className = "status error";
-        statusEl.textContent = "Username, birthday and password are required.";
+        statusEl.textContent = "Username, last name, first name, birthday and password are required.";
         return;
     }
 
@@ -349,14 +351,14 @@ async function createAdmin() {
         const res = await fetch(`${API}/admin/create-admin`, { // Endpoint for creating admins
             method: "POST",
             headers: { "Content-Type": "application/json", ...getHeaders() },
-            body: JSON.stringify({ username, first_name, last_name, email, birthday, password, school_id: schoolIdOf("adminSchool") }),
+            body: JSON.stringify({ username, last_name, first_name, middle_name, email, birthday, password, school_id: schoolIdOf("adminSchool") }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail);
 
         statusEl.className = "status success";
         statusEl.textContent = data.message;
-        ["adminUsername", "adminFirstName", "adminLastName", "adminEmail", "adminBirthday", "adminPassword"].forEach(id => {
+        ["adminUsername", "adminLastName", "adminFirstName", "adminMiddleName", "adminEmail", "adminBirthday", "adminPassword"].forEach(id => {
             document.getElementById(id).value = "";
         });
         loadUsers();

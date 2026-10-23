@@ -25,7 +25,9 @@ function setSelect(sel, value) {
 }
 
 function fill(p) {
-    $("fullName").value = p.full_name || "";
+    $("lastName").value = p.last_name || "";
+    $("firstName").value = p.first_name || "";
+    $("middleName").value = p.middle_name || "";
     $("email").value = p.email || "";
     $("contact").value = p.contact_number || "";
     $("birthday").value = /^\d{4}-\d{2}-\d{2}$/.test(p.birthday || "") ? p.birthday : "";
@@ -85,13 +87,15 @@ $("photoInput").addEventListener("change", () => {
 // --- Save / Cancel ---
 $("profileForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const full_name = $("fullName").value.trim();
+    const last_name = $("lastName").value.trim();
+    const first_name = $("firstName").value.trim();
+    const middle_name = $("middleName").value.trim();
     const email = $("email").value.trim();
-    if (!full_name) return showMsg("Full name is required.", "error");
+    if (!last_name || !first_name) return showMsg("Last name and first name are required.", "error");
     if (email && !/^\S+@\S+\.\S+$/.test(email)) return showMsg("Please enter a valid email address.", "error");
 
     const body = {
-        full_name, email,
+        last_name, first_name, middle_name, email,
         contact_number: $("contact").value.trim(),
         birthday: $("birthday").value,
         gender: $("gender").value,
@@ -110,7 +114,8 @@ $("profileForm").addEventListener("submit", async (e) => {
         if (!res.ok) throw new Error(data.detail || "Couldn't save changes.");
         original = data;
         fill(data);
-        localStorage.setItem("full_name", data.full_name);
+        localStorage.setItem("full_name", data.display_name);
+        localStorage.setItem("first_name", data.first_name);
         showMsg("Profile saved.", "ok");
     } catch (err) {
         showMsg(err.message, "error");

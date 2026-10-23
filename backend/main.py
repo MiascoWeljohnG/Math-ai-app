@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import Base, engine, SessionLocal, migrate_add_missing_columns
+from database import Base, engine, SessionLocal, migrate_add_missing_columns, drop_legacy_full_name
 from models import User, Subject
 from auth import hash_password
 from routes import auth_routes, admin_routes, user_routes, teacher_routes, materials_routes, profile_routes, subjects_routes, subject_deletion_routes, notification_routes, learning_routes, schools_routes, school_admin_routes, practice_routes
@@ -16,6 +16,7 @@ import config
 
 Base.metadata.create_all(bind=engine)
 migrate_add_missing_columns()
+drop_legacy_full_name()
 
 db = SessionLocal()
 if not db.query(User).filter(User.username == "admin").first():

@@ -3,11 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#003a00">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
     <title>Teacher Dashboard</title>
     <script src="js/theme.js"></script>
     <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
     <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
 <body>
@@ -15,8 +18,6 @@
     <div class="header">
         <h1>Teacher Dashboard <span class="tag" id="schoolBadge" style="display:none;"></span></h1>
         <div class="header-actions">
-            <span id="themeSwitchWrap"></span>
-            <button class="btn btn-danger" onclick="logout()">Logout</button>
         </div>
     </div>
 
@@ -195,6 +196,7 @@
 
     <script src="js/modal.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/topic-picker.js"></script>
     <script src="js/material-table.js"></script>
@@ -206,8 +208,7 @@
     </script>
     <script>
         requireRole("teacher");
-        document.getElementById("themeSwitchWrap").innerHTML = themeSwitchHTML("teacherThemeSwitch");
-        wireThemeSwitch("teacherThemeSwitch");
+        initNavDrawer({ staff: true });
     </script>
 </body>
 </html>

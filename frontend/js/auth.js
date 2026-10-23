@@ -59,6 +59,7 @@ if (authForm) {
             localStorage.setItem("role", data.role);
             localStorage.setItem("username", username);
             if (data.full_name) localStorage.setItem("full_name", data.full_name);
+            if (data.first_name) localStorage.setItem("first_name", data.first_name);
 
             if (data.school_name) localStorage.setItem("school_name", data.school_name);
             else localStorage.removeItem("school_name");   // the main pool has no school
@@ -180,7 +181,9 @@ if (registerForm) {
     registerForm.addEventListener("submit", async (e) => {
         e.preventDefault();
         const student_id = document.getElementById("regStudentId").value.trim();
-        const full_name = document.getElementById("regFullName").value.trim();
+        const last_name = document.getElementById("regLastName").value.trim();
+        const first_name = document.getElementById("regFirstName").value.trim();
+        const middle_name = document.getElementById("regMiddleName").value.trim();   // optional
         const email = document.getElementById("regEmail").value.trim();
         const birthday = document.getElementById("regBirthday").value;   // YYYY-MM-DD
         const password = document.getElementById("regPassword").value;
@@ -192,7 +195,7 @@ if (registerForm) {
         const fail = (msg) => { errorEl.textContent = msg; errorEl.className = "form-msg error"; };
 
         if (dobText && dobText.value.trim() && !birthday) return fail("Please enter a valid date of birth (MM/DD/YYYY).");
-        if (!student_id || !full_name || !email || !birthday || !password || !confirm) return fail("Please fill in all fields.");
+        if (!student_id || !last_name || !first_name || !email || !birthday || !password || !confirm) return fail("Please fill in all fields.");
         if (!schoolRow.hidden && !schoolSelect.value) return fail("Please choose your school.");
         if (!/^\S+@\S+\.\S+$/.test(email)) return fail("Please enter a valid email address.");
         if (birthday > localToday()) return fail("Date of birth cannot be in the future.");
@@ -205,7 +208,7 @@ if (registerForm) {
             const res = await fetch(`${API}/auth/register`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ student_id, full_name, email, birthday, password, school_id: schoolSelect.value ? Number(schoolSelect.value) : null }),
+                body: JSON.stringify({ student_id, last_name, first_name, middle_name, email, birthday, password, school_id: schoolSelect.value ? Number(schoolSelect.value) : null }),
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || "Registration failed");
@@ -246,3 +249,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const badge = document.getElementById("schoolBadge"), name = localStorage.getItem("school_name");
     if (badge && name) { badge.textContent = name; badge.style.display = ""; }
 });
+
+// "Last, First Middle" for tables and pick-lists (the order the school uses). Empty when no name is set.
+function formatName(person) {
+    if (!person) return "";
+    const given = [person.first_name, person.middle_name].filter(Boolean).join(" ");
+    return [person.last_name, given].filter(Boolean).join(", ");
+}

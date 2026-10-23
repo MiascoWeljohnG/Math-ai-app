@@ -1,46 +1,82 @@
-/* Shared hamburger + slide-out drawer, injected by js/nav.js */
+/* App sidebar, built by js/nav.js.
+   Desktop (>820px): always visible on the left, and the page makes room for it (body.has-sidebar).
+   Phones / tablets (<=820px): the same element is a slide-in drawer opened by the hamburger button.
+   Chat and Modules pages (body.nav-rail) already have their own inner sidebar, so here it is an icon rail. */
+
 .hamburger-btn {
     background: none; border: none; color: var(--text); cursor: pointer;
-    padding: 0.4rem; display: flex; flex-direction: column; gap: 4px;
+    padding: 0.4rem; display: flex; flex-direction: column; gap: 4px; border-radius: var(--r-sm);
 }
 .hamburger-btn span { width: 22px; height: 2px; background: var(--text); border-radius: 2px; }
 
 .nav-drawer-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    position: fixed; inset: 0; background: rgba(14, 18, 38, 0.55);
     opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 40;
 }
 .nav-drawer-overlay.open { opacity: 1; pointer-events: auto; }
 
 .nav-drawer {
-    position: fixed; top: 0; left: 0; bottom: 0; width: 260px;
-    background: var(--bg-elevated-2); border-right: 1px solid var(--border);
+    position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w);
+    background: var(--bg-elevated); border-right: 1px solid var(--border);
     transform: translateX(-100%); transition: transform 0.2s;
-    z-index: 50; display: flex; flex-direction: column; padding: 1rem 0;
+    z-index: 50; display: flex; flex-direction: column; padding: 22px 16px 16px; overflow-y: auto;
 }
 .nav-drawer.open { transform: translateX(0); }
-.nav-drawer-header { padding: 0.25rem 1.25rem 1rem; border-bottom: 1px solid var(--border); margin-bottom: 0.5rem; }
-.nav-drawer-header img { height: 64px; width: auto; display: block; }
-.nav-drawer-items { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 0 0.5rem; }
+.nav-drawer-header { padding: 0 10px 26px; }
+
+.nav-drawer-items { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .nav-drawer-item {
-    display: flex; align-items: center; gap: 0.6rem; text-align: left; width: 100%; padding: 0.7rem 0.9rem;
-    background: none; border: none; border-left: 3px solid transparent; border-radius: 8px; color: var(--text-muted);
-    font-size: 0.9rem; text-decoration: none; cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; gap: 14px; text-align: left; width: 100%; padding: 12px 16px;
+    background: none; border: none; border-radius: var(--r-md); color: var(--text-muted);
+    font: 500 1.02rem/1.2 var(--font-body); text-decoration: none; cursor: pointer;
     transition: background 0.15s, color 0.15s;
 }
-.nav-drawer-item .nav-icon { width: 1.4rem; display: flex; justify-content: center; }
-.nav-drawer-item .nav-icon .icon { width: 1.2rem; height: 1.2rem; }
-.nav-drawer-item:hover { background: var(--nav-active-bg); color: var(--text); }
-/* The page you're on: same look as hover, but it stays put. */
-.nav-drawer-item.active {
-    background: var(--nav-active-bg); color: var(--text); font-weight: 600;
-    border-left-color: var(--nav-active-bar);
-}
+.nav-drawer-item .nav-icon { width: 1.5rem; display: flex; justify-content: center; flex: none; }
+.nav-drawer-item .nav-icon .icon { width: 1.35rem; height: 1.35rem; stroke-width: 1.8; }
+.nav-drawer-item:hover { background: var(--hover-bg); color: var(--text); }
+/* The page you're on. */
+.nav-drawer-item.active { background: var(--nav-active-bg); color: var(--accent); font-weight: 600; }
+.nav-drawer-item:focus-visible, .nav-user:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+
+.nav-drawer-foot { display: grid; gap: 8px; margin-top: 16px; }
 .nav-drawer-theme-row {
-    margin: 0.5rem 0.75rem 0; padding: 0.6rem 0.9rem; border: 1px solid var(--border); border-radius: 8px;
-    display: flex; align-items: center; justify-content: space-between; color: var(--text); font-size: 0.9rem;
+    padding: 8px 16px; border-radius: var(--r-md);
+    display: flex; align-items: center; justify-content: space-between; color: var(--text-muted); font: 500 0.95rem var(--font-body);
 }
-.nav-drawer-logout {
-    margin: 0.5rem 0.75rem 0; padding: 0.7rem; border: none; border-radius: 8px;
-    background: var(--danger); color: white; font-size: 0.9rem; cursor: pointer;
+.nav-user {
+    display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--r-lg);
+    background: var(--bg); text-decoration: none; color: var(--text); min-width: 0;
 }
-.nav-drawer-logout:hover { background: var(--danger-hover); }
+.nav-user-text { min-width: 0; display: grid; gap: 2px; }
+.nav-user-name { font: 700 1rem/1.2 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-user-role { font-size: 0.82rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-theme-compact { display: none; }
+
+/* ---------- desktop: sidebar always on ---------- */
+@media (min-width: 821px) {
+    body.has-sidebar { padding-left: var(--sidebar-w); }
+    body.has-sidebar .nav-drawer { transform: none; transition: none; }
+    body.has-sidebar .nav-drawer-overlay, body.has-sidebar .hamburger-btn { display: none; }
+    /* the brand lives in the sidebar, so the slim top bar is only needed on small screens */
+    body.has-sidebar > .app-header { display: none; }
+
+    /* icon rail */
+    body.nav-rail { --sidebar-w: 84px; }
+    body.nav-rail .nav-drawer { padding: 18px 12px 14px; align-items: center; }
+    body.nav-rail .nav-drawer-header { padding: 0 0 22px; }
+    body.nav-rail .brand-lockup { font-size: 0; gap: 0; }
+    body.nav-rail .nav-drawer-items { width: 100%; }
+    body.nav-rail .nav-drawer-item { justify-content: center; padding: 12px 0; }
+    body.nav-rail .nav-drawer-item .nav-label, body.nav-rail .nav-drawer-theme-row,
+    body.nav-rail .nav-user-text { display: none; }
+    body.nav-rail .nav-drawer-foot { width: 100%; justify-items: center; }
+    body.nav-rail .nav-user { padding: 6px; background: none; }
+    body.nav-rail .nav-theme-compact { display: grid; }
+}
+.nav-theme-compact {
+    width: 44px; height: 44px; place-items: center; border: 0; border-radius: var(--r-md); background: none; color: var(--text-muted); cursor: pointer;
+}
+.nav-theme-compact:hover { background: var(--hover-bg); color: var(--text); }
+.nav-theme-compact .icon { width: 1.3rem; height: 1.3rem; }
+
+@media (prefers-reduced-motion: reduce) { .nav-drawer, .nav-drawer-overlay { transition: none; } }

@@ -48,7 +48,7 @@ def school(api, name):
 
 
 def account(username, school_id=None):
-    return {"username": username, "first_name": "F", "last_name": "L", "email": "a@b.co",
+    return {"username": username, "last_name": "L", "first_name": "F", "middle_name": "M", "email": "a@b.co",
             "birthday": BIRTHDAY, "password": "secret1", "school_id": school_id}
 
 
@@ -114,7 +114,7 @@ def test_only_the_default_admin_creates_admins(api):
 
 # ---------------------------------------------------------------- sign up and log in
 def test_students_pick_a_school_once_schools_exist(api):
-    form = {"student_id": "2024-1", "full_name": "Ana Cruz", "email": "a@b.co", "birthday": BIRTHDAY, "password": "secret1"}
+    form = {"student_id": "2024-1", "last_name": "Cruz", "first_name": "Ana", "middle_name": "", "email": "a@b.co", "birthday": BIRTHDAY, "password": "secret1"}
     assert api.client.post("/auth/register", json=form).status_code == 200   # no schools yet: as before
     assert api.db.query(User).filter(User.username == "2024-1").one().school_id is None
 
@@ -232,7 +232,7 @@ def test_deletion_requests_are_listed_per_school_and_the_main_admin_sees_all(api
 # ---------------------------------------------------------------- registered student numbers
 def test_admin_registers_student_numbers_and_signup_follows_the_list(api):
     a, b = two_schools(api)
-    form = {"full_name": "Ana Cruz", "email": "a@b.co", "birthday": BIRTHDAY, "password": "secret1"}
+    form = {"last_name": "Cruz", "first_name": "Ana", "middle_name": "", "email": "a@b.co", "birthday": BIRTHDAY, "password": "secret1"}
     assert api.client.get("/schools/signup-mode").json() == {"registry": False}   # no list yet: students pick a school
 
     as_(api, "admin")

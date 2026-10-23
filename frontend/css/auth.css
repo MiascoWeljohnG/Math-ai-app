@@ -1,184 +1,152 @@
-/* Login + Create Account screens */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Roboto:wght@400;500;700;900&display=swap');
-
+/* Login + Create Account screens.
+   Split layout: the indigo roadmap panel from the website on the left (hidden on phones), the form on the right. */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { min-height: 100%; }
 body {
-    font-family: 'Poppins', 'Segoe UI', sans-serif;
-    background: var(--bg); color: var(--text);
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    position: relative; overflow-x: hidden; padding: 1.5rem;
+    font: 400 1rem/1.5 var(--font-body); -webkit-font-smoothing: antialiased;
+    background: var(--bg); color: var(--text); min-height: 100vh;
 }
+:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
 .theme-toggle-wrap { position: fixed; top: 1rem; right: 1rem; z-index: 20; }
 
-/* ---------- Colourful blobs ---------- */
-.blob { position: fixed; border-radius: 50%; z-index: 0; pointer-events: none; }
-.blob.b-green  { width: clamp(170px, 26vw, 240px); height: clamp(180px, 28vw, 260px); top: 9%; right: 27%;
-    background: radial-gradient(circle at 28% 45%, #43e9f5 0%, #74df9f 38%, #5fe062 78%); }
-.blob.b-yellow { width: clamp(120px, 20vw, 190px); height: clamp(120px, 20vw, 190px); top: 44%; right: -3%;
-    background: radial-gradient(circle at 40% 30%, #fbe06a 0%, #efc02a 55%, #e0a70d 100%); }
-.blob.b-red    { width: clamp(200px, 30vw, 300px); height: clamp(240px, 42vw, 380px); left: -8%; bottom: -10%;
-    background: radial-gradient(circle at 12% 70%, #f6858c 0%, #e35555 45%, #c62828 100%); }
-.blob.b-lime   { width: clamp(260px, 46vw, 440px); height: clamp(220px, 36vw, 360px); right: -9%; bottom: -14%;
-    background: radial-gradient(circle at 68% 65%, #a3f59a 0%, #6fd352 50%, #55b833 100%); opacity: 0.95; }
-.blob.b-pink   { width: clamp(110px, 19vw, 170px); height: clamp(110px, 19vw, 170px); left: 60%; bottom: -7%;
-    background: radial-gradient(circle at 48% 50%, #ff5fa8 0%, #ff9f71 55%, #ffb04a 100%); }
-[data-theme="dark"] .blob { opacity: 0.55; }
-
-/* ---------- Faint math glyphs (sign-up background) ---------- */
-.glyph { position: fixed; z-index: 0; color: var(--text); opacity: 0.06; font-family: Georgia, serif; font-weight: 700; pointer-events: none; user-select: none; }
-
-/* ---------- Cards ---------- */
-.auth-card {
-    position: relative; z-index: 2; background: var(--card-cream);
-    border: 1px solid #b9b9a4; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+.auth-shell {
+    min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: clamp(1.5rem, 4vw, 4rem); align-items: center;
+    padding: clamp(1.25rem, 3vw, 2.5rem) clamp(1.25rem, 5vw, 4.5rem);
+    max-width: 1280px; margin: 0 auto;
 }
-.login-card { width: min(360px, 100%); padding: 1.6rem 2rem 1.4rem; text-align: center; }
-.login-card .logo { width: 150px; height: auto; display: block; margin: 0 auto 0.35rem; }
-.tagline { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: 0.8rem; margin-bottom: 1.5rem; color: var(--text); }
-.tagline .num { color: #1c7c1c; }
-.tagline .fut { color: #c62828; }
+
+/* ---------- left: brand + sample roadmap ---------- */
+.auth-aside { display: grid; gap: 2rem; align-content: center; }
+.auth-aside h1 { font: 800 clamp(2.4rem, 4.4vw, 3.8rem)/1.05 var(--font-display); letter-spacing: -0.03em; max-width: 12ch; }
+.auth-aside p.lead { color: var(--text-muted); font-size: 1.15rem; max-width: 34ch; margin-top: 1rem; }
+.trail { background: var(--accent); color: #fff; border-radius: 32px; padding: 1.75rem; position: relative; overflow: hidden; max-width: 460px; }
+[data-theme="dark"] .trail { background: #2B3680; }
+.trail::after { content: ""; position: absolute; right: -50px; top: -50px; width: 160px; height: 160px; border-radius: 50%; background: var(--sun); }
+.trail h2 { position: relative; z-index: 1; font: 700 1.25rem var(--font-display); }
+.trail small { position: relative; z-index: 1; opacity: 0.85; }
+.tn { position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; margin-top: 12px; background: rgba(255,255,255,0.12); border-radius: 16px; padding: 10px 14px; }
+.tn:nth-of-type(even) { margin-left: 30px; }
+.tn span { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font: 700 15px var(--font-display); background: rgba(255,255,255,0.2); flex: none; }
+.tn.done span { background: var(--ok); }
+.tn.now { background: #fff; color: #151B3A; }
+.tn.now span { background: var(--sun); }
+.tn.lock { opacity: 0.6; }
+
+/* ---------- cards ---------- */
+.auth-card {
+    position: relative; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-xl);
+    width: 100%; max-width: 480px; justify-self: center; padding: clamp(1.5rem, 3vw, 2.4rem);
+}
+.auth-card h1, .auth-card h2.auth-title { font: 800 2rem/1.1 var(--font-display); letter-spacing: -0.025em; }
+.auth-card .sub { color: var(--text-muted); margin: 0.5rem 0 1.5rem; }
 
 .plain-field, .field input, .field select {
-    width: 100%; border: 1px solid var(--field-border); border-radius: 10px;
-    background: transparent; color: var(--text); font: 500 0.82rem 'Poppins', sans-serif;
-    padding: 0.7rem 0.9rem; outline: none;
+    width: 100%; border: 1px solid var(--field-border); border-radius: var(--r-md);
+    background: var(--bg-input); color: var(--text); font: 500 1rem var(--font-body);
+    padding: 0.8rem 1rem; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
 }
-.plain-field::placeholder, .field input::placeholder { color: var(--text-muted); }
-.plain-field:focus, .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(101,150,79,0.25); }
-.login-card .plain-field { margin-bottom: 0.95rem; }
+.plain-field::placeholder, .field input::placeholder { color: var(--text-muted); font-weight: 400; }
+.plain-field:focus, .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent); }
+.login-card .plain-field { margin-bottom: 1rem; }
 
 .btn-primary {
-    width: 100%; border: none; border-radius: 8px; background: var(--accent); color: #fff;
-    font: 600 0.8rem 'Poppins', sans-serif; letter-spacing: 0.08em; padding: 0.6rem 1rem; cursor: pointer;
-    transition: background 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+    width: 100%; border: none; border-radius: var(--r-md); background: var(--accent); color: var(--on-accent);
+    font: 600 1rem var(--font-body); padding: 0.9rem 1rem; cursor: pointer;
+    transition: filter 0.15s; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
 }
-.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:hover { filter: brightness(1.08); }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-outline {
-    width: 100%; border: 1px solid var(--field-border); border-radius: 8px; background: transparent; color: var(--heading);
-    font: 600 0.8rem 'Poppins', sans-serif; padding: 0.6rem 1rem; cursor: pointer; text-decoration: none;
+    width: 100%; border: 1px solid var(--field-border); border-radius: var(--r-md); background: transparent; color: var(--text);
+    font: 600 1rem var(--font-body); padding: 0.85rem 1rem; cursor: pointer; text-decoration: none;
     display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
 }
 .btn-outline:hover { background: var(--hover-bg); }
 
-.switch-line { margin-top: 0.7rem; font-size: 0.78rem; color: var(--text); }
-.switch-line a { color: #0b5d0b; font-weight: 600; text-decoration: none; }
+.switch-line { margin-top: 1.25rem; color: var(--text-muted); text-align: center; }
+.switch-line a { color: var(--accent); font-weight: 600; text-decoration: none; }
 .switch-line a:hover { text-decoration: underline; }
 
-.form-msg { font-size: 0.78rem; margin: 0 0 0.8rem; display: none; text-align: left; }
+.form-msg { font-size: 0.92rem; margin: 0 0 1rem; display: none; text-align: left; }
 .form-msg.error { color: var(--danger); display: block; }
-.form-msg.ok { color: #1c7c1c; display: block; }
+.form-msg.ok { color: var(--ok-ink); display: block; }
 
 /* ---------- Create Account ---------- */
-.signup-wrap { position: relative; z-index: 2; width: min(1000px, 100%); display: flex; align-items: center; justify-content: center; gap: 3rem; }
-.signup-logo { flex: 0 0 auto; }
-.signup-logo img { width: clamp(150px, 20vw, 210px); height: auto; display: block; }
-.signup-card { flex: 0 1 560px; width: 100%; padding: 1.5rem 2.4rem 1.6rem; position: relative; }
-.signup-card h1 { font: 700 1.9rem 'Roboto', sans-serif; color: var(--heading); margin-bottom: 1rem; }
+.signup-wrap { display: contents; }
+.signup-card { max-width: 560px; }
 .signup-card .close-x {
-    position: absolute; top: 0.9rem; right: 1.1rem; background: none; border: none; color: var(--text);
-    font-size: 1.7rem; line-height: 1; cursor: pointer; text-decoration: none;
+    position: absolute; top: 1rem; right: 1.2rem; background: none; border: none; color: var(--text-muted);
+    font-size: 1.8rem; line-height: 1; cursor: pointer; text-decoration: none;
 }
 .signup-card .close-x:hover { color: var(--danger); }
-.signup-card label.lbl { display: block; font: 700 0.9rem 'Roboto', sans-serif; color: var(--heading); margin: 0.65rem 0 0.25rem; }
+.signup-card label.lbl { display: block; font: 600 0.95rem var(--font-body); color: var(--text); margin: 1rem 0 0.35rem; }
+.lbl .opt { font-weight: 400; color: var(--text-muted); }
 .field { position: relative; }
-.field .ico { 
-    position: absolute; 
-    left: 0.75rem; 
-    top: 50%; 
-    transform: translateY(-50%); 
-    width: 18px; 
-    height: 18px; 
-    color: var(--text-muted); /* Updated from #555 so it uses theme colors */
-    pointer-events: none; 
-}
-.field input { padding-left: 2.6rem; padding-right: 2.6rem; font-size: 0.78rem; }
-.field .eye {
-    position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer;
-    color: #222; display: flex; padding: 0.2rem;
-}
+.field .ico { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--text-muted); pointer-events: none; }
+.field input { padding-left: 2.7rem; padding-right: 2.7rem; }
+.field select { padding-left: 1rem; }
+.field .eye { position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; padding: 0.2rem; }
 
 /* Password eye: inline SVG, coloured through currentColor so it follows the theme */
-.field .eye, .pw-wrap .eye { color: #222; }
-[data-theme="dark"] .field .eye, [data-theme="dark"] .pw-wrap .eye { color: var(--text); }
 .eye .eye-icon { width: 20px; height: 20px; display: block; pointer-events: none; }
-.eye:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.eye:hover { color: var(--text); }
+.eye:focus-visible { border-radius: 6px; }
 
 /* Login page: password box with the eye inside it */
-.pw-wrap { position: relative; }
-.pw-wrap .plain-field { padding-right: 2.6rem; }
-.login-card .pw-wrap .plain-field { margin-bottom: 0; }
-.login-card .pw-wrap { margin-bottom: 0.95rem; }
-.pw-wrap .eye {
-    position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
-    background: none; border: none; cursor: pointer; display: flex; padding: 0.2rem;
-}
+.pw-wrap { position: relative; margin-bottom: 1rem; }
+.pw-wrap .plain-field { padding-right: 2.8rem; margin-bottom: 0; }
+.pw-wrap .eye { position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex; padding: 0.2rem; }
 
 /* Date of birth: type it, or pick from a calendar that has separate Month and Year dropdowns */
-.field .dob-cal { position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer;
-    color: var(--text); display: flex; padding: 0.2rem; }
+.field .dob-cal { position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text); display: flex; padding: 0.2rem; }
 .field .dob-cal svg { width: 20px; height: 20px; }
 .dob-pop { position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; width: min(300px, 100%); padding: 0.7rem;
-    background: var(--bg-elevated); color: var(--text); border: 1px solid var(--field-border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.22); }
+    background: var(--bg-elevated); color: var(--text); border: 1px solid var(--field-border); border-radius: var(--r-md); box-shadow: var(--shadow-pop); }
 .dob-pop[hidden] { display: none; }
 .dob-head { display: flex; align-items: center; gap: 0.35rem; margin-bottom: 0.5rem; }
-.dob-pop .dob-head select { flex: 1; min-width: 0; width: auto; padding: 0.35rem 0.4rem; border-radius: 6px; cursor: pointer;
-    background: var(--bg-elevated); color: var(--text); border: 1px solid var(--field-border); font: 600 0.78rem 'Poppins', sans-serif; }
+.dob-pop .dob-head select { flex: 1; min-width: 0; width: auto; padding: 0.35rem 0.4rem; border-radius: 8px; cursor: pointer;
+    background: var(--bg-elevated); color: var(--text); border: 1px solid var(--field-border); font: 600 0.85rem var(--font-body); }
 .dob-pop select option { background: var(--bg-elevated); color: var(--text); }
-.dob-nav { flex: none; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer;
-    background: none; border: 1px solid var(--field-border); border-radius: 6px; color: var(--text); }
+.dob-nav { flex: none; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    background: none; border: 1px solid var(--field-border); border-radius: 8px; color: var(--text); }
 .dob-nav:hover:not(:disabled) { background: var(--hover-bg); }
 .dob-nav:disabled { opacity: 0.35; cursor: not-allowed; }
 .dob-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
-.dob-grid .dow { font: 600 0.68rem 'Poppins', sans-serif; color: var(--text-muted); padding: 0.25rem 0; }
-.dob-day { aspect-ratio: 1; border: none; background: none; border-radius: 50%; color: var(--text); font: 500 0.78rem 'Poppins', sans-serif; cursor: pointer; }
+.dob-grid .dow { font: 600 0.72rem var(--font-body); color: var(--text-muted); padding: 0.25rem 0; }
+.dob-day { aspect-ratio: 1; border: none; background: none; border-radius: 50%; color: var(--text); font: 500 0.85rem var(--font-body); cursor: pointer; }
 .dob-day:hover:not(:disabled) { background: var(--hover-bg); }
 .dob-day.today { box-shadow: inset 0 0 0 1px var(--accent); }
-.dob-day.sel, .dob-day.sel:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.dob-day.sel, .dob-day.sel:hover:not(:disabled) { background: var(--accent); color: var(--on-accent); }
 .dob-day:disabled { opacity: 0.3; cursor: not-allowed; }
-.dob-day:focus-visible, .dob-nav:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.terms { display: flex; align-items: center; gap: 0.6rem; margin: 0.9rem 0 0.8rem; font: 500 0.78rem 'Roboto', sans-serif; color: var(--text-muted); }
+.terms { display: flex; align-items: center; gap: 0.6rem; margin: 1.1rem 0 1rem; font: 500 0.92rem var(--font-body); color: var(--text-muted); }
 .terms input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
-.terms b { color: var(--heading); }
-.divider { display: flex; align-items: center; gap: 0.75rem; margin: 0.85rem 0; font: 500 0.75rem 'Roboto', sans-serif; color: var(--text-muted); }
+.terms b { color: var(--text); font-weight: 600; }
+.divider { display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0; font: 500 0.88rem var(--font-body); color: var(--text-muted); }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 
-@media (max-width: 760px) {
-    .signup-wrap { flex-direction: column; gap: 1rem; }
-    .signup-card { padding: 1.3rem 1.3rem 1.4rem; }
-}
-/* Increase the size of the native calendar icon */
-input[type="date"]::-webkit-calendar-picker-indicator {
-    transform: scale(1.4); /* Adjust this number up or down for your preferred size */
-    cursor: pointer;
-}
-/* ---------- Dark Mode Icon Fixes ---------- */
-[data-theme="dark"] .field .ico {
-    color: var(--heading); /* Brightens user, email, calendar, and lock SVG icons */
+@media (max-width: 900px) {
+    .auth-shell { grid-template-columns: 1fr; align-content: start; padding-top: 4rem; }
+    .auth-aside .trail, .auth-aside p.lead, .auth-aside h1 { display: none; }
+    .auth-aside { gap: 0; }
+    .auth-card { max-width: 520px; }
 }
 
-/* Calendar picker icon size + dark mode invert */
-input[type="date"]::-webkit-calendar-picker-indicator {
-    transform: scale(1.3);
-    cursor: pointer;
-}
+/* Native date input: bigger calendar icon, light in dark mode */
+input[type="date"]::-webkit-calendar-picker-indicator { transform: scale(1.3); cursor: pointer; }
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.85); }
+input[type="date"] { padding-right: 0.8rem; }
 
-[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(0.85); /* Turns the right calendar icon light in dark mode */
+/* Browser autofill paints fields pale blue, which hides the eye icon in dark mode; keep the theme colours. */
+.plain-field:-webkit-autofill, .plain-field:-webkit-autofill:hover, .plain-field:-webkit-autofill:focus,
+.field input:-webkit-autofill, .field input:-webkit-autofill:hover, .field input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--text); caret-color: var(--text); transition: background-color 9999s ease-in-out 0s;
 }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
+.lbl-login { display: block; font: 600 0.95rem var(--font-body); color: var(--text); margin-bottom: 0.35rem; }
 
-/* Browser autofill (Edge/Chrome) paints fields pale blue, which hides the light eye icon in dark mode.
-   Keep the theme background and text colour instead. */
-.plain-field:-webkit-autofill,
-.plain-field:-webkit-autofill:hover,
-.plain-field:-webkit-autofill:focus,
-.field input:-webkit-autofill,
-.field input:-webkit-autofill:hover,
-.field input:-webkit-autofill:focus {
-    -webkit-text-fill-color: var(--text);
-    caret-color: var(--text);
-    transition: background-color 9999s ease-in-out 0s;
-}
+/* Create Account is tall: keep the brand panel pinned near the top instead of floating mid-page */
+body:has(.signup-card) .auth-aside { align-self: start; position: sticky; top: 2rem; }
+@media (max-width: 900px) { body:has(.signup-card) .auth-aside { position: static; } }

@@ -1,41 +1,32 @@
-// --- Greeting: "HELLO JAY, WELCOME" (first name in caps) ---
+// --- Greeting: "Magandang umaga, Mika" (changes with the time of day) ---
 function firstNameOf(full) {
     return (full || "").trim().split(/\s+/)[0] || "";
 }
-function setGreeting(fullName) {
-    const first = firstNameOf(fullName);
+function setGreeting(firstName) {
+    const first = (firstName || "").trim();
     if (first) {
-        localStorage.setItem("full_name", fullName);
-        document.getElementById("helloTitle").textContent = `Hello ${first}, Welcome`;
+        localStorage.setItem("first_name", first);
+        const hour = new Date().getHours();
+        const greeting = hour < 12 ? "Magandang umaga" : hour < 18 ? "Magandang hapon" : "Magandang gabi";
+        document.getElementById("helloTitle").textContent = `${greeting}, ${first}`;
     }
 }
-setGreeting(localStorage.getItem("full_name") || localStorage.getItem("username"));
+setGreeting(localStorage.getItem("first_name") || firstNameOf(localStorage.getItem("full_name")) || localStorage.getItem("username"));
 (async function refreshName() {
     try {
         const res = await fetch(`${API}/profile`, { headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` } });
-        if (res.ok) setGreeting((await res.json()).full_name);
+        if (res.ok) setGreeting((await res.json()).first_name);
     } catch (_) { /* keep the cached name */ }
 })();
 
-// --- Hero carousel ---
-(function () {
-    const slides = document.querySelectorAll(".slide");
-    const dotsWrap = document.getElementById("dots");
-    let index = 0, timer = null;
-    slides.forEach((_, i) => {
-        const b = document.createElement("button");
-        b.setAttribute("aria-label", `Slide ${i + 1}`);
-        b.addEventListener("click", () => { show(i); restart(); });
-        dotsWrap.appendChild(b);
-    });
-    function show(i) {
-        index = (i + slides.length) % slides.length;
-        slides.forEach((s, n) => s.classList.toggle("active", n === index));
-        dotsWrap.querySelectorAll("button").forEach((d, n) => d.classList.toggle("active", n === index));
-    }
-    function restart() { clearInterval(timer); timer = setInterval(() => show(index + 1), 6000); }
-    show(0); restart();
-})();
+// --- "Type any math topic": hands the topic to the iChatbot, like the tiles below do ---
+document.getElementById("topicForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const topic = document.getElementById("topicInput").value.trim();
+    if (!topic) { document.getElementById("topicInput").focus(); return; }
+    sessionStorage.setItem("landingPendingQuestion", `Teach me ${topic}. Give me an explanation, worked examples, and the solution step by step.`);
+    window.location.href = "user.html";
+});
 
 // --- Subjects + REAL progress ---
 // Each tile's bar shows the lessons this student has actually completed
@@ -299,11 +290,27 @@ async function loadSubjectsAndProgress() {
 
 loadSubjectsAndProgress();
 
+// "Continue learning": the first subject that has a lesson up next, with that subject's progress.
+function paintResumeCard(subjects) {
+    const subject = subjects.find(s => s.total && s.lessons.some(l => l.status === "next"));
+    if (!subject) return;
+    const index = subject.lessons.findIndex(l => l.status === "next");
+    const next = subject.lessons[index];
+    const percent = Math.round((subject.completed / subject.total) * 100) || 0;
+    document.getElementById("resumeRing").style.setProperty("--p", `${percent}%`);
+    document.getElementById("resumePct").textContent = `${percent}%`;
+    document.getElementById("resumeTitle").textContent = next.title;
+    document.getElementById("resumeMeta").textContent = `${subject.branch} · Lesson ${index + 1} of ${subject.total}`;
+    document.getElementById("resumeBtn").href = `lessons.html?subject=${subject.subject_id}&lesson=${next.id}`;
+    document.getElementById("resumeCard").hidden = false;
+}
+
 // "Your roadmap": one line per subject with progress and the next lesson to open. Details live on roadmap.html.
 async function loadRoadmapSummary() {
     const list = document.getElementById("roadmapList");
     try {
         const { subjects } = await getJson("/learning/roadmap");
+        paintResumeCard(subjects);
         const rows = subjects.filter(s => s.total).map(subject => {
             const next = subject.lessons.find(l => l.status === "next");
             const item = document.createElement("li");

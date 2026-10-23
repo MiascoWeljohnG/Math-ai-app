@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#003a00">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
     <title>Math AI — Course Materials</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
@@ -26,7 +27,7 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         /* Updated layout rules to support the pinned footer */
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        body { font-family: var(--font-body); background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         .content-row { display: flex; flex: 1; min-height: 0; width: 100%; }
         
         .file-panel { width: 280px; flex-shrink: 0; background: var(--bg-elevated-2); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
@@ -68,6 +69,7 @@
         .badge-General { background: #64748b; }
         .ask-note { align-self: center; font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 0.2rem 0.5rem; }
     </style>
+    <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
 <body>

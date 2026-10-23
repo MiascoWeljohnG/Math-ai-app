@@ -120,7 +120,7 @@ async function loadStudents() {
         }));
 
         const rows = students.map(s => {
-            const name = [s.first_name, s.last_name].filter(Boolean).join(" ") || s.username;
+            const name = formatName(s) || s.username;
             const row = document.createElement("tr");
             const nameCell = document.createElement("td");
             nameCell.textContent = name;

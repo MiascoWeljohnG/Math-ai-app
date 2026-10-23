@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#003a00">
-    <title>iSipnayan — Edit Profile</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>IsipNayan — Edit Profile</title>
     <script src="js/theme.js"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap">
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/nav-drawer.css">
     <link rel="stylesheet" href="css/app-shell.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Roboto', 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        body { font-family: var(--font-body); background: var(--bg); color: var(--text); min-height: 100vh; }
         .page { max-width: 1000px; margin: 0 auto; padding: 1.2rem 1.5rem 3rem; }
         .page-head { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 1rem; }
         .back { background: none; border: none; color: var(--text); font-size: 1.8rem; cursor: pointer; line-height: 1; text-decoration: none; }
@@ -31,7 +31,7 @@
         .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid var(--field-border); background: #5a6aa0; }
         .avatar .cam { position: absolute; right: -2px; bottom: -2px; width: 26px; height: 26px; border-radius: 50%; background: #333; color: #fff; display: flex; align-items: center; justify-content: center; }
         .avatar .cam svg { width: 14px; height: 14px; }
-        .btn-photo { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--card-mint); border: 1px solid var(--field-border); border-radius: 6px; padding: 0.4rem 0.8rem; font: 700 0.8rem 'Roboto', sans-serif; color: var(--text); cursor: pointer; }
+        .btn-photo { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--card-mint); border: 1px solid var(--field-border); border-radius: 6px; padding: 0.4rem 0.8rem; font: 700 0.8rem var(--font-body), sans-serif; color: var(--text); cursor: pointer; }
         .btn-photo:hover { background: var(--hover-bg); }
         .btn-link { background: none; border: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; margin-left: 0.6rem; text-decoration: underline; }
 
@@ -44,23 +44,24 @@
         .inp svg { position: absolute; left: 0.55rem; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--text-muted); pointer-events: none; }
         .inp input, .inp select {
             width: 100%; height: 34px; border: 1px solid var(--field-border); border-radius: 5px; background: var(--bg-elevated); color: var(--text);
-            font: 700 0.82rem 'Roboto', sans-serif; padding: 0 0.6rem 0 2rem; outline: none;
+            font: 700 0.82rem var(--font-body), sans-serif; padding: 0 0.6rem 0 2rem; outline: none;
         }
         .inp input::placeholder { font-weight: 400; color: var(--text-muted); }
         .inp input:focus, .inp select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(101,150,79,0.25); }
         .inp input[readonly] { background: var(--hover-bg); cursor: not-allowed; }
 
         .save-actions { display: flex; flex-direction: column; gap: 0.6rem; }
-        .btn-save { height: 34px; border: 1px solid var(--field-border); border-radius: 5px; background: #d6f7e6; color: #0b3d18; font: 700 0.85rem 'Roboto', sans-serif; cursor: pointer; }
+        .btn-save { height: 34px; border: 1px solid var(--field-border); border-radius: 5px; background: #d6f7e6; color: #0b3d18; font: 700 0.85rem var(--font-body), sans-serif; cursor: pointer; }
         [data-theme="dark"] .btn-save { background: #23402b; color: #eaf6ea; }
         .btn-save:hover { filter: brightness(0.96); }
         .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
-        .btn-cancel { height: 34px; border: 1px solid var(--field-border); border-radius: 5px; background: var(--bg-elevated); color: var(--text); font: 700 0.85rem 'Roboto', sans-serif; cursor: pointer; }
+        .btn-cancel { height: 34px; border: 1px solid var(--field-border); border-radius: 5px; background: var(--bg-elevated); color: var(--text); font: 700 0.85rem var(--font-body), sans-serif; cursor: pointer; }
         .btn-cancel:hover { background: var(--hover-bg); }
         .msg { font-size: 0.8rem; margin-top: 0.7rem; display: none; }
         .msg.ok { display: block; color: #1c7c1c; }
         .msg.error { display: block; color: var(--danger); }
     </style>
+    <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
 <body>
@@ -68,7 +69,7 @@
         <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu">
             <span></span><span></span><span></span>
         </button>
-        <a class="brand" href="landing.html"><img class="brand-eye" src="img/logo-eye.png" alt=""><img class="brand-word" src="img/logo-word.png" alt="iSipnayan"></a>
+        <a class="brand-lockup" href="landing.html"><span class="brand-mark" aria-hidden="true"></span>IsipNayan</a>
     </header>
 
     <main class="page">
@@ -93,7 +94,9 @@
 
                 <h2><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.4 0-8 2.2-8 5v3h16v-3c0-2.8-3.6-5-8-5Z"/></svg> Personal Details</h2>
                 <div class="grid2">
-                    <div class="full"><label class="lbl" for="fullName">Full Name:</label><div class="inp"><input id="fullName" type="text" style="padding-left:.6rem" autocomplete="name"></div></div>
+                    <div class="full"><label class="lbl" for="lastName">Last Name:</label><div class="inp"><input id="lastName" type="text" style="padding-left:.6rem" autocomplete="family-name"></div></div>
+                    <div><label class="lbl" for="firstName">First Name:</label><div class="inp"><input id="firstName" type="text" style="padding-left:.6rem" autocomplete="given-name"></div></div>
+                    <div><label class="lbl" for="middleName">Middle Name <span class="opt">(optional)</span>:</label><div class="inp"><input id="middleName" type="text" style="padding-left:.6rem" autocomplete="additional-name"></div></div>
                     <div class="full"><label class="lbl" for="email">Email Address:</label>
                         <div class="inp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18a1 1 0 0 1 1 1v.5l-10 6.2L2 6.5V6a1 1 0 0 1 1-1Zm-1 4.1V18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V9.1l-9.5 5.9a1 1 0 0 1-1 0L2 9.1Z"/></svg><input id="email" type="email" autocomplete="email"></div></div>
                     <div><label class="lbl" for="contact">Contact Number:</label>

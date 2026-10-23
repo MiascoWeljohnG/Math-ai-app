@@ -60,6 +60,7 @@ def list_students(user: User = Depends(require_teacher), db: Session = Depends(g
             "username": s.username,
             "first_name": s.first_name,
             "last_name": s.last_name,
+            "middle_name": s.middle_name,
             "email": s.email,
             # one entry per dashboard column, in the same order for every student
             "progress": [by_branch.get(b, {"branch": b, **empty}) for b in branches],

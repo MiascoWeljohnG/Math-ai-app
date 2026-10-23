@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#003a00">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
     <title>Practice set</title>
     <script src="js/theme.js"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap">
     <link rel="stylesheet" href="css/theme.css">
     <!-- Same MathJax setup as the quiz page, so $...$ in questions renders -->
     <script>
@@ -17,13 +17,13 @@
         * { box-sizing: border-box; }
         :root, [data-theme="light"] { --q-mint: #c9fce4; --q-green: #006b1b; --q-ink: #0b4a12; --q-on-green: #ffffff; }
         [data-theme="dark"] { --q-mint: #1b3a26; --q-green: #6fd070; --q-ink: #bff0b8; --q-on-green: #08210f; }
-        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Roboto', 'Segoe UI', sans-serif; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-body); }
         .wrap { max-width: 760px; margin: 1.5rem auto; padding: 0 1rem 3rem; }
         a { color: var(--q-green); }
         .card { background: var(--bg-elevated); border: 1px solid var(--field-border); border-radius: 14px; box-shadow: 1px 2px 8px rgba(0,0,0,0.12); padding: 1.4rem; }
         h1 { margin: 0 0 0.2rem; font-size: 1.5rem; color: var(--q-green); }
         .muted { color: var(--text-muted); font-size: 0.9rem; margin: 0.2rem 0 0.8rem; }
-        .btn { display: inline-block; padding: 0.55rem 1.4rem; border: 1px solid var(--q-green); border-radius: 999px; background: var(--q-mint); color: var(--q-ink); font: 700 0.95rem 'Roboto', sans-serif; cursor: pointer; text-decoration: none; margin: 0.4rem 0.4rem 0 0; }
+        .btn { display: inline-block; padding: 0.55rem 1.4rem; border: 1px solid var(--q-green); border-radius: 999px; background: var(--q-mint); color: var(--q-ink); font: 700 0.95rem var(--font-body), sans-serif; cursor: pointer; text-decoration: none; margin: 0.4rem 0.4rem 0 0; }
         .btn:hover { background: var(--q-green); color: var(--q-on-green); }
         .btn.primary { background: var(--q-green); color: var(--q-on-green); }
         .q { margin: 1.1rem 0; padding: 0.9rem 1rem; border: 1px solid var(--field-border); border-radius: 10px; }
@@ -36,6 +36,7 @@
         .score { font-size: 1.3rem; font-weight: 700; margin: 0.5rem 0; }
         .error { color: #c0392b; }
     </style>
+    <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
 <body>

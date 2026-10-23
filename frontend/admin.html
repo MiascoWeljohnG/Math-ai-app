@@ -3,11 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#003a00">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
     <title>Admin Dashboard</title>
     <script src="js/theme.js"></script>
     <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
     <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
 <body>
@@ -35,8 +38,6 @@
                     <p class="empty bell-empty" id="bellEmpty">You're all caught up.</p>
                 </div>
             </div>
-            <span id="themeSwitchWrap"></span>
-            <button class="btn btn-danger" onclick="logout()">Logout</button>
         </div>
     </div>
 
@@ -132,7 +133,7 @@
         </div>
         <div class="table-wrap">
             <table id="usersTable">
-                <thead><tr><th>Username</th><th>First Name</th><th>Last Name</th><th>Email</th><th>Birthday</th><th>School</th><th>Role</th><th>Joined</th></tr></thead>
+                <thead><tr><th>Username</th><th>Last Name</th><th>First Name</th><th>Middle Name</th><th>Email</th><th>Birthday</th><th>School</th><th>Role</th><th>Joined</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
@@ -152,8 +153,9 @@
             <h2>Add Teacher Account</h2>
             <form id="teacherForm">
                 <label>Username</label><input type="text" id="teacherUsername" required>
-                <label>First name</label><input type="text" id="teacherFirstName" required>
                 <label>Last name</label><input type="text" id="teacherLastName" required>
+                <label>First name</label><input type="text" id="teacherFirstName" required>
+                <label>Middle name <span class="opt">(optional)</span></label><input type="text" id="teacherMiddleName">
                 <label>Email</label><input type="email" id="teacherEmail" required>
                 <label>Birthday</label><input type="date" id="teacherBirthday" required>
                 <label>School</label><select id="teacherSchool"></select>
@@ -179,8 +181,9 @@
             <h2>Add Admin Account</h2>
             <form id="adminForm">
                 <label>Username</label><input type="text" id="adminUsername" required>
-                <label>First name</label><input type="text" id="adminFirstName" required>
                 <label>Last name</label><input type="text" id="adminLastName" required>
+                <label>First name</label><input type="text" id="adminFirstName" required>
+                <label>Middle name <span class="opt">(optional)</span></label><input type="text" id="adminMiddleName">
                 <label>Email</label><input type="email" id="adminEmail" required>
                 <label>Birthday</label><input type="date" id="adminBirthday" required>
                 <label>School (an admin for a school only sees that school)</label><select id="adminSchool"></select>
@@ -225,6 +228,7 @@
 
     <script src="js/modal.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/topic-picker.js"></script>
     <script src="js/material-table.js"></script>
@@ -232,8 +236,7 @@
     <script src="js/admin.js"></script>
     <script>
         requireRole("admin");
-        document.getElementById("themeSwitchWrap").innerHTML = themeSwitchHTML("adminThemeSwitch");
-        wireThemeSwitch("adminThemeSwitch");
+        initNavDrawer({ staff: true });
 
         // Teacher Modal logic
         const teacherModal = document.getElementById("teacherModal");

@@ -51,7 +51,7 @@ def list_users(user=Depends(require_admin), db: Session = Depends(get_db)):
 @router.get("/files")
 def list_files(user=Depends(require_admin), db: Session = Depends(get_db)):
     """Every uploaded file with who uploaded it and when (newest first)."""
-    names = {u.username: " ".join(filter(None, [u.first_name, u.last_name])) for u in db.query(User).all()}
+    names = {u.username: u.person_name for u in db.query(User).all()}
     rows = db.query(Material).order_by(Material.uploaded_at.desc(), Material.id.desc()).all()
     return [{**material_summary(m), "uploaded_by_name": names.get(m.uploaded_by, "")} for m in rows]
 
@@ -123,8 +123,9 @@ def clear_knowledge_base(user=Depends(require_admin), db: Session = Depends(get_
 
 class CreateTeacherRequest(BaseModel):
     username: str
-    first_name: str
     last_name: str
+    first_name: str
+    middle_name: str = ""   # optional
     email: str
     birthday: str = ""   # YYYY-MM-DD
     password: str
@@ -156,11 +157,16 @@ def new_account(req: CreateTeacherRequest, role: str, school_id: Optional[int], 
     if born > date.today():
         raise HTTPException(status_code=400, detail="Birthday cannot be in the future")
 
+    last_name = " ".join((req.last_name or "").split())
+    first_name = " ".join((req.first_name or "").split())
+    if not last_name or not first_name:
+        raise HTTPException(status_code=400, detail="Last name and first name are required")
+
     account = User(
         username=req.username,
-        first_name=req.first_name,
-        last_name=req.last_name,
-        middle_name="",
+        first_name=first_name,
+        last_name=last_name,
+        middle_name=" ".join((req.middle_name or "").split()),
         email=req.email,
         birthday=birthday,
         password_hash=hash_password(req.password),

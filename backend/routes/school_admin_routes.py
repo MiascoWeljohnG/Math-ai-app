@@ -22,7 +22,7 @@ def school_users(user: User = Depends(require_school_admin), db: Session = Depen
             "username": u.username,
             "first_name": u.first_name,
             "last_name": u.last_name,
-            "full_name": u.full_name,
+            "middle_name": u.middle_name,
             "email": u.email,
             "birthday": u.birthday,
             "role": u.role,
@@ -45,7 +45,7 @@ def create_school_teacher(
 @router.get("/files")
 def school_files(user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
     """The files this school's teachers uploaded."""
-    names = {u.username: " ".join(filter(None, [u.first_name, u.last_name])) for u in db.query(User).filter(User.school_id == user.school_id)}
+    names = {u.username: u.person_name for u in db.query(User).filter(User.school_id == user.school_id)}
     rows = (
         db.query(Material)
         .filter(Material.school_id == user.school_id)

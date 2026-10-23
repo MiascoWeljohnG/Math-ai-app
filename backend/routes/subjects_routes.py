@@ -992,7 +992,7 @@ LEADERBOARD_SIZE = 10
 
 
 def _display_name(person: User) -> str:
-    return person.full_name or " ".join(filter(None, [person.first_name, person.last_name])) or person.username
+    return person.display_name
 
 
 @router.get("/{subject_id}/lessons/{lesson_id}/quiz/leaderboard")

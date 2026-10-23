@@ -16,7 +16,9 @@ MAX_AVATAR_CHARS = 400_000
 
 
 class ProfileUpdate(BaseModel):
-    full_name: str
+    last_name: str
+    first_name: str
+    middle_name: Optional[str] = ""
     email: str
     contact_number: Optional[str] = ""
     birthday: Optional[str] = ""
@@ -30,14 +32,17 @@ class ProfileUpdate(BaseModel):
 
 
 def _display_name(u: User) -> str:
-    return u.full_name or " ".join(filter(None, [u.first_name, u.last_name])) or u.username
+    return u.display_name
 
 
 def _serialize(u: User) -> dict:
     return {
         "username": u.username,
         "role": u.role,
-        "full_name": _display_name(u),
+        "last_name": u.last_name or "",
+        "first_name": u.first_name or "",
+        "middle_name": u.middle_name or "",
+        "display_name": _display_name(u),
         "email": u.email or "",
         "contact_number": u.contact_number or "",
         "birthday": u.birthday or "",
@@ -62,14 +67,14 @@ def update_profile(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    full_name = " ".join(req.full_name.split())
-    if not full_name:
-        raise HTTPException(400, "Full name is required")
+    last_name = " ".join(req.last_name.split())
+    first_name = " ".join(req.first_name.split())
+    if not last_name or not first_name:
+        raise HTTPException(400, "Last name and first name are required")
 
-    user.full_name = full_name
-    parts = full_name.split(" ")
-    user.first_name = " ".join(parts[:-1]) if len(parts) > 1 else full_name
-    user.last_name = parts[-1] if len(parts) > 1 else ""
+    user.last_name = last_name
+    user.first_name = first_name
+    user.middle_name = " ".join((req.middle_name or "").split())
 
     user.email = req.email.strip()
     user.contact_number = (req.contact_number or "").strip()

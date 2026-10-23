@@ -34,7 +34,6 @@ class User(Base):
     email = Column(String, nullable=True)
     birthday = Column(String, nullable=True)
     # --- profile fields (added for the Edit Profile page) ---
-    full_name = Column(String, nullable=True)
     student_id = Column(String, nullable=True)
     contact_number = Column(String, nullable=True)
     gender = Column(String, nullable=True)
@@ -47,6 +46,16 @@ class User(Base):
     role = Column(String, nullable=False, default="user")   # user | teacher | school_admin | admin (main admin)
     school_id = Column(Integer, nullable=True, index=True)   # NULL = the main pool
     created_at = Column(Date, default=date.today)
+
+    @property
+    def person_name(self) -> str:
+        """First, middle and last name joined in that order; "" when the account has no name filled in."""
+        return " ".join(p.strip() for p in (self.first_name, self.middle_name, self.last_name) if p and p.strip())
+
+    @property
+    def display_name(self) -> str:
+        """The name to show in greetings and lists; falls back to the username."""
+        return self.person_name or self.username
 
 class UsageLog(Base):
     __tablename__ = "usage_logs"

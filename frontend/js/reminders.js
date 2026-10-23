@@ -19,7 +19,7 @@
         const students = await call("/teacher/students");
         const everyone = new Option("Everyone", "");
         $("reminderTarget").replaceChildren(everyone, ...students.map(s =>
-            new Option(`${[s.first_name, s.last_name].filter(Boolean).join(" ") || s.username} (${s.username})`, s.username)));
+            new Option(`${formatName(s) || s.username} (${s.username})`, s.username)));
     }
 
     async function loadReminders() {

@@ -18,9 +18,11 @@ class LoginRequest(BaseModel):
 
 
 class RegisterRequest(BaseModel):
-    # Matches the Create Account screen: Student ID, Full name, Email, Birthday, Password.
+    # Matches the Create Account screen: Student ID, Last / First / Middle name, Email, Birthday, Password.
     student_id: str
-    full_name: str
+    last_name: str
+    first_name: str
+    middle_name: str = ""   # optional
     email: str
     birthday: str # YYYY-MM-DD
     password: str
@@ -28,13 +30,15 @@ class RegisterRequest(BaseModel):
 
 class AccessRequest(BaseModel):
     student_id: str
-    full_name: str
+    last_name: str
+    first_name: str
+    middle_name: str = ""
     email: str
 
 @router.post("/request-access")
 def request_access(req: AccessRequest, db: Session = Depends(get_db)):
     student_id = req.student_id.strip()
-    full_name = " ".join(req.full_name.split())
+    full_name = " ".join(p for p in (req.first_name.split() + req.middle_name.split() + req.last_name.split()) if p)
     email = req.email.strip()
     
     message = f"Student '{full_name}' with ID '{student_id}' (Email: {email}) is trying to register but their number is not in the system."
@@ -44,9 +48,11 @@ def request_access(req: AccessRequest, db: Session = Depends(get_db)):
 @router.post("/register")
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
     student_id = req.student_id.strip()
-    full_name = " ".join(req.full_name.split())
-    if not student_id or not full_name:
-        raise HTTPException(400, "Student ID and full name are required")
+    last_name = " ".join(req.last_name.split())
+    first_name = " ".join(req.first_name.split())
+    middle_name = " ".join(req.middle_name.split())
+    if not student_id or not last_name or not first_name:
+        raise HTTPException(400, "Student ID, last name and first name are required")
     if len(req.password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
 
@@ -75,17 +81,12 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == student_id).first():
         raise HTTPException(400, "An account with this Student ID already exists")
 
-    parts = full_name.split(" ")
-    first_name = " ".join(parts[:-1]) if len(parts) > 1 else full_name
-    last_name = parts[-1] if len(parts) > 1 else ""
-
     user = User(
         username=student_id,
         student_id=student_id,
-        full_name=full_name,
         first_name=first_name,
         last_name=last_name,
-        middle_name="",
+        middle_name=middle_name,
         email=req.email.strip(),
         birthday=birthday,
         password_hash=hash_password(req.password),
@@ -105,13 +106,16 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(401, "Invalid username or password")
 
     token = create_access_token({"sub": user.username})
-    display_name = user.full_name or " ".join(filter(None, [user.first_name, user.last_name])) or user.username
+    display_name = user.display_name
     school = db.query(School).filter(School.id == user.school_id).first() if user.school_id else None
     return {
         "access_token": token,
         "token_type": "bearer",
         "role": user.role,
-        "full_name": display_name,
+        "full_name": display_name,        # kept so older cached pages still greet the user
+        "first_name": user.first_name or user.username,
+        "last_name": user.last_name,
+        "middle_name": user.middle_name,
         "school_id": user.school_id,
         "school_name": school.name if school else None,
     }
