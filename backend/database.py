@@ -36,6 +36,17 @@ def migrate_add_missing_columns():
                     conn.execute(text(f"ALTER TABLE {table.name} ADD COLUMN {col.name} {col_type}"))
 
 
+def backfill_user_status():
+    """Accounts that existed before the approval workflow have no status. They were already trusted, so they
+    become 'active'. Safe to run on every start: new rows always carry an explicit status."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    if not inspector.has_table("users") or "status" not in {c["name"] for c in inspector.get_columns("users")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE users SET status = 'active' WHERE status IS NULL"))
+
+
 def drop_legacy_full_name():
     """The users table no longer has a full_name column (last / first / middle name are separate).
     Copy any name that only lived in full_name into first_name, then drop the column.

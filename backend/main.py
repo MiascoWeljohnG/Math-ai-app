@@ -8,29 +8,22 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import Base, engine, SessionLocal, migrate_add_missing_columns, drop_legacy_full_name
+from database import Base, engine, SessionLocal, migrate_add_missing_columns, drop_legacy_full_name, backfill_user_status
 from models import User, Subject
-from auth import hash_password
-from routes import auth_routes, admin_routes, user_routes, teacher_routes, materials_routes, profile_routes, subjects_routes, subject_deletion_routes, notification_routes, learning_routes, schools_routes, school_admin_routes, practice_routes
+from bootstrap import ensure_schools, ensure_school_admins, retire_main_admins, warn_if_default_password
+from routes import approval_routes, auth_routes, user_routes, teacher_routes, materials_routes, profile_routes, subjects_routes, subject_deletion_routes, notification_routes, learning_routes, schools_routes, school_admin_routes, practice_routes
 import config
 
 Base.metadata.create_all(bind=engine)
 migrate_add_missing_columns()
 drop_legacy_full_name()
+backfill_user_status()   # accounts from before the approval workflow stay usable
 
 db = SessionLocal()
-if not db.query(User).filter(User.username == "admin").first():
-    db.add(User(
-        username="admin",
-        first_name="Admin",
-        last_name="User",
-        middle_name="",
-        email="admin@mail.com",
-        birthday="2000-01-01",
-        password_hash=hash_password("admin123"),
-        role="admin",
-    ))
-    db.commit()
+ensure_schools(db)        # exactly the two configured schools
+ensure_school_admins(db)  # one default admin per school; no built-in password: see bootstrap.py
+retire_main_admins(db)    # the all-schools admin role no longer exists
+warn_if_default_password(db)
 # Seed the four default branches only on a brand-new database. Seeding "any that is missing" on every
 # start would bring back a subject the admins just approved deleting.
 if not db.query(Subject).filter(Subject.owner_user_id.is_(None)).first():
@@ -107,7 +100,7 @@ async def unhandled_error(request: Request, exc: Exception):
     )
 
 app.include_router(auth_routes.router)
-app.include_router(admin_routes.router)
+app.include_router(approval_routes.router)
 app.include_router(user_routes.router)
 app.include_router(teacher_routes.router)
 app.include_router(materials_routes.router)

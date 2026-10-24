@@ -5,7 +5,7 @@ from auth import require_teacher
 from database import get_db
 from adaptive import level_counts
 from school import in_school, shared_subjects
-from models import Lesson, Material, Subject, User
+from models import ACTIVE, Lesson, Material, Subject, User
 from classifier import AUTO, ingest_with_detection
 from progress import progress_for_user
 from routes.materials_routes import material_summary
@@ -46,7 +46,7 @@ def my_files(user: User = Depends(require_teacher), db: Session = Depends(get_db
 def list_students(user: User = Depends(require_teacher), db: Session = Depends(get_db)):
     """The students of this teacher's school, each with their real progress per math branch.
     There's no per-class roster model yet, so a teacher sees every student of their own school."""
-    students = db.query(User).filter(User.role == "user", in_school(User.school_id, user.school_id)).all()
+    students = db.query(User).filter(User.role == "user", User.status == ACTIVE, in_school(User.school_id, user.school_id)).all()
     # one column per shared subject, so branches the AI creates (or the admins delete) show up here
     branches = [name for (name,) in db.query(Subject.name).filter(shared_subjects(user)).order_by(Subject.id.asc())]
     empty = {"completed": 0, "total": 0, "percent": 0}

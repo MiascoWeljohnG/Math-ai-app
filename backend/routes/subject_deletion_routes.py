@@ -1,3 +1,6 @@
+"""Deleting a shared subject. A teacher (or the school admin) asks; the admin of the subject's school decides.
+One approval deletes the subject with its lessons, quizzes and progress; a rejection keeps it. Everything is
+limited to the requester's own school, and each request and decision goes into the audit log."""
 from datetime import datetime
 from typing import Optional
 
@@ -6,20 +9,19 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from auth import require_admin, require_teacher_or_admin
+from auth import require_school_admin, require_staff
 from database import get_db
-from models import Lesson, Subject, SubjectDeletionRequest, SubjectDeletionVote, User
+from models import AuditLog, Lesson, Subject, SubjectDeletionRequest, SubjectDeletionVote, User
 from routes.subjects_routes import delete_subject_cascade
 from school import shared_subjects
 from notifications import notify_admins
 
 router = APIRouter(prefix="/subject-deletions", tags=["subject-deletions"])
 
+OPEN = ["pending", "pending_main_admin"]   # the second only appears on requests made under the old two-step rule
 
-def _admin_usernames(db: Session) -> set[str]:
-    return {username for (username,) in db.query(User.username).filter(User.role == "admin")}
 
-def _school_admin_usernames(db: Session, school_id: int) -> set[str]:
+def _school_admin_usernames(db: Session, school_id: Optional[int]) -> set[str]:
     if not school_id:
         return set()
     return {username for (username,) in db.query(User.username).filter(User.role == "school_admin", User.school_id == school_id)}
@@ -35,14 +37,9 @@ def _iso(moment: Optional[datetime]) -> Optional[str]:
 
 def _serialize(db: Session, request: SubjectDeletionRequest, viewer: User) -> dict:
     subject = db.query(Subject).filter(Subject.id == request.subject_id).first()
-    school_id = subject.school_id if subject else None
-    
-    admins = _admin_usernames(db)
-    school_admins = _school_admin_usernames(db, school_id)
-    
+    admins = _school_admin_usernames(db, subject.school_id if subject else None)
     votes = _votes(db, request.id)
     my_vote = votes.get(viewer.username)
-    
     return {
         "id": request.id,
         "subject_id": request.subject_id,
@@ -52,9 +49,9 @@ def _serialize(db: Session, request: SubjectDeletionRequest, viewer: User) -> di
         "status": request.status,
         "created_at": _iso(request.created_at),
         "lesson_count": db.query(func.count(Lesson.id)).filter(Lesson.subject_id == request.subject_id).scalar(),
-        "admins_total": len(admins) + len(school_admins),
-        "approved_by": sorted(name for name in (admins | school_admins) if votes.get(name) is True),
-        "waiting_on": sorted(name for name in (admins | school_admins) if name not in votes),
+        "admins_total": len(admins),
+        "approved_by": sorted(name for name in admins if votes.get(name) is True),
+        "waiting_on": sorted(name for name in admins if name not in votes),
         "my_vote": None if my_vote is None else ("approve" if my_vote else "reject"),
     }
 
@@ -62,34 +59,19 @@ def _serialize(db: Session, request: SubjectDeletionRequest, viewer: User) -> di
 def _resolve(db: Session, request: SubjectDeletionRequest) -> str:
     """Settle a pending request after a vote. Returns its new status. The caller has not committed yet."""
     votes = _votes(db, request.id)
+    subject = db.query(Subject).filter(Subject.id == request.subject_id).first()
+    admins = _school_admin_usernames(db, subject.school_id if subject else None)
     if False in votes.values():
         request.status = "rejected"
-        # Notify default admins that deletion was declined
-        subject = db.query(Subject).filter(Subject.id == request.subject_id).first()
-        notify_admins(db, "deletion_declined", "Subject Deletion Declined", f'The deletion request for subject "{request.subject_name}" was rejected.')
+        notify_admins(db, "deletion_declined", "Subject Deletion Declined",
+                      f'The deletion request for subject "{request.subject_name}" was rejected.',
+                      school_id=subject.school_id if subject else None)
+    elif any(votes.get(name) for name in admins):
+        if subject is not None and subject.owner_user_id is None:
+            delete_subject_cascade(db, subject)
+        request.status = "approved"
     else:
-        subject = db.query(Subject).filter(Subject.id == request.subject_id).first()
-        school_id = subject.school_id if subject else None
-        
-        admins = _admin_usernames(db)
-        school_admins = _school_admin_usernames(db, school_id)
-        
-        # Check if we have at least one school admin approval (if there are any school admins for this school)
-        has_school_admin_approval = any(votes.get(sa) for sa in school_admins) if school_admins else True
-        
-        # Check if we have at least one main admin approval
-        has_main_admin_approval = any(votes.get(ma) for ma in admins)
-        
-        if has_school_admin_approval and not has_main_admin_approval:
-            # Forwarded to main admin implicitly by just waiting for them
-            request.status = "pending_main_admin"
-        elif has_school_admin_approval and has_main_admin_approval:
-            if subject is not None and subject.owner_user_id is None:
-                delete_subject_cascade(db, subject)
-            request.status = "approved"
-        else:
-            return request.status
-            
+        return request.status
     request.resolved_at = datetime.utcnow()
     return request.status
 
@@ -102,7 +84,7 @@ class DeletionRequest(BaseModel):
 @router.post("")
 def request_subject_deletion(
     req: DeletionRequest,
-    user: User = Depends(require_teacher_or_admin),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     subject = db.query(Subject).filter(Subject.id == req.subject_id, shared_subjects(user)).first()
@@ -110,9 +92,9 @@ def request_subject_deletion(
         raise HTTPException(status_code=404, detail="Subject not found")
     if db.query(SubjectDeletionRequest).filter(
         SubjectDeletionRequest.subject_id == subject.id,
-        SubjectDeletionRequest.status.in_(["pending", "pending_main_admin"]),
+        SubjectDeletionRequest.status.in_(OPEN),
     ).first():
-        raise HTTPException(status_code=409, detail="A deletion request for this subject is already waiting for the admins")
+        raise HTTPException(status_code=409, detail="A deletion request for this subject is already waiting for the admin")
 
     request = SubjectDeletionRequest(
         subject_id=subject.id,
@@ -122,34 +104,34 @@ def request_subject_deletion(
     )
     db.add(request)
     db.flush()
-    if user.role in ["admin", "school_admin"]:
+    db.add(AuditLog(actor=user.username, school_id=subject.school_id, action="subject.delete.request", target=subject.name, detail=request.reason))
+    if user.role == "school_admin":   # asking as the school admin is the same as approving
         db.add(SubjectDeletionVote(request_id=request.id, admin_username=user.username, approve=True))
         db.flush()
+    else:
+        notify_admins(db, "deletion_request", "Subject deletion requested",
+                      f'@{user.username} asked to delete "{subject.name}".', school_id=subject.school_id)
+    name = subject.name
     status = _resolve(db, request)
     db.commit()
-    
+
     if status == "approved":
-        message = f'"{subject.name}" was deleted.'
-    elif status == "rejected":
-        message = f'Request rejected immediately.'
+        message = f'"{name}" was deleted.'
     else:
-        message = f'Request sent. "{subject.name}" will be deleted once approved by the required admins.'
-        
+        message = f'Request sent. "{name}" will be deleted once your school admin approves.'
     return {"status": status, "message": message, "request_id": request.id}
 
 
 @router.get("")
-def list_pending_requests(user: User = Depends(require_teacher_or_admin), db: Session = Depends(get_db)):
+def list_pending_requests(user: User = Depends(require_staff), db: Session = Depends(get_db)):
     rows = (
         db.query(SubjectDeletionRequest)
-        .filter(SubjectDeletionRequest.status.in_(["pending", "pending_main_admin"]))
+        .filter(SubjectDeletionRequest.status.in_(OPEN))
         .order_by(SubjectDeletionRequest.created_at.asc(), SubjectDeletionRequest.id.asc())
         .all()
     )
-    if user.role != "admin":   # teachers/school_admins see their own school's requests
-        mine = {i for (i,) in db.query(Subject.id).filter(shared_subjects(user))}
-        rows = [row for row in rows if row.subject_id in mine]
-    return [_serialize(db, row, user) for row in rows]
+    mine = {i for (i,) in db.query(Subject.id).filter(shared_subjects(user))}   # own school's subjects only
+    return [_serialize(db, row, user) for row in rows if row.subject_id in mine]
 
 
 class Decision(BaseModel):
@@ -160,16 +142,14 @@ class Decision(BaseModel):
 def decide(
     request_id: int,
     req: Decision,
-    user: User = Depends(require_teacher_or_admin), # Allow school_admin or admin
+    user: User = Depends(require_school_admin),
     db: Session = Depends(get_db),
 ):
-    if user.role not in ["admin", "school_admin"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-        
     request = db.query(SubjectDeletionRequest).filter(SubjectDeletionRequest.id == request_id).first()
-    if request is None:
+    subject = db.query(Subject).filter(Subject.id == request.subject_id).first() if request else None
+    if request is None or subject is None or subject.school_id != user.school_id:   # another school's request looks like it does not exist
         raise HTTPException(status_code=404, detail="Request not found")
-    if request.status not in ["pending", "pending_main_admin"]:
+    if request.status not in OPEN:
         raise HTTPException(status_code=409, detail=f"This request was already {request.status}")
 
     vote = db.query(SubjectDeletionVote).filter(
@@ -180,15 +160,15 @@ def decide(
         db.add(SubjectDeletionVote(request_id=request.id, admin_username=user.username, approve=req.approve))
     else:
         vote.approve, vote.decided_at = req.approve, datetime.utcnow()
+    db.add(AuditLog(actor=user.username, school_id=subject.school_id, action="subject.delete.approve" if req.approve else "subject.delete.reject", target=request.subject_name))
     db.flush()
     status = _resolve(db, request)
     db.commit()
-    
-    if status in ["pending", "pending_main_admin"]:
-        message = "Approved. Waiting for other admins."
-    elif status == "approved":
+
+    if status == "approved":
         message = f'Approved. "{request.subject_name}" was deleted.'
-    else:
+    elif status == "rejected":
         message = f'Rejected. "{request.subject_name}" stays.'
-        
+    else:
+        message = "Saved."
     return {"status": status, "message": message}

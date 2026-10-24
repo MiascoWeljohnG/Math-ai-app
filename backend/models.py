@@ -1,6 +1,11 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey, UniqueConstraint, Boolean
+from sqlalchemy import Column, Integer, String, Date, DateTime, Text, ForeignKey, UniqueConstraint, Boolean, event
 from datetime import date, datetime
+import config
 from database import Base
+
+# Account lifecycle. A student account is created PENDING and can neither log in nor use any token until a
+# reviewer of their school approves it (ACTIVE). REJECTED can be resubmitted a limited number of times.
+PENDING, ACTIVE, REJECTED, DISABLED = "pending", "active", "rejected", "disabled"   # DISABLED: retired accounts (the old main admin)
 
 class School(Base):
     """One school (A, B ...). Accounts, subjects, files and reminders belong to a school through their
@@ -12,15 +17,12 @@ class School(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-class RegisteredStudent(Base):
-    """A student number the school has registered. Once any exist, only these numbers can sign up, and
-    the student joins the school the number is listed under."""
-    __tablename__ = "registered_students"
-
-    id = Column(Integer, primary_key=True, index=True)
-    student_number = Column(String, nullable=False, unique=True, index=True)
-    school_id = Column(Integer, nullable=True, index=True)   # NULL = the main pool
-    created_at = Column(DateTime, default=datetime.utcnow)
+@event.listens_for(School, "before_insert")
+def _only_the_fixed_schools(mapper, connection, target):
+    """Last line of defence behind the missing 'add school' route: the database can only ever hold the two
+    schools named in config.SCHOOL_NAMES, whatever code path tries to insert one."""
+    if target.name not in config.SCHOOL_NAMES:
+        raise ValueError(f"Only these schools exist: {', '.join(config.SCHOOL_NAMES)}")
 
 
 class User(Base):
@@ -46,6 +48,12 @@ class User(Base):
     role = Column(String, nullable=False, default="user")   # user | teacher | school_admin | admin (main admin)
     school_id = Column(Integer, nullable=True, index=True)   # NULL = the main pool
     created_at = Column(Date, default=date.today)
+    # --- approval workflow ---
+    status = Column(String, nullable=False, default=PENDING, index=True)   # pending | active | rejected | disabled (fail closed: new rows are pending)
+    reviewed_by = Column(String, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(String, nullable=True)
+    submissions = Column(Integer, nullable=True, default=1)                 # how many certificates this student has sent
 
     @property
     def person_name(self) -> str:
@@ -56,6 +64,35 @@ class User(Base):
     def display_name(self) -> str:
         """The name to show in greetings and lists; falls back to the username."""
         return self.person_name or self.username
+
+class StudentCertificate(Base):
+    """One enrollment certificate a student uploaded. The file itself lives in private storage (certificates.py);
+    `storage_ref` points at it and is never sent to the browser. `sha256` lets reviewers see when the same
+    file was used by another account."""
+    __tablename__ = "student_certificates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    storage_ref = Column(String, nullable=False)
+    original_name = Column(String, nullable=True)
+    content_type = Column(String, nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    sha256 = Column(String, index=True, nullable=False)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AuditLog(Base):
+    """Append-only trail of privileged actions: approvals, rejections, admin creation."""
+    __tablename__ = "audit_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    actor = Column(String, index=True, nullable=False)
+    school_id = Column(Integer, index=True, nullable=True)   # which school the event belongs to; school admins read only their own
+    action = Column(String, index=True, nullable=False)
+    target = Column(String, nullable=True)
+    detail = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class UsageLog(Base):
     __tablename__ = "usage_logs"
@@ -123,6 +160,7 @@ class Lesson(Base):
     title = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     order_index = Column(Integer, default=0)
+    prerequisite_id = Column(Integer, ForeignKey("lessons.id"), nullable=True)
     created_by = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

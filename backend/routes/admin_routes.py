@@ -6,9 +6,9 @@ from datetime import date
 from pydantic import BaseModel
 from typing import Optional
 
-from auth import require_admin, hash_password
+from auth import require_school_admin, hash_password, check_password_strength
 from database import get_db
-from models import User, UsageLog, Material, RegisteredStudent, School
+from models import ACTIVE, AuditLog, User, UsageLog, Material, RegisteredStudent, School
 from notifications import notify_admins
 from classifier import AUTO, ingest_with_detection
 from routes.materials_routes import material_summary
@@ -22,7 +22,7 @@ async def upload_documents(
     files: list[UploadFile] = File(...),
     branch: str = Form(AUTO),
     branches: str = Form(""),
-    user=Depends(require_admin),
+    user=Depends(require_school_admin),
     db: Session = Depends(get_db),
 ):
     # branch=Auto: the AI picks each file's branch and only asks when it isn't sure (classifier.py)
@@ -30,12 +30,12 @@ async def upload_documents(
 
 @router.get("/users")
 def list_users(user=Depends(require_admin), db: Session = Depends(get_db)):
-    users = db.query(User).all()
+    users = db.query(User).filter(User.school_id == user.school_id).all()
     schools = {s.id: s.name for s in db.query(School)}
     return [
         {
             "school_id": u.school_id,
-            "school": schools.get(u.school_id),   # None = the main pool
+            "school": schools.get(u.school_id),
             "username": u.username,
             "first_name": u.first_name,
             "last_name": u.last_name,
@@ -43,6 +43,7 @@ def list_users(user=Depends(require_admin), db: Session = Depends(get_db)):
             "email": u.email,
             "birthday": u.birthday,
             "role": u.role,
+            "status": u.status,
             "created": str(u.created_at),
         }
         for u in users
@@ -52,14 +53,14 @@ def list_users(user=Depends(require_admin), db: Session = Depends(get_db)):
 def list_files(user=Depends(require_admin), db: Session = Depends(get_db)):
     """Every uploaded file with who uploaded it and when (newest first)."""
     names = {u.username: u.person_name for u in db.query(User).all()}
-    rows = db.query(Material).order_by(Material.uploaded_at.desc(), Material.id.desc()).all()
+    rows = db.query(Material).filter(Material.school_id == user.school_id).order_by(Material.uploaded_at.desc(), Material.id.desc()).all()
     return [{**material_summary(m), "uploaded_by_name": names.get(m.uploaded_by, "")} for m in rows]
 
 @router.delete("/files/{filename:path}")
 def delete_file(filename: str, user=Depends(require_admin), db: Session = Depends(get_db)):
     """Delete one uploaded file: its record, the original on disk, and the AI's chunks from it."""
     from rag import delete_material_chunks
-    material = db.query(Material).filter(Material.filename == filename).first()
+    material = db.query(Material).filter(Material.filename == filename, Material.school_id == user.school_id).first()
     if material is None:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -132,20 +133,23 @@ class CreateTeacherRequest(BaseModel):
     school_id: Optional[int] = None   # which school the account is for; None = the main pool
 
 
-def school_or_400(db: Session, school_id: Optional[int]) -> Optional[School]:
+def school_or_400(db: Session, school_id: Optional[int]) -> School:
+    """Every account and every student number belongs to one of the two fixed schools."""
     if school_id is None:
-        return None
+        raise HTTPException(status_code=400, detail="Choose a school")
     school = db.query(School).filter(School.id == school_id).first()
     if school is None:
         raise HTTPException(status_code=400, detail="That school does not exist")
     return school
 
 
-def new_account(req: CreateTeacherRequest, role: str, school_id: Optional[int], db: Session) -> User:
-    """Validate and save one staff account (teacher, school admin or main admin). school_admin_routes
-    calls this too, so a school admin makes teachers by exactly the same rules."""
+def new_account(req: CreateTeacherRequest, role: str, school_id: int, db: Session, actor: str = "system") -> User:
+    """Validate and save one staff account (teacher or school admin). school_admin_routes calls this too, so a
+    school admin makes teachers by exactly the same rules. Staff accounts are made by someone who is already
+    trusted, so they start ACTIVE (only self-service student sign-ups go through approval)."""
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
+    check_password_strength(req.password)
 
     birthday = (req.birthday or "").strip()
     if not birthday:
@@ -172,8 +176,10 @@ def new_account(req: CreateTeacherRequest, role: str, school_id: Optional[int], 
         password_hash=hash_password(req.password),
         role=role,
         school_id=school_id,
+        status=ACTIVE,
     )
     db.add(account)
+    db.add(AuditLog(actor=actor, action=f"{role}.create", target=req.username, detail=f"school_id={school_id}"))
     db.commit()
     return account
 
@@ -181,7 +187,7 @@ def new_account(req: CreateTeacherRequest, role: str, school_id: Optional[int], 
 @router.post("/create-teacher")
 def create_teacher(
     req: CreateTeacherRequest,
-    user=Depends(require_admin),
+    user=Depends(require_school_admin),
     db: Session = Depends(get_db),
 ):
     # Teachers are never self-registered through the public /auth/register
@@ -189,26 +195,28 @@ def create_teacher(
     # teacher access, so this is the one place a "teacher" role gets created
     # (school admins make teachers for their own school in school_admin_routes.py).
     school = school_or_400(db, req.school_id)
-    new_account(req, "teacher", school.id if school else None, db)
-    where = f" for {school.name}" if school else ""
-    return {"message": f"Teacher account '{req.username}' created{where}."}
+    new_account(req, "teacher", school.id, db, actor=user.username)
+    return {"message": f"Teacher account '{req.username}' created for {school.name}."}
 
 
 @router.post("/create-admin")
 def create_admin(
     req: CreateTeacherRequest,
-    user=Depends(require_admin),
+    user=Depends(require_school_admin),
     db: Session = Depends(get_db),
 ):
-    """Only the default 'admin' account makes admins (the page hides the button from everyone else).
-    With a school it is that school's admin (role school_admin, sees only that school); without one it
-    is another main admin."""
-    if user.username != "admin":
-        raise HTTPException(status_code=403, detail="Only the default admin can create admins")
+    """Admin creation is locked down three ways: only the super admin (a flag on the account, set at startup
+    or by create_admin.py) can call this; it can only make a SCHOOL admin, for one of the two schools, so no
+    API call ever produces another all-powerful account; and every creation is written to the audit log."""
     school = school_or_400(db, req.school_id)
-    new_account(req, "school_admin" if school else "admin", school.id if school else None, db)
-    label = f"{school.name} admin" if school else "Admin"
-    return {"message": f"{label} account '{req.username}' created."}
+    new_account(req, "school_admin", school.id, db, actor=user.username)
+    return {"message": f"{school.name} admin account '{req.username}' created."}
+
+
+@router.get("/audit-log")
+def audit_log(limit: int = 200, user=Depends(require_school_admin), db: Session = Depends(get_db)):
+    rows = db.query(AuditLog).order_by(AuditLog.id.desc()).limit(max(1, min(limit, 500))).all()
+    return [{"at": r.created_at.isoformat() + "Z", "actor": r.actor, "action": r.action, "target": r.target, "detail": r.detail} for r in rows]
 
 
 # ---- Registered student numbers (the sign-up list). Shared with school_admin_routes. ----
@@ -269,7 +277,7 @@ def remove_registered(db: Session, row: Optional[RegisteredStudent]) -> dict:
 @router.post("/registered-students")
 def add_registered_students(req: RegisteredNumbersRequest, user=Depends(require_admin), db: Session = Depends(get_db)):
     school = school_or_400(db, req.school_id)
-    return add_registered(db, req.numbers, school.id if school else None)
+    return add_registered(db, req.numbers, school.id)
 
 
 @router.get("/registered-students")

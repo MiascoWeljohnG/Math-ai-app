@@ -1,5 +1,5 @@
-"""Deleting a shared subject needs every admin's approval; lessons can be generated from an uploaded
-file, creating a new branch when the AI says the file doesn't fit an existing one."""
+"""Deleting a shared subject needs the approval of the admin of its school; lessons can be generated from an
+uploaded file, creating a new branch when the AI says the file doesn't fit an existing one."""
 import json
 from types import SimpleNamespace
 
@@ -11,7 +11,7 @@ import classifier
 import config
 from auth import get_current_user
 from database import get_db
-from models import Lesson, LessonCompletion, LessonQuiz, Material, Subject, SubjectDeletionRequest, User
+from models import Lesson, LessonCompletion, LessonQuiz, Material, School, Subject, SubjectDeletionRequest, User
 from routes import subject_deletion_routes, subjects_routes
 
 NAMES = ["Algebra", "Geometry"]
@@ -20,14 +20,17 @@ NAMES = ["Algebra", "Geometry"]
 @pytest.fixture
 def api(db, rag, tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CHROMA_VAULT_DIR", str(tmp_path))
+    school, other_school = School(name="School A"), School(name="School B")
+    db.add_all([school, other_school])
+    db.flush()
     users = {
-        "ana": User(username="ana", password_hash="x", role="teacher"),
-        "root": User(username="root", password_hash="x", role="admin"),
-        "boss": User(username="boss", password_hash="x", role="admin"),
-        "stu": User(username="stu", password_hash="x", role="user"),
+        "ana": User(username="ana", password_hash="x", role="teacher", school_id=school.id),
+        "root": User(username="root", password_hash="x", role="school_admin", school_id=school.id),
+        "other": User(username="other", password_hash="x", role="school_admin", school_id=other_school.id),
+        "stu": User(username="stu", password_hash="x", role="user", school_id=school.id),
     }
     db.add_all(users.values())
-    algebra, geometry = Subject(name="Algebra", description="Equations"), Subject(name="Geometry")
+    algebra, geometry = Subject(name="Algebra", description="Equations", school_id=school.id), Subject(name="Geometry", school_id=school.id)
     db.add_all([algebra, geometry])
     db.commit()
     lesson = Lesson(subject_id=algebra.id, title="Intro", content="body", created_by="ana")
@@ -37,7 +40,7 @@ def api(db, rag, tmp_path, monkeypatch):
     folder = tmp_path / "Uploaded Materials" / "General"
     folder.mkdir(parents=True)
     (folder / "primes.txt").write_text("Prime numbers and divisibility.")
-    db.add(Material(filename="Uploaded Materials/General/primes.txt", display_name="primes.txt", branch="General", uploaded_by="ana"))
+    db.add(Material(filename="Uploaded Materials/General/primes.txt", display_name="primes.txt", branch="General", uploaded_by="ana", school_id=school.id))
     db.commit()
 
     app, current = FastAPI(), {"user": users["ana"]}
@@ -57,14 +60,14 @@ def subject_exists(api, subject):
     return api.db.query(Subject).filter(Subject.id == subject.id).first() is not None
 
 
-# ---------------------------------------------------------------- deletion needs every admin
+# ---------------------------------------------------------------- deletion is decided by the school's admin
 def test_request_is_pending_and_subject_stays(api):
     res = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id, "reason": "duplicate"})
     assert res.status_code == 200 and res.json()["status"] == "pending"
     assert subject_exists(api, api.algebra)
     pending = api.client.get("/subject-deletions").json()
     assert pending[0]["subject_name"] == "Algebra" and pending[0]["lesson_count"] == 1
-    assert pending[0]["waiting_on"] == ["boss", "root"] and pending[0]["approved_by"] == []
+    assert pending[0]["waiting_on"] == ["root"] and pending[0]["approved_by"] == [] and pending[0]["admins_total"] == 1
 
 
 def test_second_request_for_same_subject_is_refused(api):
@@ -88,69 +91,38 @@ def test_students_cannot_request_and_teachers_cannot_decide(api):
     assert api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).status_code == 403
 
 
-def test_subject_is_deleted_only_after_all_admins_approve(api):
+def test_the_school_admins_approval_deletes_the_subject_and_everything_under_it(api):
     request_id = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()["request_id"]
     as_user(api, "root")
-    first = api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).json()
-    assert first["status"] == "pending" and subject_exists(api, api.algebra)
-    as_user(api, "boss")
-    last = api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).json()
-    assert last["status"] == "approved" and not subject_exists(api, api.algebra)
+    done = api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).json()
+    assert done["status"] == "approved" and not subject_exists(api, api.algebra)
     assert api.db.query(Lesson).count() == 0 and api.db.query(LessonQuiz).count() == 0
     assert api.db.query(LessonCompletion).count() == 0
     assert api.client.get("/subject-deletions").json() == []
     assert subject_exists(api, api.geometry)   # nothing else was touched
 
 
-def test_one_rejection_keeps_the_subject(api):
+def test_a_rejection_keeps_the_subject(api):
     request_id = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()["request_id"]
     as_user(api, "root")
-    api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True})
-    as_user(api, "boss")
     assert api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": False}).json()["status"] == "rejected"
     assert subject_exists(api, api.algebra)
     assert api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).status_code == 409   # already closed
     assert api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).status_code == 200            # may ask again
 
 
-def test_admin_requester_counts_as_approved(api):
+def test_school_admin_asking_counts_as_approving(api):
     as_user(api, "root")
     body = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()
-    assert body["status"] == "pending"
-    assert api.client.get("/subject-deletions").json()[0]["approved_by"] == ["root"]
-    as_user(api, "boss")
-    request_id = body["request_id"]
-    assert api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).json()["status"] == "approved"
+    assert body["status"] == "approved" and not subject_exists(api, api.algebra)
 
 
-def test_sole_admin_deletes_immediately(api):
-    api.db.delete(api.users["boss"])
-    api.db.commit()
-    as_user(api, "root")
-    assert api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()["status"] == "approved"
-    assert not subject_exists(api, api.algebra)
-
-
-def test_an_admin_added_later_must_approve_too(api):
+def test_another_schools_admin_cannot_see_or_decide_the_request(api):
     request_id = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()["request_id"]
-    api.users["late"] = User(username="late", password_hash="x", role="admin")
-    api.db.add(api.users["late"])
-    api.db.commit()
-    for name in ("root", "boss"):
-        as_user(api, name)
-        status = api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).json()["status"]
-    assert status == "pending" and subject_exists(api, api.algebra)
-    as_user(api, "late")
-    assert api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).json()["status"] == "approved"
-
-
-def test_admin_can_change_their_vote_while_pending(api):
-    request_id = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()["request_id"]
-    as_user(api, "root")
-    api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True})
-    assert api.client.get("/subject-deletions").json()[0]["my_vote"] == "approve"
-    assert api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": False}).json()["status"] == "rejected"
-    assert api.db.query(SubjectDeletionRequest).one().status == "rejected"
+    as_user(api, "other")
+    assert api.client.get("/subject-deletions").json() == []
+    assert api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).status_code == 404
+    assert subject_exists(api, api.algebra)
 
 
 # ---------------------------------------------------------------- AI picks (or creates) the branch

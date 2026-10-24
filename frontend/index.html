@@ -1,61 +1,119 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <meta name="theme-color" content="#F2F5FA">
-    <title>IsipNayan — Login</title>
-    <script src="js/theme.js"></script>
-    <link rel="stylesheet" href="css/theme.css">
-    <link rel="stylesheet" href="css/auth.css">
-    <link rel="stylesheet" href="css/pages.css?v=1">
-    <link rel="stylesheet" href="css/mobile.css?v=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IsipNayan – Math that meets you where you are</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F2F5FA;--sf:#fff;--ink:#151B3A;--mut:#5F678C;--ln:#E3E8F3;--pri:#3446D6;--pri2:#E9ECFD;--sun:#FFB627;--sun2:#FFF3D6;--ok:#1FA37A;--ok2:#DFF6EE;--d:'Bricolage Grotesque',system-ui,sans-serif;--b:'Figtree',system-ui,sans-serif;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1226;--sf:#171C38;--ink:#EEF0FB;--mut:#9AA2C6;--ln:#262C4F;--pri:#7A8BFF;--pri2:#222A5C;--sun2:#3A2F12;--ok2:#12352B}}
+:root[data-theme="dark"]{--bg:#0E1226;--sf:#171C38;--ink:#EEF0FB;--mut:#9AA2C6;--ln:#262C4F;--pri:#7A8BFF;--pri2:#222A5C;--sun2:#3A2F12;--ok2:#12352B}
+html{scroll-padding-top:env(safe-area-inset-top,0px);scroll-behavior:smooth}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.6 var(--b);-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:var(--d);margin:0;line-height:1.08;letter-spacing:-.025em}
+h1{font-size:clamp(40px,7vw,80px);font-weight:800}h2{font-size:clamp(30px,4.5vw,46px);font-weight:800}h3{font-size:20px;font-weight:700}
+p{margin:0}a{color:inherit;text-decoration:none}
+:focus-visible{outline:3px solid var(--sun);outline-offset:3px}
+.w{max-width:1120px;margin:0 auto;padding:0 clamp(18px,4vw,40px)}
+header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--ln)}
+header .w{display:flex;align-items:center;gap:28px;height:68px}
+.logo{display:flex;align-items:center;gap:10px;font:800 21px var(--d)}
+.logo i{width:32px;height:32px;border-radius:10px;background:var(--pri);display:grid;place-items:center}.logo i::before{content:"";width:13px;height:13px;border-radius:50%;background:var(--sun)}
+header nav{display:flex;gap:24px;margin-left:auto;color:var(--mut);font-weight:500}header nav a:hover{color:var(--ink)}
+.btn{display:inline-block;border:0;border-radius:14px;padding:13px 22px;font-weight:600;background:var(--pri);color:#fff;transition:transform .12s,filter .15s}
+.btn:hover{filter:brightness(1.08)}.btn.sun{background:var(--sun);color:#151B3A}.btn.ghost{background:var(--pri2);color:var(--pri)}
+.hero{padding:clamp(48px,8vw,96px) 0 clamp(40px,6vw,80px)}
+.hero .w{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center}
+.hero p.l{font-size:20px;color:var(--mut);max-width:40ch;margin:22px 0 30px}
+.cta{display:flex;gap:12px;flex-wrap:wrap}
+.trail{background:var(--pri);border-radius:32px;padding:30px;color:#fff;position:relative;overflow:hidden;min-height:420px}
+.trail::after{content:"";position:absolute;right:-60px;top:-60px;width:200px;height:200px;border-radius:50%;background:var(--sun)}
+.trail h3{position:relative;z-index:1;margin-bottom:4px}.trail small{position:relative;z-index:1;opacity:.8}
+.tn{position:relative;z-index:1;display:flex;align-items:center;gap:14px;margin-top:16px;background:rgba(255,255,255,.12);border-radius:16px;padding:12px 14px}
+.tn:nth-child(even){margin-left:34px}
+.tn span{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font:700 15px var(--d);background:rgba(255,255,255,.2)}
+.tn.done span{background:var(--ok)}.tn.now{background:#fff;color:#151B3A}.tn.now span{background:var(--sun)}
+.tn.lock{opacity:.55}
+section{padding:clamp(56px,8vw,100px) 0}
+.sec h2{max-width:16ch}.sec>.w>p{color:var(--mut);max-width:50ch;margin-top:14px}
+.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:44px;counter-reset:s}
+.flow div{background:var(--sf);border:1px solid var(--ln);border-radius:22px;padding:22px;counter-increment:s}
+.flow div::before{content:counter(s);display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--sun);color:#151B3A;font:700 16px var(--d);margin-bottom:16px}
+.flow p{color:var(--mut);font-size:15px;margin-top:6px}
+.feat{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin-top:44px}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:26px;padding:28px}
+.card p{color:var(--mut);margin-top:8px}
+.f1{grid-column:span 4}.f2{grid-column:span 2}.f3{grid-column:span 2}.f4{grid-column:span 4}
+.f1{background:var(--ink);color:var(--bg);border:0}.f1 p{color:inherit;opacity:.75}
+.eq{font:700 22px var(--d);background:rgba(255,255,255,.1);border-radius:12px;display:inline-block;padding:8px 14px;margin-top:18px}
+.bub{display:block;margin-top:10px;padding:10px 14px;border-radius:14px;background:var(--pri2);color:var(--pri);font-size:15px;max-width:30ch}
+.bars{display:flex;align-items:flex-end;gap:8px;height:70px;margin-top:18px}.bars i{flex:1;border-radius:7px 7px 3px 3px;background:var(--pri2)}.bars i:nth-child(4){background:var(--pri)}
+.topics{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:44px}
+.topics .card{padding:24px}.sym{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;font:700 26px var(--d);margin-bottom:16px}
+.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px}
+.roles .card b{font:700 20px var(--d);display:block}
+.band{background:var(--sun);color:#151B3A;border-radius:36px;padding:clamp(36px,6vw,72px);text-align:center;display:grid;gap:22px;justify-items:center}
+.band h2{max-width:18ch}.band p{max-width:44ch;opacity:.8}.band .btn{background:#151B3A;color:#fff}
+footer{padding:36px 0 48px;color:var(--mut);font-size:15px}footer .w{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+@media (max-width:900px){.hero .w{grid-template-columns:1fr}.flow{grid-template-columns:1fr 1fr}.topics{grid-template-columns:1fr 1fr}.roles{grid-template-columns:1fr}.f1,.f2,.f3,.f4{grid-column:span 6}header nav a:not(.btn){display:none}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+</style>
 </head>
-<body class="auth-page">
-    <div class="theme-toggle-wrap" id="themeToggleWrap"></div>
+<body>
+<header><div class="w"><a class="logo" href="#top"><i></i>IsipNayan</a>
+<nav><a href="#how">How it works</a><a href="#features">Features</a><a href="#topics">Topics</a><a href="#roles">Who it’s for</a><a class="btn" href="login.html">Log in</a></nav></div></header>
 
+<div class="hero" id="top"><div class="w">
+<div><h1>Math that meets you where you are.</h1>
+<p class="l">An AI tutor, a roadmap built around your gaps, and quizzes that tell you exactly what to review next.</p>
+<div class="cta"><a class="btn sun" href="signup.html">Start learning free</a><a class="btn ghost" href="#how">See how it works</a></div></div>
+<div class="trail" aria-label="Sample learning roadmap"><h3>Your roadmap · Algebra</h3><small>Basic to advanced, prerequisites included</small>
+<div class="tn done"><span>✓</span>One-step equations</div>
+<div class="tn now"><span>4</span><b>Solving linear equations</b></div>
+<div class="tn"><span>5</span>Systems of equations</div>
+<div class="tn lock"><span>6</span>Quadratic equations</div>
+<div class="tn lock"><span>7</span>Polynomials</div></div>
+</div></div>
 
-    <div class="auth-shell">
-    <aside class="auth-aside">
-        <a class="brand-lockup" href="index.html"><span class="brand-mark" aria-hidden="true"></span>IsipNayan</a>
-        <div>
-            <h1>Math that meets you where you are.</h1>
-            <p class="lead">An AI tutor, a roadmap built around your gaps, and quizzes that tell you exactly what to review next.</p>
-        </div>
-        <div class="trail" aria-hidden="true">
-            <h2>Your roadmap · Algebra</h2><small>Basic to advanced, prerequisites included</small>
-            <div class="tn done"><span>&#10003;</span>One-step equations</div>
-            <div class="tn now"><span>4</span><b>Solving linear equations</b></div>
-            <div class="tn"><span>5</span>Systems of equations</div>
-            <div class="tn lock"><span>6</span>Quadratic equations</div>
-        </div>
-    </aside>
-        <main class="auth-card login-card">
-            <h2 class="auth-title">Welcome back</h2>
-            <p class="sub">Sign in to pick up where you left off.</p>
+<section class="sec" id="how"><div class="w"><h2>From first question to full mastery</h2><p>Every lesson follows the same five steps, and your results decide what comes next.</p>
+<div class="flow">
+<div><h3>Sign in</h3><p>Register, verify your account, and enter as a student, teacher, or admin.</p></div>
+<div><h3>Get your roadmap</h3><p>Topics are ordered from basic to advanced with prerequisites flagged.</p></div>
+<div><h3>Learn with AI</h3><p>Explanations, worked examples, and step-by-step solutions plus a video tutorial.</p></div>
+<div><h3>Take the quiz</h3><p>Answers are checked right away and your score is saved.</p></div>
+<div><h3>Level up</h3><p>Pass to unlock the next topic. Miss it and get review material and practice.</p></div>
+</div></div></section>
 
-            <form id="authForm">
-                <label class="lbl-login" for="username">Username</label>
-                <input class="plain-field" type="text" id="username" placeholder="Your username" required autocomplete="username">
-                <label class="lbl-login" for="password">Password</label>
-                <div class="pw-wrap">
-                    <input class="plain-field" type="password" id="password" placeholder="Your password" required autocomplete="current-password">
-                    <button type="button" class="eye" data-target="password" aria-label="Show password"></button>
-                </div>
+<section class="sec" id="features" style="padding-top:0"><div class="w"><h2>Everything you need, nothing you don’t</h2>
+<div class="feat">
+<div class="card f1"><h3>An AI tutor that shows its work</h3><p>Type any math topic and get a structured lesson with explanations, examples, and every step of the solution.</p><span class="eq">2x + 6 = 14 → x = 4</span></div>
+<div class="card f2"><h3>Ask follow-ups</h3><p>Stuck on a step? Chat with the tutor.</p><span class="bub">What’s your first step for 3x − 5 = 10?</span></div>
+<div class="card f3"><h3>Progress you can see</h3><p>Scores, completed lessons, time spent, and a class leaderboard.</p><div class="bars"><i style="height:40%"></i><i style="height:62%"></i><i style="height:28%"></i><i style="height:95%"></i><i style="height:55%"></i></div></div>
+<div class="card f4"><h3>Quizzes that teach, not just grade</h3><p>A low score opens detailed explanations, review materials, and practice questions. A passing score completes the lesson and suggests what to learn next.</p></div>
+</div></div></section>
 
-                <p class="form-msg" id="error" role="alert"></p>
-                <button type="submit" class="btn-primary" id="submitBtn">Sign in</button>
-            </form>
+<section class="sec" id="topics" style="padding-top:0"><div class="w"><h2>Four topics, one clear path</h2>
+<div class="topics">
+<div class="card"><div class="sym" style="background:var(--pri2);color:var(--pri)">x</div><h3>Algebra</h3><p>Equations, expressions, and polynomials.</p></div>
+<div class="card"><div class="sym" style="background:var(--sun2);color:#B07A00">△</div><h3>Geometry</h3><p>Shapes, angles, area, and volume.</p></div>
+<div class="card"><div class="sym" style="background:var(--ok2);color:var(--ok)">σ</div><h3>Statistics</h3><p>Data, probability, and distributions.</p></div>
+<div class="card"><div class="sym" style="background:var(--pri2);color:var(--pri)">∫</div><h3>Calculus</h3><p>Limits, derivatives, and integrals.</p></div>
+</div></div></section>
 
-            <p class="switch-line">New to IsipNayan? <a href="signup.html">Create an account</a></p>
-        </main>
-    </div>
+<section class="sec" id="roles" style="padding-top:0"><div class="w"><h2>Built for the whole classroom</h2>
+<div class="roles">
+<div class="card"><b>Students</b><p>Learn at your pace, take quizzes, and track your growth.</p></div>
+<div class="card"><b>Teachers</b><p>Manage lessons and send reminders to keep learners on track.</p></div>
+<div class="card"><b>Admins</b><p>Manage users and keep the whole system running.</p></div>
+</div></div></section>
 
-    <script src="js/auth.js?v=2"></script>
-    <script>
-        document.getElementById("themeToggleWrap").innerHTML = themeSwitchHTML("indexThemeSwitch");
-        wireThemeSwitch("indexThemeSwitch");
-    </script>
+<section style="padding-top:0"><div class="w"><div class="band"><h2>Ready to make math make sense?</h2><p>Create your account in a minute. We’ll email a code to verify it.</p><a class="btn" href="signup.html">Create your account</a></div></div></section>
+
+<footer><div class="w"><span>© 2026 IsipNayan</span><span>Algebra · Geometry · Statistics · Calculus</span></div></footer>
+<script>
+document.querySelectorAll('a[href^="#"]').forEach(a=>a.addEventListener('click',e=>{const t=document.getElementById(a.getAttribute('href').slice(1));if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'})}}));
+</script>
 </body>
 </html>

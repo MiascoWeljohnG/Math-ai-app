@@ -4,21 +4,10 @@ function getHeaders() {
     };
 }
 
-// Decode token to see if current user is the default "admin"
-function getUsernameFromToken() {
-    const token = localStorage.getItem("token");
-    if (!token) return null;
-    try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        return payload.sub; // Ensure your backend sets the username in the 'sub' claim
-    } catch (e) {
-        return null;
-    }
-}
-
-// Show "+ Add Admin" button if logged-in user is 'admin'
+// Only the super admin may create admins. The login response says whether this account is one; this just decides
+// whether the button is shown - the server refuses everyone else anyway.
 document.addEventListener("DOMContentLoaded", () => {
-    if (getUsernameFromToken() === "admin") {
+    if (localStorage.getItem("is_super_admin") === "1") {
         document.getElementById("openAdminModalBtn").style.display = "inline-block";
     }
 });
@@ -38,7 +27,7 @@ function renderUsers() {
     const users = allUsers.filter(u => (filter === "all" || u.role === filter) && inSchool(u));
     const tbody = document.querySelector("#usersTable tbody");
     tbody.innerHTML = users.map(u =>
-        `<tr><td>${esc(u.username)}</td><td>${esc(u.last_name)}</td><td>${esc(u.first_name)}</td><td>${esc(u.middle_name)}</td><td>${esc(u.email)}</td><td>${esc(u.birthday)}</td><td>${esc(u.school || "Main")}</td><td>${esc(u.role.replace("_", " "))}</td><td>${esc(u.created)}</td></tr>`
+        `<tr><td>${esc(u.username)}</td><td>${esc(u.last_name)}</td><td>${esc(u.first_name)}</td><td>${esc(u.middle_name)}</td><td>${esc(u.email)}</td><td>${esc(u.birthday)}</td><td>${esc(u.school || "Main")}</td><td>${esc(u.role.replace("_", " "))}${u.status && u.status !== "active" ? ` <span class="tag warn">${esc(u.status)}</span>` : ""}</td><td>${esc(u.created)}</td></tr>`
     ).join("");
     document.getElementById("userCount").textContent = `Showing ${users.length} of ${allUsers.length}`;
 }
@@ -73,28 +62,13 @@ async function loadSchools() {
     schools = await res.json();
     document.getElementById("schoolList").replaceChildren(...schools.map(s => Object.assign(document.createElement("span"), { className: "tag", textContent: s.name })));
     document.getElementById("noSchools").style.display = schools.length ? "none" : "block";
-    fillSelect("teacherSchool", "", "Main (no school)");
-    fillSelect("adminSchool", "", "Main admin (sees every school)");
-    fillSelect("registrySchool", "", "Main (no school)");
+    fillSelect("teacherSchool", "", "Choose a school");
+    fillSelect("adminSchool", "", "Choose a school");
     fillSelect("schoolFilter", "all", "All schools");
     document.getElementById("schoolFilter").add(new Option("Main (no school)", "main"), 1);
 }
 
-async function addSchool() {
-    const input = document.getElementById("schoolName"), name = input.value.trim();
-    if (!name) return;
-    const res = await fetch(`${API}/schools`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getHeaders() },
-        body: JSON.stringify({ name }),
-    });
-    const data = await res.json();
-    if (!res.ok) return showNotification("Couldn't add the school", data.detail, true);
-    input.value = "";
-    loadSchools();
-}
 loadSchools();
-initRegistry("/admin");
 
 // --- Load files ---
 function stripHashPrefix(name) {

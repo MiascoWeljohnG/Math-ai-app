@@ -9,9 +9,9 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from adaptive import mastery_level, practice_kind
-from auth import get_current_user, require_teacher_or_admin
+from auth import get_current_user, require_staff
 from database import get_db
-from models import Lesson, LessonCompletion, LessonQuiz, QuizAttempt, Reminder, Subject, User
+from models import ACTIVE, Lesson, LessonCompletion, LessonQuiz, QuizAttempt, Reminder, Subject, User
 from school import in_school, shared_subjects, visible_subjects
 from routes.subjects_routes import PASS_PERCENT, QUIZ_LENGTH, SECONDS_PER_QUESTION, _display_name
 
@@ -65,10 +65,16 @@ def roadmap(
             status = "done" if is_done else ("upcoming" if any(r["status"] == "next" for r in rows) else "next")
             level = mastery_level(t["attempts"], t["best"], t["passed"])   # see adaptive.py for the rules
             reading = _minutes(len(lesson.content.split()) * 60 / WORDS_PER_MINUTE)
+            # Prerequisite & Remediation enhancement
+            prereq_lesson = None
+            if lesson.prerequisite_id:
+                prereq_lesson = db.query(Lesson).filter(Lesson.id == lesson.prerequisite_id).first()
+
             rows.append({
                 "id": lesson.id, "title": lesson.title, "status": status, "read": lesson.id in read,
                 "attempts": t["attempts"], "best_percent": t["best"],
                 "level": level, "practice": practice_kind(level),
+                "prerequisite_id": lesson.prerequisite_id,
             })
             if not is_done and len(plan) < PLAN_LESSONS:
                 quiz_time = _minutes(QUIZ_LENGTH * SECONDS_PER_QUESTION[difficulty.get(lesson.id) or 3])
@@ -136,7 +142,7 @@ def rankings(
                 best[0], best[1] = percent, seconds
             best[2] = best[2] or attempt.passed
 
-    staff = user.role in ("teacher", "admin")
+    staff = user.role in ("teacher", "school_admin")
     table = []
     for person in people.values():
         results = list(person["lessons"].values())
@@ -182,14 +188,14 @@ def _serialize_reminder(r: Reminder) -> dict:
 @router.post("/reminders")
 def create_reminder(
     req: ReminderRequest,
-    user: User = Depends(require_teacher_or_admin),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     message = req.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Write a message for the reminder")
     if req.student_username and not db.query(User).filter(
-        User.username == req.student_username, User.role == "user", in_school(User.school_id, user.school_id),
+        User.username == req.student_username, User.role == "user", User.status == ACTIVE, in_school(User.school_id, user.school_id),
     ).first():
         raise HTTPException(status_code=404, detail="Student not found")
     reminder = Reminder(
@@ -220,13 +226,13 @@ def list_reminders(user: User = Depends(get_current_user), db: Session = Depends
 @router.delete("/reminders/{reminder_id}")
 def delete_reminder(
     reminder_id: int,
-    user: User = Depends(require_teacher_or_admin),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     reminder = db.query(Reminder).filter(Reminder.id == reminder_id).first()
     if reminder is None:
         raise HTTPException(status_code=404, detail="Reminder not found")
-    if user.role != "admin" and reminder.created_by != user.username:
+    if user.role != "school_admin" and reminder.created_by != user.username:
         raise HTTPException(status_code=403, detail="You can only delete your own reminders")
     db.delete(reminder)
     db.commit()

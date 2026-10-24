@@ -267,7 +267,7 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
             else:
                 label = f"{result['branch']} ({round(result['confidence'] * 100)}%)" if result["branch"] else "no clear topic"
                 why = {"not_math": "it doesn't look like a math document", "unavailable": "the AI couldn't analyze it"}.get(result["reason"], f"the AI wasn't confident enough, best guess: {label}")
-                notify_admins(db, "needs_topic", "AI needs help filing a file", f'@{username} uploaded "{file.filename}" but {why}. Waiting for a topic to be chosen.')
+                notify_admins(db, "needs_topic", "AI needs help filing a file", f'@{username} uploaded "{file.filename}" but {why}. Waiting for a topic to be chosen.', about=username)
                 needs_topic.append({
                     "filename": file.filename,
                     "guess": result["branch"],
@@ -301,10 +301,10 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
             ))
             if original_name in picked:   # the AI wasn't sure, so a person chose the topic
                 notify_admins(db, "manual_topic", "Topic chosen by a person",
-                              f'@{username} filed "{original_name}" under {target} after the AI wasn\'t sure.')
+                              f'@{username} filed "{original_name}" under {target} after the AI wasn\'t sure.', about=username)
             else:
                 how = f"The AI filed it under {target} ({round(detected[original_name] * 100)}% sure)." if original_name in detected else f"Filed under {target}."
-                notify_admins(db, "upload", "New file uploaded", f'@{username} uploaded "{original_name}". {how}', exclude=username)
+                notify_admins(db, "upload", "New file uploaded", f'@{username} uploaded "{original_name}". {how}', exclude=username, about=username)
             uploaded.append({
                 "filename": original_name,
                 "branch": target,

@@ -97,6 +97,8 @@ td.file-name { overflow-wrap: anywhere; min-width: 170px; }
 td.nowrap { white-space: nowrap; }
 .cell-sub { display: block; color: var(--text-muted); font-size: 0.76rem; }
 .tag { display: inline-block; padding: 0.15rem 0.7rem; border-radius: 999px; background: var(--sun2); color: var(--sun-ink); font-size: 0.8rem; font-weight: 600; }
+.tag.warn { background: color-mix(in srgb, var(--danger, #d64545) 16%, transparent); color: var(--danger, #d64545); }
+.tag.good { background: color-mix(in srgb, var(--ok-ink, #1f7a3a) 16%, transparent); color: var(--ok-ink, #1f7a3a); }
 .empty { color: var(--text-muted); font-size: 0.88rem; margin-top: 0.75rem; }
 .mini-progress-track { background: var(--pri2); border-radius: 999px; height: 8px; width: 80px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
 .mini-progress-fill { background: var(--accent); height: 100%; display: block; }

@@ -15,7 +15,7 @@ function renderUsers() {
     const filter = document.getElementById("roleFilter").value;
     const users = filter === "all" ? allUsers : allUsers.filter(u => u.role === filter);
     document.querySelector("#usersTable tbody").innerHTML = users.map(u => {
-        return `<tr><td>${esc(u.username)}</td><td>${esc(u.last_name)}</td><td>${esc(u.first_name)}</td><td>${esc(u.middle_name)}</td><td>${esc(u.email)}</td><td>${esc(u.role.replace("_", " "))}</td><td>${esc(u.created)}</td></tr>`;
+        return `<tr><td>${esc(u.username)}</td><td>${esc(u.last_name)}</td><td>${esc(u.first_name)}</td><td>${esc(u.middle_name)}</td><td>${esc(u.email)}</td><td>${esc(u.role.replace("_", " "))}${u.status && u.status !== "active" ? ` <span class="tag warn">${esc(u.status)}</span>` : ""}</td><td>${esc(u.created)}</td></tr>`;
     }).join("");
     document.getElementById("userCount").textContent = `Showing ${users.length} of ${allUsers.length}`;
 }
@@ -36,10 +36,18 @@ async function loadFiles() {
     const files = await res.json();
     document.getElementById("noFiles").style.display = files.length ? "none" : "block";
     document.getElementById("filesTable").style.display = files.length ? "" : "none";
-    renderMaterialRows(document.querySelector("#filesTable tbody"), files, true);
+    renderMaterialRows(document.querySelector("#filesTable tbody"), files, true, deleteFile);
+}
+
+async function deleteFile(file) {
+    if (!await uiConfirm(`Delete "${file.display_name}"?\n\nThe file and what the AI learned from it are removed. This can't be undone.`, { title: "Delete file", okText: "Delete", danger: true })) return;
+    const res = await fetch(`${API}/school-admin/files/${encodeURIComponent(file.filename)}`, { method: "DELETE", headers: getHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) await uiAlert(data.detail || "Couldn't delete the file.", { title: "Delete file" });
+    loadFiles();
+    if (typeof loadAuditLog === "function") loadAuditLog();
 }
 loadFiles();
-initRegistry("/school-admin");
 
 // --- Add a teacher to this school ---
 const teacherModal = document.getElementById("teacherModal");

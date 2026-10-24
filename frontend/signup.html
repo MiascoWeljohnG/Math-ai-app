@@ -17,7 +17,7 @@
 
     <div class="auth-shell">
     <aside class="auth-aside">
-        <a class="brand-lockup" href="index.html"><span class="brand-mark" aria-hidden="true"></span>IsipNayan</a>
+        <a class="brand-lockup" href="website.html"><span class="brand-mark" aria-hidden="true"></span>IsipNayan</a>
         <div>
             <h1>Math that meets you where you are.</h1>
             <p class="lead">An AI tutor, a roadmap built around your gaps, and quizzes that tell you exactly what to review next.</p>
@@ -32,9 +32,9 @@
     </aside>
     <div class="signup-wrap">
         <main class="auth-card signup-card">
-            <a class="close-x" href="index.html" aria-label="Close">&times;</a>
+            <a class="close-x" href="website.html" aria-label="Close">&times;</a>
             <h1>Create your account</h1>
-            <p class="sub">Use your Student ID to get started.</p>
+            <p class="sub">Use your Student ID to get started. Your school checks your certificate before your account is activated.</p>
 
             <form id="registerForm" novalidate>
                 <label class="lbl" for="regStudentId">Student ID number</label>
@@ -61,10 +61,10 @@
                     <input type="text" id="regMiddleName" placeholder="Enter your Middle Name" autocomplete="additional-name">
                 </div>
 
-                <div id="schoolRow" hidden>
+                <div id="schoolRow">
                     <label class="lbl" for="regSchool">School</label>
                     <div class="field">
-                        <select id="regSchool"></select>
+                        <select id="regSchool" required><option value="">Loading schools…</option></select>
                     </div>
                 </div>
 
@@ -94,19 +94,41 @@
                     <button type="button" class="eye" data-target="regConfirm" aria-label="Show password"></button>
                 </div>
 
+                <label class="lbl" for="regCertificate">Certificate of enrollment</label>
+                <div class="field">
+                    <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V9h5.5L13 3.5ZM8 13h8v2H8v-2Zm0 4h8v2H8v-2Z"/></svg>
+                    <input type="file" id="regCertificate" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg">
+                </div>
+                <p class="field-hint">PDF, PNG or JPG, up to 5 MB. Only the administrators of your school can open it.</p>
+
                 <label class="terms"><input type="checkbox" id="regTerms"> <span>I agree to the <b>Terms of Service</b> and <b>Privacy Policy</b></span></label>
 
                 <p class="form-msg" id="regError"></p>
                 <button type="submit" class="btn-primary" id="regSubmit">Create account</button>
 
                 <div class="divider">Already have an account?</div>
-                <a class="btn-outline" href="index.html">Sign in</a>
+                <a class="btn-outline" href="login.html">Sign in</a>
+            </form>
+
+            <p class="field-hint" style="text-align:center; margin-top:1.2rem;">
+                Registration rejected? <button type="button" class="link-plain" id="resubmitToggle">Send a new certificate</button>
+            </p>
+            <form id="resubmitForm" novalidate hidden>
+                <label class="lbl" for="rsStudentId">Student ID number</label>
+                <div class="field"><input type="text" id="rsStudentId" autocomplete="username" style="padding-left:1rem;"></div>
+                <label class="lbl" for="rsPassword">Password</label>
+                <div class="field"><input type="password" id="rsPassword" autocomplete="current-password" style="padding-left:1rem;"></div>
+                <label class="lbl" for="rsCertificate">New certificate</label>
+                <div class="field"><input type="file" id="rsCertificate" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" style="padding-left:1rem;"></div>
+                <p class="form-msg" id="rsMsg"></p>
+                <button type="submit" class="btn-primary" id="rsSubmit">Send for review</button>
             </form>
         </main>
     </div>
     </div>
 
-    <script src="js/auth.js?v=2"></script>
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js?v=4"></script>
     <script>
         document.getElementById("themeToggleWrap").innerHTML = themeSwitchHTML("signupThemeSwitch");
         wireThemeSwitch("signupThemeSwitch");

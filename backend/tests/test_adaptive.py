@@ -38,7 +38,7 @@ def test_which_practice_each_level_is_offered():
 # ---------------------------------------------------------------- endpoints
 @pytest.fixture
 def api(db, rag):
-    student = User(username="stu", password_hash="x", role="user")
+    student = User(username="stu", password_hash="x", role="user", status="active")
     teacher = User(username="teach", password_hash="x", role="teacher")
     db.add_all([student, teacher, Subject(name="Algebra")])
     db.commit()

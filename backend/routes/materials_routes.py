@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
-from auth import get_current_user, require_teacher_or_admin
+from auth import get_current_user, require_staff
 from database import get_db
 from school import in_school
 from models import Material
@@ -84,8 +84,8 @@ def get_material_file(
     db: Session = Depends(get_db),
 ):
     material = db.query(Material).filter(Material.filename == filename).first()
-    # the main admin may open any school's file (the admin page lists them all); everyone else only their school's
-    if material is None or (user.role != "admin" and material.school_id != user.school_id):
+    # only the user's own school's files
+    if material is None or material.school_id != user.school_id:
         raise HTTPException(status_code=404, detail="File not found")
     name = material.display_name or _display_name(material.filename)
     if material.drive_file_id:
@@ -98,7 +98,7 @@ def get_material_file(
 
 
 @router.post("/reindex")
-async def reindex_vault(user=Depends(require_teacher_or_admin), db: Session = Depends(get_db)):
+async def reindex_vault(user=Depends(require_staff), db: Session = Depends(get_db)):
     """Re-read the uploaded files into the AI's knowledge base. With Google Drive storage that means
     downloading every file again and re-indexing it; with local storage, re-reading the uploads folder
     (files copied in by hand are otherwise only picked up when the backend restarts)."""

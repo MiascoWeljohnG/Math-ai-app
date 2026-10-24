@@ -42,6 +42,8 @@ fake_rag.extract_text_from_bytes = extract_text_from_bytes
 fake_rag.ingest_uploaded_materials = ingest_uploaded_materials
 fake_rag.ask_stream = ask_stream
 fake_rag.ingest_uploads = lambda *args, **kwargs: 0   # imported by materials_routes, unused here
+fake_rag.deleted_chunks = []   # file names whose chunks were deleted
+fake_rag.delete_material_chunks = lambda filename: fake_rag.deleted_chunks.append(filename) or 0
 sys.modules["rag"] = fake_rag
 
 

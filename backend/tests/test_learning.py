@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from auth import get_current_user
 from database import get_db
-from models import Lesson, LessonCompletion, LessonQuiz, QuizAttempt, Subject, User
+from models import Lesson, LessonCompletion, LessonQuiz, QuizAttempt, Subject, User, School
 from routes import learning_routes, subjects_routes
 
 QUESTIONS = [
@@ -25,8 +25,12 @@ ALL_WRONG = {"0": 0, "1": True, "2": "1", "3": 1, "4": False}
 
 @pytest.fixture
 def api(db, rag):
-    users = {n: User(username=n, password_hash="x", role=r) for n, r in
-             [("ann", "user"), ("bob", "user"), ("teach", "teacher"), ("teach2", "teacher"), ("boss", "admin")]}
+    users = {n: User(username=n, password_hash="x", role=r, status="active") for n, r in
+             [("ann", "user"), ("bob", "user"), ("teach", "teacher"), ("teach2", "teacher"), ("boss", "school_admin")]}
+    school = School(name="School A")   # the school admin needs a school; the other accounts stay in the old no-school pool
+    db.add(school)
+    db.flush()
+    users["boss"].school_id = school.id
     db.add_all(users.values())
     algebra = Subject(name="Algebra")
     db.add(algebra)
@@ -150,12 +154,12 @@ def test_reminder_rules(api):
     assert api.client.get("/learning/reminders").json() == []                                         # sees only their own
     assert api.client.delete(f"/learning/reminders/{rid}").status_code == 403
     api.login("boss")
-    assert api.client.delete(f"/learning/reminders/{rid}").status_code == 200                          # admin may delete any
+    assert api.client.delete(f"/learning/reminders/{rid}").status_code == 200                          # the school admin may delete any
 
 
 def test_notification_model_exists_and_routes_import():
     import models
-    from routes import admin_routes, notification_routes  # noqa: F401  (these crashed the app at startup)
+    from routes import notification_routes  # noqa: F401  (these crashed the app at startup)
     assert models.Notification.__tablename__ == "notifications"
 
 

@@ -5,9 +5,26 @@ const API = IS_LOCAL_HOST
     ? `http://${location.hostname}:8000`
     : "https://isipnayan.onrender.com"; // Render backend
 
+// FastAPI answers validation problems with a list of {msg}; everything else is a plain string.
+function detailText(data, fallback) {
+    const d = data && data.detail;
+    if (Array.isArray(d)) return d.map(e => (e.msg || "").replace(/^Value error, /, "")).filter(Boolean).join(" ") || fallback;
+    return d || fallback;
+}
+
+const MAX_CERT_BYTES = 5 * 1024 * 1024;
+// Cheap checks so a student learns about a wrong file before uploading it. The server re-checks everything
+// (it reads the file's real type), so this is only a convenience.
+function certificateProblem(file) {
+    if (!file) return "Please attach your certificate of enrollment.";
+    if (!/\.(pdf|png|jpe?g)$/i.test(file.name)) return "The certificate must be a PDF, PNG or JPG file.";
+    if (file.size > MAX_CERT_BYTES) return "The certificate must be under 5 MB.";
+    return "";
+}
+
 // Where each role lands after login (and where it is sent when it opens a page that isn't its own)
 function homeFor(role) {
-    return { admin: "admin.html", school_admin: "school-admin.html", teacher: "teacher.html" }[role] || "landing.html";
+    return { school_admin: "school-admin.html", teacher: "teacher.html" }[role] || "landing.html";
 }
 
 // --- SHOW / HIDE PASSWORD (works on any page with <button class="eye" data-target="inputId">) ---
@@ -53,7 +70,7 @@ if (authForm) {
                 body: JSON.stringify({ username, password }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || "Something went wrong");
+            if (!res.ok) throw new Error(detailText(data, "Something went wrong"));
 
             localStorage.setItem("token", data.access_token);
             localStorage.setItem("role", data.role);
@@ -168,15 +185,11 @@ if (registerForm) {
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !dobPop.hidden) closeCal(true); });
     }  // end custom date-of-birth widget
 
-    const schoolRow = document.getElementById("schoolRow"), schoolSelect = document.getElementById("regSchool");
-    Promise.all([
-        fetch(`${API}/schools/signup-mode`).then(r => r.json()),
-        fetch(`${API}/schools`).then(r => r.json()),
-    ]).then(([mode, schools]) => {
-        if (mode.registry || !schools.length) return;   // with a registered list the school comes from the list
+    // There are exactly two schools and the student always picks one.
+    const schoolSelect = document.getElementById("regSchool");
+    fetch(`${API}/schools`).then(r => r.json()).then(schools => {
         schoolSelect.replaceChildren(new Option("Choose your school", ""), ...schools.map(s => new Option(s.name, s.id)));
-        schoolRow.hidden = false;
-    }).catch(() => {});   // no list = no dropdown; the server still says so if a school is required
+    }).catch(() => { schoolSelect.replaceChildren(new Option("Couldn't load the schools - refresh the page", "")); });
 
     registerForm.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -196,26 +209,36 @@ if (registerForm) {
 
         if (dobText && dobText.value.trim() && !birthday) return fail("Please enter a valid date of birth (MM/DD/YYYY).");
         if (!student_id || !last_name || !first_name || !email || !birthday || !password || !confirm) return fail("Please fill in all fields.");
-        if (!schoolRow.hidden && !schoolSelect.value) return fail("Please choose your school.");
+        if (!schoolSelect.value) return fail("Please choose your school.");
         if (!/^\S+@\S+\.\S+$/.test(email)) return fail("Please enter a valid email address.");
         if (birthday > localToday()) return fail("Date of birth cannot be in the future.");
-        if (password.length < 6) return fail("Password must be at least 6 characters.");
+        if (password.length < 8) return fail("Password must be at least 8 characters.");
         if (password !== confirm) return fail("Passwords do not match.");
+        const certificate = document.getElementById("regCertificate").files[0];
+        const certError = certificateProblem(certificate);
+        if (certError) return fail(certError);
         if (!document.getElementById("regTerms").checked) return fail("Please agree to the Terms of Service and Privacy Policy.");
 
         submitBtn.disabled = true;
         try {
-            const res = await fetch(`${API}/auth/register`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ student_id, last_name, first_name, middle_name, email, birthday, password, school_id: schoolSelect.value ? Number(schoolSelect.value) : null }),
-            });
+            // multipart (not JSON) because a file goes with it; the browser sets the Content-Type and boundary itself
+            const body = new FormData();
+            Object.entries({ student_id, last_name, first_name, middle_name, email, birthday, password, school_id: schoolSelect.value })
+                .forEach(([k, v]) => body.append(k, v));
+            body.append("certificate", certificate);
+            const res = await fetch(`${API}/auth/register`, { method: "POST", body });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || "Registration failed");
+            if (!res.ok) throw new Error(detailText(data, "Registration failed"));
 
-            errorEl.textContent = "Account created! Taking you to login…";
-            errorEl.className = "form-msg ok";
-            setTimeout(() => { window.location.href = "index.html"; }, 1200);
+            // Nothing to log in to yet: the account waits for a school administrator. Say so in a popup, then go to login.
+            registerForm.reset();
+            errorEl.textContent = "";
+            submitBtn.textContent = "Submitted";
+            await uiAlert(
+                `${data.message}\n\nYour school admin will check your certificate of enrollment and accept or reject it. ` +
+                "If it is rejected you will see the reason when you try to log in, and you can send a new certificate.",
+                { title: "Registration submitted", okText: "Go to login" });
+            window.location.href = "login.html";
         } catch (err) {
             fail(err.message);
             submitBtn.disabled = false;
@@ -223,15 +246,46 @@ if (registerForm) {
     });
 }
 
+// --- SEND A NEW CERTIFICATE after a rejection (only on signup.html) ---
+const resubmitForm = document.getElementById("resubmitForm");
+if (resubmitForm) {
+    document.getElementById("resubmitToggle").addEventListener("click", () => { resubmitForm.hidden = !resubmitForm.hidden; });
+    resubmitForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById("rsMsg"), btn = document.getElementById("rsSubmit");
+        const fail = (t) => { msg.textContent = t; msg.className = "form-msg error"; };
+        const student_id = document.getElementById("rsStudentId").value.trim(), password = document.getElementById("rsPassword").value;
+        const certificate = document.getElementById("rsCertificate").files[0];
+        if (!student_id || !password) return fail("Enter your Student ID and password.");
+        const problem = certificateProblem(certificate);
+        if (problem) return fail(problem);
+        btn.disabled = true;
+        try {
+            const body = new FormData();
+            body.append("student_id", student_id); body.append("password", password); body.append("certificate", certificate);
+            const res = await fetch(`${API}/auth/resubmit`, { method: "POST", body });
+            const data = await res.json();
+            if (!res.ok) throw new Error(detailText(data, "Could not send the certificate"));
+            resubmitForm.reset();
+            msg.textContent = "";
+            await uiAlert(`${data.message}\n\nYou can log in once your school admin accepts it.`, { title: "Certificate sent", okText: "OK" });
+        } catch (err) {
+            fail(err.message);
+        } finally {
+            btn.disabled = false;
+        }
+    });
+}
+
 // --- PROTECT PAGES (works on all pages) ---
 function requireAuth() {
     const token = localStorage.getItem("token");
-    if (!token) window.location.href = "index.html";
+    if (!token) window.location.href = "login.html";
 }
 
 function requireRole(expectedRole) {
     const token = localStorage.getItem("token");
-    if (!token) { window.location.href = "index.html"; return; }
+    if (!token) { window.location.href = "login.html"; return; }
     if (localStorage.getItem("role") !== expectedRole) {
         window.location.href = homeFor(localStorage.getItem("role"));
     }
@@ -241,7 +295,7 @@ function logout() {
     const theme = localStorage.getItem("theme");   // keep the light/dark choice
     localStorage.clear();
     if (theme) localStorage.setItem("theme", theme);
-    window.location.href = "index.html";
+    window.location.href = "login.html";
 }
 
 // Pages with <span id="schoolBadge"> show the school the signed-in account belongs to

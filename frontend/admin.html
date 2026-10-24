@@ -41,36 +41,30 @@
         </div>
     </div>
 
-    <div class="section">
+    <div class="section" id="approvalSection">
         <div class="section-head">
-            <h2>Schools</h2>
-            <p class="hint">Accounts, subjects, files and progress are kept separate per school. Accounts made before schools existed stay in "Main".</p>
+            <h2>Pending student approvals <span class="tag" id="pendingCount" style="display:none;">0</span></h2>
+            <p class="hint">Students from both schools. Open the certificate, then approve or reject. A rejected student sees your reason and can send a new certificate.</p>
         </div>
-        <div class="field-row">
-            <input type="text" id="schoolName" class="branch-select" placeholder="School name, e.g. School A" maxlength="80">
-            <button class="btn btn-primary" type="button" onclick="addSchool()">+ Add School</button>
+        <div class="table-wrap">
+            <table id="pendingTable">
+                <thead><tr><th>Student ID</th><th>Name</th><th>School</th><th>Email</th><th>Submitted</th><th>Checks</th><th>Certificate</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
         </div>
-        <div id="schoolList" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.75rem;"></div>
-        <p id="noSchools" class="empty">No schools yet. Add one, then create its admin with "+ Add Admin".</p>
+        <p id="noPending" class="empty">No one is waiting for approval.</p>
     </div>
 
     <div class="section">
         <div class="section-head">
-            <h2>Registered Students</h2>
-            <p class="hint">Only students whose number is listed here can create an account, and they join the school it is listed under. Paste one number per line (commas and spaces work too).</p>
+            <h2>Schools</h2>
+            <p class="hint">The platform serves exactly two schools. Accounts, subjects, files and progress are kept separate per school. Accounts made before schools existed stay in "Main".</p>
         </div>
-        <select id="registrySchool" class="branch-select" aria-label="School for these students"></select>
-        <textarea id="registryNumbers" rows="4" style="width:100%; margin:0.6rem 0;" placeholder="2024-0001&#10;2024-0002&#10;2024-0003"></textarea>
-        <button class="btn btn-primary" type="button" onclick="addRegistered()">+ Add Registered Students</button>
-        <div class="status" id="registryStatus" role="status" aria-live="polite"></div>
-        <p id="registryCount" class="hint"></p>
-        <div class="table-wrap">
-            <table id="registryTable">
-                <thead><tr><th>Student number</th><th>School</th><th>Status</th><th></th></tr></thead>
-                <tbody></tbody>
-            </table>
-        </div>
+        <div id="schoolList" style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.75rem;"></div>
+        <p id="noSchools" class="empty">The schools haven't been created yet. Restart the server so it can set them up.</p>
     </div>
+
+
 
     <div class="section" id="deletionSection">
         <div class="section-head">
@@ -162,7 +156,7 @@
                 
                 <label>Temporary password</label>
                 <div class="field">
-                    <input type="password" id="teacherPassword" required minlength="6">
+                    <input type="password" id="teacherPassword" required minlength="8">
                     <button type="button" class="eye" data-target="teacherPassword" aria-label="Show password">
                         <img src="img/view.svg" alt="Toggle Password" class="eye-icon">
                     </button>
@@ -186,11 +180,11 @@
                 <label>Middle name <span class="opt">(optional)</span></label><input type="text" id="adminMiddleName">
                 <label>Email</label><input type="email" id="adminEmail" required>
                 <label>Birthday</label><input type="date" id="adminBirthday" required>
-                <label>School (an admin for a school only sees that school)</label><select id="adminSchool"></select>
+                <label>School (this admin only sees that school)</label><select id="adminSchool"></select>
                 
                 <label>Temporary password</label>
                 <div class="field">
-                    <input type="password" id="adminPassword" required minlength="6">
+                    <input type="password" id="adminPassword" required minlength="8">
                     <button type="button" class="eye" data-target="adminPassword" aria-label="Show password">
                         <img src="img/view.svg" alt="Toggle Password" class="eye-icon">
                     </button>
@@ -232,7 +226,8 @@
     <script src="js/utils.js"></script>
     <script src="js/topic-picker.js"></script>
     <script src="js/material-table.js"></script>
-    <script src="js/registry.js"></script>
+
+    <script src="js/approvals.js"></script>
     <script src="js/admin.js"></script>
     <script>
         requireRole("admin");

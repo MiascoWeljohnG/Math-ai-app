@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 import config
-from auth import get_current_user, require_teacher_or_admin
+from auth import get_current_user, require_staff
 from database import get_db
 from models import Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, Subject, User
 from classifier import check_relevance, choose_subject, document_text, read_upload, relevant_text, sample_text, summarize_document
@@ -88,7 +88,7 @@ def create_personal_subject(
 @router.post("/shared")
 def create_shared_subject(
     req: CreateSubjectRequest,
-    user: User = Depends(require_teacher_or_admin),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     """A new branch every student of the creator's school can see. Names are unique within a school (ignoring case)."""
@@ -253,7 +253,7 @@ def _lesson_values(req: LessonRequest) -> tuple[str, str]:
 def create_lesson(
     subject_id: int,
     req: LessonRequest,
-    user: User = Depends(require_teacher_or_admin),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     _shared_subject_or_404(db, subject_id, user)
@@ -276,7 +276,7 @@ def update_lesson(
     subject_id: int,
     lesson_id: int,
     req: LessonRequest,
-    user: User = Depends(require_teacher_or_admin),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     _shared_subject_or_404(db, subject_id, user)
@@ -298,7 +298,7 @@ def update_lesson(
 def delete_lesson(
     subject_id: int,
     lesson_id: int,
-    user: User = Depends(require_teacher_or_admin),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     _shared_subject_or_404(db, subject_id, user)
@@ -322,7 +322,7 @@ class DraftLessonRequest(BaseModel):
 async def draft_lesson(
     subject_id: int,
     req: DraftLessonRequest,
-    user: User = Depends(require_teacher_or_admin),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     subject = _shared_subject_or_404(db, subject_id, user)
@@ -360,7 +360,7 @@ LESSON_SYSTEM = (
 def _writable_subject_or_404(db: Session, subject_id: int, user: User) -> Subject:
     """Shared subjects: teacher/admin only. Personal subjects: their owner."""
     subject = _visible_subject_or_404(db, subject_id, user)
-    if subject.owner_user_id is None and user.role not in ("teacher", "admin"):
+    if subject.owner_user_id is None and user.role not in ("teacher", "school_admin"):
         raise HTTPException(status_code=403, detail="Teacher or admin access required")
     return subject
 
@@ -555,7 +555,7 @@ class AnalyzeMaterialRequest(BaseModel):
 @router.post("/analyze-material")
 async def analyze_material(
     req: AnalyzeMaterialRequest,
-    user: User = Depends(require_teacher_or_admin),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     """Step 1 of "generate lessons from an uploaded file". Saves nothing. Says which shared subject
@@ -606,7 +606,7 @@ class GenerateFromMaterialRequest(BaseModel):
 async def generate_lesson_from_material(
     subject_id: int,
     req: GenerateFromMaterialRequest,
-    user: User = Depends(require_teacher_or_admin),
+    user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
     """Step 2: write one lesson for `topic` from a file already in the knowledge base."""
@@ -804,7 +804,7 @@ def _quiz_payload(db: Session, subject: Subject, lesson: Lesson, user: User, qui
         "lesson_title": lesson.title,
         "lesson_number": position + 1,
         "next_lesson_id": ids[position + 1] if position + 1 < len(ids) else None,
-        "can_regenerate": subject.owner_user_id is not None or user.role in ("teacher", "admin"),
+        "can_regenerate": subject.owner_user_id is not None or user.role in ("teacher", "school_admin"),
         "quiz": None,
     }
     if quiz:
@@ -851,7 +851,7 @@ async def generate_quiz(
     teachers/admins (and a student's own personal subjects), so students can't keep re-rolling it."""
     subject = _visible_subject_or_404(db, subject_id, user)
     lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
-    can_replace = subject.owner_user_id is not None or user.role in ("teacher", "admin")
+    can_replace = subject.owner_user_id is not None or user.role in ("teacher", "school_admin")
     quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
     if quiz and not can_replace:
         return _quiz_payload(db, subject, lesson, user, quiz)
