@@ -8,3 +8,8 @@ __pycache__/
 /backend/uploads/
 /routes/__pycache__/
 client_secret.json
+/graphify-out/
+/UsersitsmeDownloadsMath-ai-appgraphify-out/
+
+/backend/app.db
+/backend/*.bak
