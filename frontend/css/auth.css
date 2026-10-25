@@ -86,6 +86,10 @@ body {
 .field-hint { font: 500 0.82rem var(--font-body); color: var(--text-muted); margin: 0.35rem 0 0; }
 .link-plain { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--accent); cursor: pointer; text-decoration: underline; }
 #resubmitForm[hidden] { display: none; }
+.forgot-form { display: grid; gap: 0.65rem; margin-top: 1.5rem; }
+.forgot-form label { font-weight: 600; }
+.forgot-form .plain-field { margin-bottom: 0.35rem; }
+.forgot-form .form-msg { margin: 0; }
 .field { position: relative; }
 .field .ico { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--text-muted); pointer-events: none; }
 .field input { padding-left: 2.7rem; padding-right: 2.7rem; }

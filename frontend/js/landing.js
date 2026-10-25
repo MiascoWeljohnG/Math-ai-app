@@ -284,7 +284,7 @@ async function loadSubjectsAndProgress() {
         const entry = progress ? progress.find(p => p.is_personal && p.subject_id === subject.id) : null;
         renderPersonalSubject(subject, entry);
     }
-    renderAddSubjectTile();
+    // Personal subjects remain available on other pages; don't render the add-subject UI here.
     if (!progress) paintProgressUnavailable();
 }
 

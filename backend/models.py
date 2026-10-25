@@ -65,6 +65,18 @@ class User(Base):
         """The name to show in greetings and lists; falls back to the username."""
         return self.person_name or self.username
 
+class PasswordResetToken(Base):
+    """Single-use, short-lived password recovery token. Only its hash is stored."""
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    token_hash = Column(String, unique=True, index=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class StudentCertificate(Base):
     """One enrollment certificate a student uploaded. The file itself lives in private storage (certificates.py);
     `storage_ref` points at it and is never sent to the browser. `sha256` lets reviewers see when the same

@@ -48,6 +48,15 @@
     background: var(--bg); text-decoration: none; color: var(--text); min-width: 0;
 }
 .nav-user-text { min-width: 0; display: grid; gap: 2px; }
+.nav-user > .avatar-initials, .nav-user > .avatar-photo {
+    width: 42px; height: 42px; flex: none; border-radius: 50%;
+}
+.nav-user > .avatar-initials {
+    display: grid; place-items: center; background: var(--accent); color: #fff;
+    font: 700 0.9rem/1 var(--font-display);
+}
+.nav-user > .avatar-photo { display: block; object-fit: cover; }
+.nav-user > .avatar-photo + .nav-user-text { margin-left: 0; }
 .nav-user-name { font: 700 1rem/1.2 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-user-role { font-size: 0.82rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-theme-compact { display: none; }

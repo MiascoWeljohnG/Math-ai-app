@@ -12,7 +12,7 @@ import ratelimit
 from auth import hash_password
 from bootstrap import ensure_school_admins, ensure_schools, retire_main_admins
 from database import get_db
-from models import AuditLog, School, StudentCertificate, User
+from models import AuditLog, PasswordResetToken, School, StudentCertificate, User
 from routes import approval_routes, auth_routes, school_admin_routes, schools_routes
 
 PDF = b"%PDF-1.4\n% enrollment certificate\n" + b"x" * 200
@@ -50,6 +50,25 @@ def sign_up(api, student_id="2024-1", file=("cor.pdf", PDF, "application/pdf"), 
 
 def login(api, username, password=PASSWORD):
     return api.client.post("/auth/login", json={"username": username, "password": password})
+
+
+def test_password_recovery_creates_single_use_email_token_and_resets_password(api, db, monkeypatch):
+    from routes import auth_routes
+    sent = []
+    monkeypatch.setattr(auth_routes, "send_password_reset_email", lambda email, link: sent.append((email, link)))
+    db.add(User(username="recover-me", email="recover@example.com", password_hash=hash_password(PASSWORD), role="user", status="active", school_id=api.a.id))
+    db.commit()
+
+    requested = api.client.post("/auth/forgot-password", json={"username": "recover-me"})
+    assert requested.status_code == 200 and sent[0][0] == "recover@example.com"
+    token = sent[0][1].split("token=", 1)[1]
+    changed = api.client.post("/auth/reset-password", json={"token": token, "password": "New-password-123"})
+    assert changed.status_code == 200
+    account = db.query(User).filter(User.username == "recover-me").first()
+    assert account.password_hash != hash_password(PASSWORD)
+    from auth import verify_password
+    assert verify_password("New-password-123", account.password_hash)
+    assert db.query(PasswordResetToken).filter(PasswordResetToken.used_at.is_(None)).count() == 0
 
 
 def headers(api, username):

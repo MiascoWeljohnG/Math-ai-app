@@ -38,6 +38,15 @@ def ensure_school_admins(db: Session) -> None:
             continue
         if db.query(User).filter(User.role == "school_admin", User.school_id == school.id, User.status == ACTIVE).first():
             continue
+        # Reuse an existing configured admin account rather than crashing when its username
+        # is already present from an earlier school-name/bootstrap setup.
+        existing_admin = db.query(User).filter(User.username == username).first()
+        if existing_admin is not None and existing_admin.role == "school_admin":
+            existing_admin.school_id = school.id
+            existing_admin.status = ACTIVE
+            db.commit()
+            log.info("Reassigned existing admin %r to %s.", username, school_name)
+            continue
         if not password:
             log.error("%s has no admin. Set SCHOOL%d_ADMIN_PASSWORD (and optionally SCHOOL%d_ADMIN_USERNAME) and restart, "
                       "or run `python create_admin.py`.", school_name, config.SCHOOL_NAMES.index(school_name) + 1, config.SCHOOL_NAMES.index(school_name) + 1)

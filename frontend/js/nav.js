@@ -89,9 +89,128 @@ function initialsFor() {
     const first = (localStorage.getItem("first_name") || "").trim();
     const full = (localStorage.getItem("full_name") || "").trim();
     const username = (localStorage.getItem("username") || "").trim();
-    const lastWord = full.split(/\s+/).filter(Boolean).slice(-1)[0] || "";
-    if (first && lastWord && lastWord.toLowerCase() !== first.toLowerCase()) return (first[0] + lastWord[0]).toUpperCase();
     return (first || full || username || "?").slice(0, 2).toUpperCase();
+}
+
+function profileAvatarHTML() {
+    const photo = localStorage.getItem("profile_avatar") || "";
+    const initials = initialsFor();
+    return photo
+        ? `<img class="avatar-photo" src="${escapeNavText(photo)}" alt="" aria-hidden="true">`
+        : `<span class="avatar-initials" aria-hidden="true">${escapeNavText(initials)}</span>`;
+}
+
+function openAdminProfileModal() {
+    const existing = document.getElementById("adminProfileModal");
+    if (existing) { existing.remove(); return; }
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay admin-profile-overlay active";
+    overlay.id = "adminProfileModal";
+    overlay.innerHTML = `
+        <section class="modal admin-profile-modal" role="dialog" aria-modal="true" aria-labelledby="adminProfileTitle">
+            <button class="close-btn" type="button" aria-label="Close">&times;</button>
+            <p class="admin-profile-eyebrow">ACCOUNT SETTINGS</p>
+            <h2 id="adminProfileTitle">Your profile</h2>
+            <p class="admin-profile-intro">Review your account details below. Choose Edit profile when you’re ready to make changes.</p>
+            <section class="admin-profile-preview" id="adminProfilePreview" aria-label="Current profile information" aria-live="polite">
+                <div class="admin-profile-preview-top"><div class="admin-profile-preview-avatar" id="adminPreviewInitials">?</div><button type="button" class="btn-primary" id="adminEditProfile">Edit profile</button></div>
+                <dl class="admin-profile-preview-list">
+                    <div><dt>Full name</dt><dd id="adminPreviewName">Loading…</dd></div>
+                    <div><dt>Username</dt><dd id="adminPreviewUsername">Loading…</dd></div>
+                    <div><dt>Email</dt><dd id="adminPreviewEmail">Loading…</dd></div>
+                    <div><dt>School</dt><dd id="adminPreviewSchool">—</dd></div>
+                </dl>
+            </section>
+            <form class="admin-profile-form" id="adminProfileForm" hidden>
+                <button type="button" class="admin-profile-back" id="adminProfileBack">← Back to profile</button>
+                <div class="admin-profile-grid">
+                    <label>First name<input name="first_name" autocomplete="given-name" required maxlength="100"></label>
+                    <label>Last name<input name="last_name" autocomplete="family-name" required maxlength="100"></label>
+                    <label>Middle name <span>(optional)</span><input name="middle_name" autocomplete="additional-name" maxlength="100"></label>
+                    <label>Email<input name="email" type="email" autocomplete="email" maxlength="254"></label>
+                    <label class="admin-profile-wide">Username<input name="username" autocomplete="username" required maxlength="80"></label>
+                </div>
+                <p class="admin-profile-message" id="adminProfileMessage" role="status" aria-live="polite"></p>
+                <div class="admin-profile-actions"><button type="submit" class="btn-primary">Save profile</button><button type="button" class="btn btn-secondary" data-close>Cancel</button></div>
+            </form>
+            <div class="admin-password-section">
+                <button type="button" class="admin-password-toggle" id="adminPasswordToggle" aria-expanded="false" aria-controls="adminPasswordPanel">Change password</button>
+                <div id="adminPasswordPanel" hidden>
+                    <p>Confirm your current password before setting a new one.</p>
+                    <form id="adminPasswordForm">
+                        <label>Current password<input name="current_password" type="password" autocomplete="current-password" required></label>
+                        <label>New password<input name="new_password" type="password" autocomplete="new-password" minlength="8" required></label>
+                        <label>Confirm new password<input name="confirm_password" type="password" autocomplete="new-password" minlength="8" required></label>
+                        <p class="admin-profile-message" id="adminPasswordMessage" role="status" aria-live="polite"></p>
+                        <div class="admin-profile-actions"><button type="submit" class="btn-primary">Update password</button></div>
+                    </form>
+                </div>
+            </div>
+        </section>`;
+    document.body.appendChild(overlay);
+    const form = overlay.querySelector("#adminProfileForm");
+    const preview = overlay.querySelector("#adminProfilePreview");
+    const passForm = overlay.querySelector("#adminPasswordForm");
+    const passToggle = overlay.querySelector("#adminPasswordToggle");
+    const passPanel = overlay.querySelector("#adminPasswordPanel");
+    passToggle.addEventListener("click", () => {
+        const expanded = passToggle.getAttribute("aria-expanded") === "true";
+        passToggle.setAttribute("aria-expanded", String(!expanded));
+        passPanel.hidden = expanded;
+    });
+    const close = () => overlay.remove();
+    const showEditor = () => { preview.hidden = true; form.hidden = false; form.elements.first_name.focus(); };
+    const showPreview = () => { form.hidden = true; preview.hidden = false; overlay.querySelector("#adminEditProfile").focus(); };
+    overlay.querySelector("#adminEditProfile").addEventListener("click", showEditor);
+    overlay.querySelector("#adminProfileBack").addEventListener("click", showPreview);
+    overlay.querySelector(".close-btn").addEventListener("click", close);
+    overlay.querySelector("[data-close]").addEventListener("click", close);
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+    const escape = (e) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", escape); } };
+    document.addEventListener("keydown", escape);
+    const authHeaders = () => ({ "Authorization": `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" });
+    const msg = (id, text, good = false) => { const el = overlay.querySelector(id); el.textContent = text; el.className = `admin-profile-message ${good ? "is-ok" : "is-error"}`; };
+    fetch(`${API}/profile`, { headers: authHeaders() }).then(async res => {
+        if (res.status === 401) { if (typeof logout === "function") logout(); throw new Error("Your session expired. Please sign in again."); }
+        const data = await res.json(); if (!res.ok) throw new Error(data.detail || "Couldn't load profile.");
+        for (const key of ["first_name", "last_name", "middle_name", "email", "username"]) form.elements[key].value = data[key] || "";
+        const name = [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(" ") || "—";
+        overlay.querySelector("#adminPreviewName").textContent = name;
+        overlay.querySelector("#adminPreviewUsername").textContent = data.username || "—";
+        overlay.querySelector("#adminPreviewEmail").textContent = data.email || "Not provided";
+        overlay.querySelector("#adminPreviewSchool").textContent = data.school_name || localStorage.getItem("school_name") || "—";
+        overlay.querySelector("#adminPreviewInitials").textContent = `${(data.first_name || "?")[0]}${(data.last_name || "")[0] || ""}`.toUpperCase();
+    }).catch(err => msg("#adminProfileMessage", err.message));
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault(); const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+        const body = Object.fromEntries(["first_name", "last_name", "middle_name", "email", "username"].map(k => [k, form.elements[k].value.trim()]));
+        try {
+            const res = await fetch(`${API}/profile/account`, { method: "PUT", headers: authHeaders(), body: JSON.stringify(body) });
+            const data = await res.json(); if (!res.ok) throw new Error(data.detail || "Couldn't save profile.");
+            localStorage.setItem("username", data.username); localStorage.setItem("first_name", data.first_name); localStorage.setItem("full_name", data.display_name);
+            drawer.querySelector(".nav-user-name").textContent = data.display_name;
+            drawer.querySelector(".avatar-initials").textContent = `${data.first_name[0]}${data.last_name[0]}`.toUpperCase();
+            overlay.querySelector("#adminPreviewName").textContent = [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(" ") || "—";
+            overlay.querySelector("#adminPreviewUsername").textContent = data.username || "—";
+            overlay.querySelector("#adminPreviewEmail").textContent = data.email || "Not provided";
+            overlay.querySelector("#adminPreviewInitials").textContent = `${(data.first_name || "?")[0]}${(data.last_name || "")[0] || ""}`.toUpperCase();
+            msg("#adminProfileMessage", "Profile saved.", true);
+            showPreview();
+        } catch (err) { msg("#adminProfileMessage", err.message); } finally { submit.disabled = false; }
+    });
+    passForm.addEventListener("submit", async (e) => {
+        e.preventDefault(); const submit = passForm.querySelector('[type="submit"]');
+        const fresh = passForm.elements.new_password.value;
+        if (fresh !== passForm.elements.confirm_password.value) return msg("#adminPasswordMessage", "The new passwords don't match.");
+        if (fresh === passForm.elements.current_password.value) return msg("#adminPasswordMessage", "Choose a password you haven't used before.");
+        submit.disabled = true;
+        try {
+            const res = await fetch(`${API}/profile/password`, { method: "PUT", headers: authHeaders(), body: JSON.stringify({ current_password: passForm.elements.current_password.value, new_password: fresh }) });
+            const data = await res.json(); if (!res.ok) throw new Error(data.detail || "Couldn't update password.");
+            passForm.reset(); msg("#adminPasswordMessage", "Password updated.", true);
+        } catch (err) { msg("#adminPasswordMessage", err.message); } finally { submit.disabled = false; }
+    });
+    overlay.querySelector(".close-btn").focus();
 }
 
 function initNavDrawer(options = {}) {
@@ -125,7 +244,7 @@ function initNavDrawer(options = {}) {
     const displayName = localStorage.getItem("full_name") || localStorage.getItem("username") || "";
     const schoolName = localStorage.getItem("school_name");
     const roleLine = [ROLE_LABELS[role] || "Student", schoolName].filter(Boolean).join(" · ");
-    const userTag = staff ? "div" : "a";
+    const userTag = staff ? "button type=\"button\"" : "a";
     const userHref = staff ? "" : ' href="profile.html"';
 
     drawer.innerHTML = `
@@ -135,8 +254,8 @@ function initNavDrawer(options = {}) {
             <div class="nav-drawer-theme-row"><span>Theme</span>${themeSwitchHTML("navThemeSwitch")}</div>
             <button type="button" class="nav-theme-compact" aria-label="Toggle dark / light mode" title="Toggle dark / light mode">${navIcon('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>')}</button>
             <button type="button" class="nav-drawer-item nav-drawer-logout" title="Sign out"><span class="nav-icon">${ICONS.signout}</span><span class="nav-label">Sign out</span></button>
-            <${userTag} class="nav-user"${userHref}>
-                <span class="avatar-initials" aria-hidden="true">${escapeNavText(initialsFor())}</span>
+            <${userTag} class="nav-user"${userHref} aria-label="${staff ? "Open admin profile settings" : "Open profile"}">
+                ${profileAvatarHTML()}
                 <span class="nav-user-text"><span class="nav-user-name">${escapeNavText(displayName)}</span><span class="nav-user-role">${escapeNavText(roleLine)}</span></span>
             </${userTag}>
         </div>
@@ -151,6 +270,14 @@ function initNavDrawer(options = {}) {
     overlay.addEventListener("click", closeDrawer);
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
     drawer.querySelector(".nav-drawer-logout").addEventListener("click", () => { if (typeof logout === "function") logout(); });
+    if (staff) drawer.querySelector(".nav-user").addEventListener("click", openAdminProfileModal);
+    window.refreshNavProfile = () => {
+        const name = localStorage.getItem("full_name") || localStorage.getItem("username") || "";
+        const navUser = drawer.querySelector(".nav-user");
+        if (navUser) {
+            navUser.innerHTML = `${profileAvatarHTML()}<span class="nav-user-text"><span class="nav-user-name">${escapeNavText(name)}</span><span class="nav-user-role">${escapeNavText(roleLine)}</span></span>`;
+        }
+    };
     drawer.querySelector(".nav-theme-compact").addEventListener("click", () => {
         toggleTheme();
         const sw = document.getElementById("navThemeSwitch");

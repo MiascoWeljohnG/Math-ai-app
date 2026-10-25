@@ -5,6 +5,11 @@ from dotenv import load_dotenv
 # Automatically read the .env file in the backend directory
 load_dotenv()
 
+# Email delivery for password recovery (Resend)
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+EMAIL_FROM = os.getenv("EMAIL_FROM", "")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://isipnayan.vercel.app")
+
 _DEFAULT_SECRET = "change-this-in-production"
 SECRET_KEY = os.getenv("SECRET_KEY", _DEFAULT_SECRET)
 if os.getenv("RENDER") and SECRET_KEY == _DEFAULT_SECRET:
@@ -16,7 +21,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 # ---- Accounts, schools and approval ----
 # The platform serves exactly two schools. They are created at startup (bootstrap.ensure_schools) and no
 # route can add another. Override the display names with SCHOOL_NAMES="Name one,Name two".
-SCHOOL_NAMES = [n.strip() for n in os.getenv("SCHOOL_NAMES", "School A,School B").split(",") if n.strip()]
+SCHOOL_NAMES = [n.strip() for n in os.getenv("SCHOOL_NAMES", "Saint Mark's Institute,Cavite State University Bacoor Campus").split(",") if n.strip()]
 if len(SCHOOL_NAMES) != 2 or len({n.lower() for n in SCHOOL_NAMES}) != 2:
     raise RuntimeError('SCHOOL_NAMES must list exactly two different school names, e.g. "School A,School B"')
 

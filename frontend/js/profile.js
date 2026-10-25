@@ -56,6 +56,10 @@ async function load() {
         if (!res.ok) throw new Error();
         original = await res.json();
         fill(original);
+        localStorage.setItem("profile_avatar", original.avatar || "");
+        localStorage.setItem("full_name", original.display_name || "");
+        localStorage.setItem("first_name", original.first_name || "");
+        if (typeof refreshNavProfile === "function") refreshNavProfile();
     } catch (_) {
         showMsg("Couldn't load your profile. Is the server running?", "error");
     }
@@ -116,6 +120,8 @@ $("profileForm").addEventListener("submit", async (e) => {
         fill(data);
         localStorage.setItem("full_name", data.display_name);
         localStorage.setItem("first_name", data.first_name);
+        localStorage.setItem("profile_avatar", data.avatar || "");
+        if (typeof refreshNavProfile === "function") refreshNavProfile();
         showMsg("Profile saved.", "ok");
     } catch (err) {
         showMsg(err.message, "error");
