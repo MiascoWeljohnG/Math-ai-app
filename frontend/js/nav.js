@@ -187,9 +187,11 @@ function openAdminProfileModal() {
         try {
             const res = await fetch(`${API}/profile/account`, { method: "PUT", headers: authHeaders(), body: JSON.stringify(body) });
             const data = await res.json(); if (!res.ok) throw new Error(data.detail || "Couldn't save profile.");
+            // The login token is tied to the username, so keep the fresh one the server sends back.
+            if (data.access_token) localStorage.setItem("token", data.access_token);
             localStorage.setItem("username", data.username); localStorage.setItem("first_name", data.first_name); localStorage.setItem("full_name", data.display_name);
-            drawer.querySelector(".nav-user-name").textContent = data.display_name;
-            drawer.querySelector(".avatar-initials").textContent = `${data.first_name[0]}${data.last_name[0]}`.toUpperCase();
+            // `drawer` only exists inside initNavDrawer(), so refresh the sidebar through the hook it exposes.
+            if (typeof window.refreshNavProfile === "function") window.refreshNavProfile();
             overlay.querySelector("#adminPreviewName").textContent = [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(" ") || "—";
             overlay.querySelector("#adminPreviewUsername").textContent = data.username || "—";
             overlay.querySelector("#adminPreviewEmail").textContent = data.email || "Not provided";

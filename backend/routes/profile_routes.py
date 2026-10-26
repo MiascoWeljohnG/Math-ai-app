@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from auth import check_password_strength, get_current_user, hash_password, verify_password
+from auth import check_password_strength, create_access_token, get_current_user, hash_password, verify_password
 from database import get_db
 from models import User
 
@@ -96,7 +96,9 @@ def update_school_admin_account(
     db.commit()
     db.refresh(user)
     return {"username": user.username, "first_name": user.first_name, "last_name": user.last_name,
-            "middle_name": user.middle_name or "", "email": user.email or "", "display_name": user.display_name}
+            "middle_name": user.middle_name or "", "email": user.email or "", "display_name": user.display_name,
+            # Tokens are keyed by username, so issue a new one in case it just changed.
+            "access_token": create_access_token({"sub": user.username})}
 
 
 @router.put("/profile/password")

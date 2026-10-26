@@ -63,3 +63,15 @@ def test_school_admin_cannot_change_username_without_authentication(profile_api)
     client, _, _, _ = profile_api
     res = client.put("/profile/account", json={"first_name": "Ada", "last_name": "Lovelace", "email": "a@example.com", "username": "ada_admin"})
     assert res.status_code == 401
+
+
+def test_username_change_returns_token_that_still_works(profile_api):
+    client, db, admin, headers = profile_api
+    res = client.put("/profile/account", headers=headers, json={
+        "first_name": "Ada", "last_name": "Lovelace", "email": "ada@example.com", "username": "ada_admin",
+    })
+    assert res.status_code == 200, res.text
+    fresh = {"Authorization": f"Bearer {res.json()['access_token']}"}
+    assert client.get("/profile", headers=fresh).status_code == 200
+    # the old token was issued for the old username, so it no longer resolves
+    assert client.get("/profile", headers=headers).status_code == 401

@@ -70,3 +70,4 @@ def new_account(req: CreateTeacherRequest, role: str, school_id: int, db: Sessio
     db.add(AuditLog(actor=actor, school_id=school_id, action=f"{role}.create", target=req.username))
     db.commit()
     return account
+
