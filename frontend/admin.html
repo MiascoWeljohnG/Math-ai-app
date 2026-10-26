@@ -235,16 +235,24 @@
 
         // Teacher Modal logic
         const teacherModal = document.getElementById("teacherModal");
-        document.getElementById("openTeacherModalBtn").addEventListener("click", () => teacherModal.classList.add("active"));
-        document.getElementById("closeTeacherModal").addEventListener("click", () => teacherModal.classList.remove("active"));
-        teacherModal.addEventListener("click", (e) => { if (e.target === teacherModal) teacherModal.classList.remove("active"); });
+        const teacherGuard = guardUnsaved(teacherModal, (discarded) => {
+            if (discarded) { document.getElementById("teacherForm").reset(); const st = document.getElementById("teacherStatus"); st.className = "status"; st.textContent = ""; }
+            teacherModal.classList.remove("active");
+        });
+        document.getElementById("openTeacherModalBtn").addEventListener("click", () => { teacherGuard.reset(); teacherModal.classList.add("active"); });
+        document.getElementById("closeTeacherModal").addEventListener("click", () => teacherGuard.requestClose());
+        teacherGuard.attachBackdrop(teacherModal);
         document.getElementById("teacherForm").addEventListener("submit", (e) => { e.preventDefault(); createTeacher(); });
 
         // Admin Modal logic
         const adminModal = document.getElementById("adminModal");
-        document.getElementById("openAdminModalBtn").addEventListener("click", () => adminModal.classList.add("active"));
-        document.getElementById("closeAdminModal").addEventListener("click", () => adminModal.classList.remove("active"));
-        adminModal.addEventListener("click", (e) => { if (e.target === adminModal) adminModal.classList.remove("active"); });
+        const adminGuard = guardUnsaved(adminModal, (discarded) => {
+            if (discarded) { document.getElementById("adminForm").reset(); const st = document.getElementById("adminStatus"); st.className = "status"; st.textContent = ""; }
+            adminModal.classList.remove("active");
+        });
+        document.getElementById("openAdminModalBtn").addEventListener("click", () => { adminGuard.reset(); adminModal.classList.add("active"); });
+        document.getElementById("closeAdminModal").addEventListener("click", () => adminGuard.requestClose());
+        adminGuard.attachBackdrop(adminModal);
         document.getElementById("adminForm").addEventListener("submit", (e) => { e.preventDefault(); createAdmin(); });
 
         // Password Show/Hide Toggle Logic for Admin Modals

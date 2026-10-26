@@ -158,15 +158,19 @@ function openAdminProfileModal() {
         passToggle.setAttribute("aria-expanded", String(!expanded));
         passPanel.hidden = expanded;
     });
-    const close = () => overlay.remove();
+    // Closing by accident (click outside, Esc, the X) asks first if something was typed; Cancel is a deliberate exit.
+    const escape = (e) => { if (e.key !== "Escape") return; e.preventDefault(); guard.requestClose(); }; // preventDefault: otherwise this same Esc also dismisses the warning that just opened
+    const close = () => { document.removeEventListener("keydown", escape); overlay.remove(); };
+    const guard = typeof guardUnsaved === "function"
+        ? guardUnsaved([form, passForm], close)
+        : { reset() {}, requestClose: async () => { close(); return true; }, attachBackdrop: o => o.addEventListener("click", (e) => { if (e.target === o) close(); }) };
     const showEditor = () => { preview.hidden = true; form.hidden = false; form.elements.first_name.focus(); };
     const showPreview = () => { form.hidden = true; preview.hidden = false; overlay.querySelector("#adminEditProfile").focus(); };
     overlay.querySelector("#adminEditProfile").addEventListener("click", showEditor);
     overlay.querySelector("#adminProfileBack").addEventListener("click", showPreview);
-    overlay.querySelector(".close-btn").addEventListener("click", close);
+    overlay.querySelector(".close-btn").addEventListener("click", () => guard.requestClose());
     overlay.querySelector("[data-close]").addEventListener("click", close);
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
-    const escape = (e) => { if (e.key === "Escape") { close(); document.removeEventListener("keydown", escape); } };
+    guard.attachBackdrop(overlay);
     document.addEventListener("keydown", escape);
     const authHeaders = () => ({ "Authorization": `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" });
     const msg = (id, text, good = false) => { const el = overlay.querySelector(id); el.textContent = text; el.className = `admin-profile-message ${good ? "is-ok" : "is-error"}`; };
@@ -180,6 +184,7 @@ function openAdminProfileModal() {
         overlay.querySelector("#adminPreviewEmail").textContent = data.email || "Not provided";
         overlay.querySelector("#adminPreviewSchool").textContent = data.school_name || localStorage.getItem("school_name") || "—";
         overlay.querySelector("#adminPreviewInitials").textContent = `${(data.first_name || "?")[0]}${(data.last_name || "")[0] || ""}`.toUpperCase();
+        guard.reset(form); // the loaded values are the starting point, not "changes"
     }).catch(err => msg("#adminProfileMessage", err.message));
     form.addEventListener("submit", async (e) => {
         e.preventDefault(); const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
@@ -197,6 +202,7 @@ function openAdminProfileModal() {
             overlay.querySelector("#adminPreviewEmail").textContent = data.email || "Not provided";
             overlay.querySelector("#adminPreviewInitials").textContent = `${(data.first_name || "?")[0]}${(data.last_name || "")[0] || ""}`.toUpperCase();
             msg("#adminProfileMessage", "Profile saved.", true);
+            guard.reset(form);
             showPreview();
         } catch (err) { msg("#adminProfileMessage", err.message); } finally { submit.disabled = false; }
     });
@@ -209,7 +215,7 @@ function openAdminProfileModal() {
         try {
             const res = await fetch(`${API}/profile/password`, { method: "PUT", headers: authHeaders(), body: JSON.stringify({ current_password: passForm.elements.current_password.value, new_password: fresh }) });
             const data = await res.json(); if (!res.ok) throw new Error(data.detail || "Couldn't update password.");
-            passForm.reset(); msg("#adminPasswordMessage", "Password updated.", true);
+            passForm.reset(); guard.reset(passForm); msg("#adminPasswordMessage", "Password updated.", true);
         } catch (err) { msg("#adminPasswordMessage", err.message); } finally { submit.disabled = false; }
     });
     overlay.querySelector(".close-btn").focus();

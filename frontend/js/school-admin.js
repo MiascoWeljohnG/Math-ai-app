@@ -54,9 +54,13 @@ const teacherModal = document.getElementById("teacherModal");
 const teacherStatus = document.getElementById("teacherStatus");
 const teacherFields = ["teacherUsername", "teacherLastName", "teacherFirstName", "teacherMiddleName", "teacherEmail", "teacherBirthday", "teacherPassword"];
 document.getElementById("teacherBirthday").max = new Date().toISOString().slice(0, 10);
-document.getElementById("openTeacherModalBtn").addEventListener("click", () => teacherModal.classList.add("active"));
-document.getElementById("closeTeacherModal").addEventListener("click", () => teacherModal.classList.remove("active"));
-teacherModal.addEventListener("click", (e) => { if (e.target === teacherModal) teacherModal.classList.remove("active"); });
+const teacherGuard = guardUnsaved(teacherModal, (discarded) => {
+    if (discarded) { document.getElementById("teacherForm").reset(); teacherStatus.className = "status"; teacherStatus.textContent = ""; }
+    teacherModal.classList.remove("active");
+});
+document.getElementById("openTeacherModalBtn").addEventListener("click", () => { teacherGuard.reset(); teacherModal.classList.add("active"); });
+document.getElementById("closeTeacherModal").addEventListener("click", () => teacherGuard.requestClose());
+teacherGuard.attachBackdrop(teacherModal);
 
 document.getElementById("teacherForm").addEventListener("submit", async (e) => {
     e.preventDefault();

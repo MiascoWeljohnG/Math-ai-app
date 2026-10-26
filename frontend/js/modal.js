@@ -112,4 +112,54 @@
     window.uiAlert = (message, opts) => openModal("alert", message, opts);
     window.uiConfirm = (message, opts) => openModal("confirm", message, opts);
     window.uiPrompt = (message, defaultValue, opts) => openModal("prompt", message, Object.assign({ defaultValue }, opts));
+
+    // ---- Unsaved-changes guard for popups that contain a form -------------------------------------
+    //   const guard = guardUnsaved(overlay, (discarded) => overlay.classList.remove("active"));
+    //   guard.reset();                    // when the popup opens, and after a successful save
+    //   closeBtn.onclick = () => guard.requestClose();
+    //   guard.attachBackdrop(overlay);    // clicking outside the popup goes through the same check
+    // requestClose() closes straight away if nothing was typed; otherwise it asks "Leave without saving?" first.
+    window.confirmDiscard = () => uiConfirm(
+        "You've entered information that hasn't been saved yet. If you leave now, it will be lost.",
+        { title: "Leave without saving?", okText: "Discard changes", cancelText: "Keep editing", danger: true });
+
+    window.guardUnsaved = function (roots, closeFn) {
+        const list = (Array.isArray(roots) ? roots : [roots]).filter(Boolean);
+        const read = root => Array.from(root.querySelectorAll("input, select, textarea"))
+            .map(el => (el.type === "checkbox" || el.type === "radio") ? String(el.checked) : el.value).join("\u0001");
+        const baselines = new Map();
+        const reset = root => (root ? [root] : list).forEach(r => baselines.set(r, read(r)));
+        const isDirty = () => list.some(r => read(r) !== baselines.get(r));
+        let asking = false, askedAt = 0;
+        reset();
+
+        async function requestClose(opts) {
+            if (asking) return false;
+            // the click that dismisses the "Keep editing" popup must not re-open the question
+            if (opts && opts.fromBackdrop && Date.now() - askedAt < 400) return false;
+            let discarded = false;
+            if (isDirty()) {
+                asking = true;
+                const leave = await window.confirmDiscard();
+                asking = false; askedAt = Date.now();
+                if (!leave) return false;
+                discarded = true;
+            }
+            closeFn(discarded);
+            return true;
+        }
+
+        // Only a click that both started and ended on the dark backdrop counts, so dragging a text
+        // selection out of the popup no longer closes it.
+        function attachBackdrop(overlay) {
+            let downOnBackdrop = false;
+            overlay.addEventListener("mousedown", e => { downOnBackdrop = e.target === overlay; });
+            overlay.addEventListener("click", e => {
+                const hit = e.target === overlay && downOnBackdrop;
+                downOnBackdrop = false;
+                if (hit) requestClose({ fromBackdrop: true });
+            });
+        }
+        return { isDirty, reset, requestClose, attachBackdrop };
+    };
 })();
