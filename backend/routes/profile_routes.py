@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from auth import check_password_strength, create_access_token, get_current_user, hash_password, verify_password
 from database import get_db
-from models import User
+from models import Material, Lesson, Notification, Reminder, SubjectDeletionRequest, SubjectDeletionVote, User
 
 router = APIRouter(tags=["profile"])
 
@@ -44,6 +44,32 @@ class SchoolAdminPasswordUpdate(BaseModel):
     new_password: str
 
 
+def _can_manage_own_account(user: User) -> bool:
+    """Teachers and school admins edit their own name / email / username / password from the dashboard popup."""
+    return user.role == "teacher" or (user.role == "school_admin" and user.school_id is not None)
+
+
+# Records that remember their author by username text rather than by user id. When the username changes they
+# are moved to the new one, otherwise a teacher would lose their own uploads and reminders, and an admin
+# their votes and notifications. (The audit log is left alone on purpose: it records what happened under
+# the name that was used at the time.)
+_USERNAME_REFERENCES = (
+    (Material, Material.uploaded_by),
+    (Lesson, Lesson.created_by),
+    (Reminder, Reminder.created_by),
+    (SubjectDeletionRequest, SubjectDeletionRequest.requested_by),
+    (SubjectDeletionVote, SubjectDeletionVote.admin_username),
+    (Notification, Notification.admin_username),
+)
+
+
+def _carry_username_references(db: Session, old: str, new: str) -> None:
+    if old == new:
+        return
+    for model, column in _USERNAME_REFERENCES:
+        db.query(model).filter(column == old).update({column: new}, synchronize_session=False)
+
+
 def _display_name(u: User) -> str:
     return u.display_name
 
@@ -75,8 +101,8 @@ def update_school_admin_account(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if user.role != "school_admin" or user.school_id is None:
-        raise HTTPException(403, "School admin access required")
+    if not _can_manage_own_account(user):
+        raise HTTPException(403, "Only teachers and school admins can edit their account here")
     first_name = " ".join(req.first_name.split())
     last_name = " ".join(req.last_name.split())
     middle_name = " ".join((req.middle_name or "").split())
@@ -91,8 +117,10 @@ def update_school_admin_account(
     collision = db.query(User).filter(User.username == username, User.id != user.id).first()
     if collision:
         raise HTTPException(409, "That username is already in use")
+    old_username = user.username
     user.first_name, user.last_name, user.middle_name = first_name, last_name, middle_name
     user.email, user.username = email, username
+    _carry_username_references(db, old_username, username)
     db.commit()
     db.refresh(user)
     return {"username": user.username, "first_name": user.first_name, "last_name": user.last_name,
@@ -107,8 +135,8 @@ def update_school_admin_password(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if user.role != "school_admin" or user.school_id is None:
-        raise HTTPException(403, "School admin access required")
+    if not _can_manage_own_account(user):
+        raise HTTPException(403, "Only teachers and school admins can change their password here")
     if not verify_password(req.current_password, user.password_hash):
         raise HTTPException(400, "Current password is incorrect")
     check_password_strength(req.new_password)
