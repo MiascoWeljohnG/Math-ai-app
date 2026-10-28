@@ -166,10 +166,70 @@ def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: b
         "order_index": lesson.order_index,
         "created_by": lesson.created_by,
         "completed": completed,
+        "status": lesson.status,
     }
     if include_content:
         result["content"] = lesson.content
+        result["description"] = lesson.description or ""
     return result
+
+
+@router.put("/{subject_id}/lessons/{lesson_id}/draft")
+def update_draft_lesson(subject_id: int, lesson_id: int, req: "LessonRequest", user: User = Depends(require_staff), db: Session = Depends(get_db)):
+    _shared_subject_or_404(db, subject_id, user)
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id, Lesson.subject_id == subject_id).first()
+    if lesson is None:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson.status != "draft":
+        raise HTTPException(status_code=409, detail="Only drafts can be edited")
+    lesson.title, lesson.content = _lesson_values(req)
+    if req.description is not None:
+        lesson.description = req.description.strip() or None
+    db.commit()
+    db.refresh(lesson)
+    return _serialize_lesson(lesson)
+
+
+@router.post("/{subject_id}/lessons/{lesson_id}/retry")
+async def retry_draft_lesson(subject_id: int, lesson_id: int, user: User = Depends(require_staff), db: Session = Depends(get_db)):
+    subject = _shared_subject_or_404(db, subject_id, user)
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id, Lesson.subject_id == subject_id).first()
+    if lesson is None:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson.status != "draft":
+        raise HTTPException(status_code=409, detail="Only drafts can be regenerated")
+    prompt = _compose_prompt(subject, lesson.title, lesson.description or "", [], None)
+    try:
+        content = await generate_text(LESSON_SYSTEM, prompt, subject.name, f"{subject.name} {lesson.title}")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Lesson generation failed: {exc}")
+    if not content:
+        raise HTTPException(status_code=502, detail="The model returned an empty lesson")
+    lesson.content = content
+    db.commit()
+    db.refresh(lesson)
+    return _serialize_lesson(lesson)
+
+
+@router.post("/{subject_id}/lessons/{lesson_id}/approve")
+def approve_draft_lesson(subject_id: int, lesson_id: int, user: User = Depends(require_staff), db: Session = Depends(get_db)):
+    _shared_subject_or_404(db, subject_id, user)
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id, Lesson.subject_id == subject_id).first()
+    if lesson is None:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if lesson.status != "draft":
+        raise HTTPException(status_code=409, detail="Only drafts can be approved")
+    lesson.status = "published"
+    db.commit()
+    db.refresh(lesson)
+    return _serialize_lesson(lesson)
+
+
+@router.get("/{subject_id}/lessons/drafts")
+def list_draft_lessons(subject_id: int, user: User = Depends(require_staff), db: Session = Depends(get_db)):
+    _shared_subject_or_404(db, subject_id, user)
+    rows = db.query(Lesson).filter(Lesson.subject_id == subject_id, Lesson.status == "draft").order_by(Lesson.order_index, Lesson.id).all()
+    return [_serialize_lesson(row) for row in rows]
 
 
 @router.get("/{subject_id}/lessons")
@@ -181,7 +241,7 @@ def list_lessons(
     _visible_subject_or_404(db, subject_id, user)
     lessons = (
         db.query(Lesson)
-        .filter(Lesson.subject_id == subject_id)
+        .filter(Lesson.subject_id == subject_id, Lesson.status == "published")
         .order_by(Lesson.order_index.asc(), Lesson.id.asc())
         .all()
     )
@@ -238,6 +298,7 @@ def set_lesson_completion(
 class LessonRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     content: str = Field(min_length=1, max_length=100_000)
+    description: Optional[str] = Field(default=None, max_length=5000)
     order_index: Optional[int] = Field(default=None, ge=0)
 
 
@@ -262,6 +323,7 @@ def create_lesson(
         subject_id=subject_id,
         title=title,
         content=content,
+        description=(req.description or "").strip() or None,
         order_index=req.order_index or 0,
         created_by=user.username,
     )
@@ -287,6 +349,8 @@ def update_lesson(
     if lesson is None:
         raise HTTPException(status_code=404, detail="Lesson not found")
     lesson.title, lesson.content = _lesson_values(req)
+    if req.description is not None:
+        lesson.description = req.description.strip() or None
     if req.order_index is not None:
         lesson.order_index = req.order_index
     db.commit()
@@ -466,13 +530,16 @@ async def generate_lesson(
     return _serialize_lesson(_save_generated_lesson(db, subject, user, topic, content))
 
 
-def _save_generated_lesson(db: Session, subject: Subject, user: User, topic: str, content: str) -> Lesson:
+def _save_generated_lesson(db: Session, subject: Subject, user: User, topic: str, content: str,
+                           description: Optional[str] = None) -> Lesson:
     lesson = Lesson(
         subject_id=subject.id,
         title=topic,
+        description=description or None,
         content=content,
         order_index=_next_order(db, subject.id),
         created_by=user.username,
+        status="draft",
     )
     db.add(lesson)
     db.commit()
@@ -613,6 +680,176 @@ async def generate_lesson_from_material(
     subject = _shared_subject_or_404(db, subject_id, user)
     _, text = await _read_material(db, req.filename, user)
     return await _lesson_from_text(db, subject, user, text, req.topic)
+
+
+# ---------------------------------------------------------------------------
+# Create lessons from a description (the teacher's "lesson description" form)
+#   plan    -> titles for 1-6 lessons
+#   compose -> one lesson: the AI writes the content from title + description (+ a PDF)
+# The PDF is optional and comes from one of two places: uploaded with the request (not stored), or a
+# file that is already in the teacher's uploaded files (`filename`).
+# ---------------------------------------------------------------------------
+
+MAX_LESSONS_PER_RUN = 6
+MAX_DESCRIPTION_CHARS = 5000
+
+
+def _clean_description(description: str) -> str:
+    description = (description or "").strip()
+    if len(description) > MAX_DESCRIPTION_CHARS:
+        raise HTTPException(status_code=400, detail=f"The description is too long (limit {MAX_DESCRIPTION_CHARS} characters)")
+    return description
+
+
+async def _optional_source_text(db: Session, user: User, file: Optional[UploadFile], filename: str) -> Optional[str]:
+    """Text of the document to base the lessons on, or None when the teacher chose no file."""
+    if file is not None and file.filename:
+        return (await read_upload(file))[1]
+    if filename.strip():
+        return (await _read_material(db, filename.strip(), user))[1]
+    return None
+
+
+def _lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+@router.post("/{subject_id}/lessons/suggest-from-file")
+async def suggest_lesson_from_file(
+    subject_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(require_staff),
+    db: Session = Depends(get_db),
+):
+    """Suggest editable lesson title, description and content from a selected PDF/DOCX; save nothing."""
+    subject = _writable_subject_or_404(db, subject_id, user)
+    _, text = await read_upload(file)
+    excerpt = sample_text(text, 8000)
+    try:
+        title, description = await summarize_document(excerpt)
+        prompt = (
+            f'Write a clear, student-friendly lesson titled "{title}" for {subject.name}. '
+            f"Focus on this description: {description}. Use markdown and include an explanation, "
+            "a worked example, and a few practice questions. Use only the source document.\n\n"
+            f'Source document:\n"""\n{excerpt}\n"""'
+        )
+        content = await generate_text(LESSON_SYSTEM, prompt, "", "")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Couldn't suggest lesson fields: {exc}") from exc
+    if not content.strip():
+        raise HTTPException(status_code=502, detail="The model returned an empty lesson")
+    return {"title": title, "description": description, "content": content}
+
+
+@router.post("/{subject_id}/lessons/plan")
+async def plan_lessons(
+    subject_id: int,
+    count: int = Form(1, ge=1, le=MAX_LESSONS_PER_RUN),
+    description: str = Form(""),
+    existing: str = Form(""),
+    filename: str = Form(""),
+    file: Optional[UploadFile] = File(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Suggest `count` new lesson titles (1-6). `existing` is titles the teacher already typed, one per
+    line: they are kept out of the answer and the new ones follow on from them."""
+    subject = _writable_subject_or_404(db, subject_id, user)
+    description = _clean_description(description)
+    text = await _optional_source_text(db, user, file, filename)
+    have = [lesson.title for lesson in db.query(Lesson).filter(Lesson.subject_id == subject_id)] + _lines(existing)
+
+    plural = "titles" if count != 1 else "title"
+    if text is not None:
+        scope = "the material in the document below, in the order the document teaches it, each one a specific topic from the document"
+    else:
+        scope = f"{subject.name}, ordered so each lesson builds on the previous one"
+    prompt = f"List {count} lesson {plural} that together teach {scope} to a beginner."
+    if description:
+        prompt += f'\nThe teacher wants the lessons to cover:\n"""\n{description}\n"""'
+    if have:
+        prompt += f"\nThese lessons already exist or are already planned, do not repeat them: {'; '.join(have)}."
+    prompt += (
+        "\nOutput one title per line. No numbering, no bullets, no other text. "
+        "Titles are plain text: no LaTeX and no dollar signs."
+    )
+    if text is not None:
+        prompt += f'\n\nDocument:\n"""\n{sample_text(text, 8000)}\n"""'
+        branch, query = "", ""
+    else:
+        branch, query = subject.name, f"{subject.name} {description[:200]}".strip()
+    try:
+        reply = await generate_text(LESSON_SYSTEM, prompt, branch, query)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Planning the lessons failed: {exc}")
+
+    taken = {title.casefold() for title in have}
+    fresh = [title for title in _clean_titles(reply) if title.casefold() not in taken]
+    if not fresh:
+        raise HTTPException(status_code=502, detail="The model only repeated lessons that already exist. Try again with a more specific description.")
+    return {"titles": fresh[:count]}
+
+
+def _compose_prompt(subject: Subject, title: str, description: str, series: list[str], source: Optional[str]) -> str:
+    parts = [f'Write a lesson titled "{title}" for the subject {subject.name}, for a student new to it.']
+    if description:
+        parts.append(
+            "The teacher described what the lesson should cover. Follow it closely:\n"
+            f'"""\n{description}\n"""'
+        )
+    if len(series) > 1:
+        parts.append(
+            f"This lesson is one of {len(series)} in a series ({'; '.join(series)}). "
+            f'Cover only "{title}" and do not repeat what the other lessons teach.'
+        )
+    if source is not None:
+        parts.append("Base the lesson ONLY on the source document at the end (ignore anything in it that is off-topic).")
+    parts.append(
+        "Use markdown with 2-4 sections (## headers), plain-language explanations, at least one "
+        "fully worked example, and 3 short practice questions at the end (answers after them). "
+        "Do not repeat the lesson title as a heading; it is shown separately."
+    )
+    prompt = "\n\n".join(parts)
+    if source is not None:
+        prompt += f'\n\nSource document:\n"""\n{relevant_text(source, f"{title} {description}")}\n"""'
+    return prompt
+
+
+@router.post("/{subject_id}/lessons/compose")
+async def compose_lesson(
+    subject_id: int,
+    title: str = Form(...),
+    description: str = Form(""),
+    series: str = Form(""),
+    save: bool = Form(True),
+    filename: str = Form(""),
+    file: Optional[UploadFile] = File(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The AI writes one lesson's content from its title and description (and the PDF, if one was chosen).
+    save=true stores the lesson and returns it; save=false only returns the new content, for "Regenerate"
+    in the editor. `series` is every title of the run, one per line, so each lesson stays in its own lane."""
+    subject = _writable_subject_or_404(db, subject_id, user)
+    title = title.strip()[:200]
+    if not title:
+        raise HTTPException(status_code=400, detail="Lesson title is required")
+    description = _clean_description(description)
+    source = await _optional_source_text(db, user, file, filename)
+    prompt = _compose_prompt(subject, title, description, _lines(series), source)
+    if source is not None:
+        branch, query = "", ""
+    else:
+        branch, query = subject.name, f"{subject.name} {title} {description[:200]}".strip()
+    try:
+        content = await generate_text(LESSON_SYSTEM, prompt, branch, query)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Lesson generation failed: {exc}")
+    if not content:
+        raise HTTPException(status_code=502, detail="The model returned an empty lesson")
+    if not save:
+        return {"title": title, "description": description, "content": content}
+    return _serialize_lesson(_save_generated_lesson(db, subject, user, title, content, description))
 
 
 # ---------------------------------------------------------------------------

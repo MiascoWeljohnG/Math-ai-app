@@ -132,7 +132,16 @@ def test_teachers_only_see_their_schools_students(api):
 
 # ---------------------------------------------------------------- subjects, files, reminders, deletions
 def test_subjects_are_separate_per_school(api):
-    a, b = two_schools(api)
+    # Use the app's fixed school names; arbitrary test schools are rejected by the model.
+    from bootstrap import ensure_schools
+    ensure_schools(api.db)
+    schools = {row.name: row for row in api.db.query(School).all()}
+    a = schools["Saint Mark's Institute"]
+    b = schools["Cavite State University Bacoor Campus"]
+    for tag, sch in (("a", a), ("b", b)):
+        person(api, f"t_{tag}", "teacher", sch)
+        person(api, f"s_{tag}", "user", sch)
+        person(api, f"adm_{tag}", "school_admin", sch)
     ids = {}
     for tag in ("a", "b"):
         as_(api, f"t_{tag}")   # the same name is fine in two schools, not twice in one
@@ -143,7 +152,8 @@ def test_subjects_are_separate_per_school(api):
     assert ids["a"] != ids["b"]
 
     as_(api, "s_a")
-    assert [s["id"] for s in api.client.get("/subjects").json()] == [ids["a"]]
+    expected_ids = [s.id for s in api.db.query(Subject).filter(Subject.school_id == a.id, Subject.owner_user_id.is_(None)).all()]
+    assert [s["id"] for s in api.client.get("/subjects").json()] == expected_ids
     as_(api, "t_b")
     assert api.client.get(f"/subjects/{ids['a']}/lessons").status_code == 404
     lesson = {"title": "T", "content": "C"}

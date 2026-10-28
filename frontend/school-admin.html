@@ -88,6 +88,8 @@
             <h2>Files from your school</h2>
             <p class="hint">Uploaded by your school's teachers, newest first.</p>
         </div>
+        <button class="btn btn-secondary" type="button" id="reindexUploadsBtn">Re-index uploaded files</button>
+        <p class="status" id="reindexStatus" role="status" aria-live="polite"></p>
         <div class="table-wrap">
             <table id="filesTable">
                 <thead><tr><th>File</th><th>Branch</th><th>Uploaded by</th><th>Uploaded</th><th></th></tr></thead>
@@ -118,8 +120,8 @@
             <h2>Add Teacher Account</h2>
             <form id="teacherForm">
                 <label>Username</label><input type="text" id="teacherUsername" required>
-                <label>Last name</label><input type="text" id="teacherLastName" required>
                 <label>First name</label><input type="text" id="teacherFirstName" required>
+                <label>Last name</label><input type="text" id="teacherLastName" required>
                 <label>Middle name <span class="opt">(optional)</span></label><input type="text" id="teacherMiddleName">
                 <label>Email</label><input type="email" id="teacherEmail" required>
                 <label>Birthday</label><input type="date" id="teacherBirthday" required>

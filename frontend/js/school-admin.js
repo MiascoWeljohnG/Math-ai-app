@@ -49,6 +49,27 @@ async function deleteFile(file) {
 }
 loadFiles();
 
+// Rebuild the shared material index; the endpoint accepts school admins via require_staff.
+const reindexUploadsBtn = document.getElementById("reindexUploadsBtn");
+const reindexStatus = document.getElementById("reindexStatus");
+reindexUploadsBtn.addEventListener("click", async () => {
+    reindexUploadsBtn.disabled = true;
+    reindexStatus.className = "status info";
+    reindexStatus.textContent = "Re-indexing the uploaded files…";
+    try {
+        const response = await fetch(`${API}/materials/reindex`, { method: "POST", headers: getHeaders() });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || "Re-index failed.");
+        reindexStatus.className = "status success";
+        reindexStatus.textContent = `Done. The AI now knows ${result.chunks} text chunks from your uploaded files.`;
+    } catch (error) {
+        reindexStatus.className = "status error";
+        reindexStatus.textContent = error.message;
+    } finally {
+        reindexUploadsBtn.disabled = false;
+    }
+});
+
 // --- Add a teacher to this school ---
 const teacherModal = document.getElementById("teacherModal");
 const teacherStatus = document.getElementById("teacherStatus");

@@ -159,9 +159,11 @@ loadStudents();
 
 const lessonSubjectSelect = document.getElementById("lessonSubjectSelect");
 const lessonListEl = document.getElementById("lessonListEl");
-const draftTopicInput = document.getElementById("draftTopicInput");
-const draftBtn = document.getElementById("draftBtn");
+const lessonForm = document.getElementById("lessonForm");
+const lessonFormHeading = document.getElementById("lessonFormHeading");
 const lessonTitleInput = document.getElementById("lessonTitleInput");
+const lessonTitlesInput = document.getElementById("lessonTitlesInput");
+const lessonDescriptionInput = document.getElementById("lessonDescriptionInput");
 const lessonContentInput = document.getElementById("lessonContentInput");
 const lessonStatus = document.getElementById("lessonStatus");
 
@@ -250,10 +252,12 @@ function startNewLesson() {
     editingLessonId = null;
     markActiveLesson();
     lessonTitleInput.value = "";
+    lessonTitlesInput.value = "";
+    lessonDescriptionInput.value = "";
     lessonContentInput.value = "";
-    draftTopicInput.value = "";
     lessonStatus.textContent = "";
     lessonStatus.className = "status";
+    refreshLessonForm();
 }
 
 async function editLesson(lessonId) {
@@ -267,9 +271,12 @@ async function editLesson(lessonId) {
         editingLessonId = lesson.id;
         markActiveLesson();
         lessonTitleInput.value = lesson.title;
+        lessonDescriptionInput.value = lesson.description || "";
         lessonContentInput.value = lesson.content;
         lessonStatus.textContent = "";
         lessonStatus.className = "status";
+        refreshLessonForm();
+        lessonForm.scrollIntoView({ block: "nearest", behavior: "smooth" });
     } catch (error) {
         showLessonStatus(error.message, "error");
     }
@@ -292,73 +299,276 @@ async function deleteLesson(lessonId) {
     }
 }
 
-async function draftLesson() {
-    if (activeLessonSubjectId === null) {
-        showLessonStatus("Choose a subject first.", "error");
-        return;
-    }
-    const topic = draftTopicInput.value.trim();
-    if (!topic) {
-        showLessonStatus("Enter a topic to draft first.", "error");
-        return;
-    }
+// --- The create-lessons form: optional file, 1-6 lessons, a description the AI writes the content from ---
+const sourceUploadRow = document.getElementById("sourceUploadRow");
+const sourceLibraryRow = document.getElementById("sourceLibraryRow");
+const sourceFileInput = document.getElementById("lessonFileInput");
+const materialSelect = document.getElementById("materialSelect");
 
-    await withButtonLoading(draftBtn, async () => {
-        draftBtn.textContent = "Drafting…";
-        const response = await fetch(
-            `${API}/subjects/${activeLessonSubjectId}/lessons/draft`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json", ...getHeaders() },
-                body: JSON.stringify({ topic }),
-            },
-        );
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || "Lesson draft failed.");
-        lessonContentInput.value = result.draft_content;
-        if (!lessonTitleInput.value) lessonTitleInput.value = topic;
-        showLessonStatus("Draft ready. Review it before saving.", "success");
-    }).catch(error => {
-        showLessonStatus(error.message, "error");
-    });
-    
-    draftBtn.textContent = "AI draft";
+// Drop zone for the lesson source file (same look as Upload Course Material, but one file; the hidden input still holds it).
+const lessonDropZone = document.getElementById("lessonDropZone");
+const lessonDropPlaceholder = document.getElementById("lessonDropPlaceholder");
+
+function renderLessonFileChip() {
+    lessonDropZone.querySelectorAll(".file-chip").forEach(chip => chip.remove());
+    const file = sourceFileInput.files[0];
+    lessonDropPlaceholder.style.display = file ? "none" : "block";
+    if (!file) return;
+    const chip = document.createElement("div");
+    chip.className = "file-chip";
+    const name = document.createElement("span");
+    name.className = "fname";
+    name.title = file.name;
+    name.textContent = file.name;
+    const removeButton = document.createElement("button");
+    removeButton.className = "fremove";
+    removeButton.type = "button";
+    removeButton.title = "Remove";
+    removeButton.setAttribute("aria-label", "Remove");
+    removeButton.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+    removeButton.addEventListener("click", () => { sourceFileInput.value = ""; renderLessonFileChip(); });
+    chip.append(name, removeButton);
+    lessonDropZone.appendChild(chip);
 }
 
-async function saveLesson() {
-    if (activeLessonSubjectId === null) {
-        showLessonStatus("Choose a subject first.", "error");
-        return;
+function setLessonFile(file) {
+    if (!file) return;
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    sourceFileInput.files = transfer.files;
+    renderLessonFileChip();
+}
+
+lessonDropZone.addEventListener("click", event => {
+    if (event.target.closest(".fremove")) return;
+    sourceFileInput.click();
+});
+lessonDropZone.addEventListener("keydown", event => {
+    if ((event.key === "Enter" || event.key === " ") && event.target === lessonDropZone) {
+        event.preventDefault();
+        sourceFileInput.click();
     }
+});
+lessonDropZone.addEventListener("dragover", event => { event.preventDefault(); lessonDropZone.classList.add("dragover"); });
+lessonDropZone.addEventListener("dragleave", () => lessonDropZone.classList.remove("dragover"));
+lessonDropZone.addEventListener("drop", event => {
+    event.preventDefault();
+    lessonDropZone.classList.remove("dragover");
+    setLessonFile(event.dataTransfer.files[0]);
+});
+sourceFileInput.addEventListener("change", renderLessonFileChip);
+
+const generateBtn = document.getElementById("generateBtn");
+const regenBtn = document.getElementById("regenBtn");
+const saveBtn = document.getElementById("saveBtn");
+const cancelBtn = document.getElementById("cancelBtn");
+const suggestTitlesBtn = document.getElementById("suggestTitlesBtn");
+
+const selectedCount = () => Number(lessonForm.elements.lessonCount.value) || 1;
+const sourceMode = () => lessonForm.elements.lessonSource.value;
+const splitLines = text => text.split("\n").map(line => line.trim()).filter(Boolean);
+
+function setCount(n) {
+    lessonForm.elements.lessonCount.value = String(Math.min(6, Math.max(1, n)));
+}
+
+// Shows only the fields that make sense: creating (1 title or a list of titles) or editing one lesson.
+function refreshLessonForm() {
+    const editing = editingLessonId !== null;
+    const count = editing ? 1 : selectedCount();
+    const multi = count > 1;
+    lessonFormHeading.textContent = editing ? "Edit lesson" : "Create lessons";
+    document.getElementById("sourceLegend").textContent = editing ? "Source file for rewriting (optional)" : "Source file (optional)";
+    document.getElementById("countField").hidden = editing;
+    document.getElementById("titleSingleField").hidden = multi;
+    document.getElementById("titleMultiField").hidden = !multi;
+    document.getElementById("lessonContentField").hidden = !editing;
+    document.getElementById("withQuizField").hidden = editing;
+    generateBtn.hidden = editing;
+    saveBtn.hidden = regenBtn.hidden = cancelBtn.hidden = !editing;
+    generateBtn.textContent = count === 1 ? "Generate lesson" : `Generate ${count} lessons`;
+    lessonTitlesInput.rows = Math.max(3, count);
+    document.getElementById("lessonDescriptionLabel").textContent = multi ? "Description of the lessons" : "Lesson description";
+    document.getElementById("lessonDescriptionHint").textContent = editing
+        ? "Changing this does not change the content until you press Rewrite content with AI."
+        : multi
+            ? `Describe what the ${count} lessons should cover together. The AI writes each one.`
+            : "The AI writes the full lesson from this.";
+    document.getElementById("titleSingleHint").hidden = editing;
+    sourceUploadRow.hidden = sourceMode() !== "upload";
+    sourceLibraryRow.hidden = sourceMode() !== "library";
+}
+
+// Going from 1 lesson to several (or back) carries the typed title over.
+lessonForm.addEventListener("change", event => {
+    if (event.target.name === "lessonCount") {
+        if (selectedCount() > 1 && lessonTitleInput.value.trim() && !lessonTitlesInput.value.trim()) {
+            lessonTitlesInput.value = lessonTitleInput.value.trim();
+        } else if (selectedCount() === 1 && !lessonTitleInput.value.trim()) {
+            lessonTitleInput.value = splitLines(lessonTitlesInput.value)[0] || "";
+        }
+    }
+    refreshLessonForm();
+});
+
+// The file the lessons are based on: { file, filename } (one of them, or neither). Throws if "upload"/"choose" is picked but empty.
+function readSource() {
+    if (sourceMode() === "upload") {
+        const file = sourceFileInput.files[0];
+        if (!file) throw new Error("Choose a file to upload, or pick \"No file\".");
+        return { file, filename: "" };
+    }
+    if (sourceMode() === "library") {
+        if (!materialSelect.value) throw new Error("Choose one of your uploaded files, or pick \"No file\".");
+        return { file: null, filename: materialSelect.value };
+    }
+    return { file: null, filename: "" };
+}
+
+function lessonRequest(source, fields) {
+    const form = new FormData();
+    Object.entries(fields).forEach(([key, value]) => form.append(key, value));
+    if (source.file) form.append("file", source.file);
+    if (source.filename) form.append("filename", source.filename);
+    return form;
+}
+
+const lessonsUrl = (path = "") => `${API}/subjects/${activeLessonSubjectId}/lessons${path}`;
+
+// Asks the AI for however many titles are still missing and returns typed + suggested titles, in order.
+async function completeTitles(count, typed, description, source) {
+    if (typed.length >= count) return typed.slice(0, count);
+    const { titles } = await postForm(lessonsUrl("/plan"),
+        lessonRequest(source, { count: count - typed.length, description, existing: typed.join("\n") }));
+    return [...typed, ...titles];
+}
+
+function typedTitles() {
+    return selectedCount() > 1 ? splitLines(lessonTitlesInput.value) : splitLines(lessonTitleInput.value).slice(0, 1);
+}
+
+async function suggestLessonFromMaterial() {
+    if (activeLessonSubjectId === null) return showLessonStatus("Choose a subject first.", "error");
+    const filename = materialSelect.value;
+    if (!filename) return showLessonStatus("Choose an uploaded file first.", "error");
+    await withButtonLoading(document.getElementById("suggestFromMaterialBtn"), async () => {
+        showLessonStatus("Reading the file and suggesting a lesson… this can take a minute.", "info");
+        const form = new FormData();
+        form.append("filename", filename);
+        const suggestion = await postForm(lessonsUrl("/suggest-from-file"), form);
+        editingLessonId = null;
+        lessonTitleInput.value = suggestion.title;
+        lessonDescriptionInput.value = suggestion.description;
+        lessonContentInput.value = suggestion.content;
+        refreshLessonForm();
+        document.getElementById("lessonContentField").hidden = false;
+        showLessonStatus("Suggested from the uploaded file. Edit the fields; nothing has been saved.", "success");
+    }).catch(error => showLessonStatus(error.message, "error"));
+}
+
+async function suggestTitles() {
+    if (activeLessonSubjectId === null) return showLessonStatus("Choose a subject first.", "error");
+    let source;
+    try { source = readSource(); } catch (error) { return showLessonStatus(error.message, "error"); }
+    await withButtonLoading(suggestTitlesBtn, async () => {
+        showLessonStatus("Planning the lessons… this can take a minute.", "info");
+        const titles = await completeTitles(selectedCount(), typedTitles(), lessonDescriptionInput.value.trim(), source);
+        lessonTitlesInput.value = titles.join("\n");
+        showLessonStatus("Edit the titles if you like, then press Generate.", "success");
+    }).catch(error => showLessonStatus(error.message, "error"));
+}
+
+// One request per lesson so a slow model never hits a timeout. Titles that were not written yet go back into
+// the form when something fails, so pressing Generate again carries on.
+async function generateLessons() {
+    if (activeLessonSubjectId === null) return showLessonStatus("Choose a subject first.", "error");
+    let source;
+    try { source = readSource(); } catch (error) { return showLessonStatus(error.message, "error"); }
+
+    const count = selectedCount();
+    const description = lessonDescriptionInput.value.trim();
+    const withQuiz = document.getElementById("withQuizInput").checked;
+    const typed = typedTitles();
+    let titles = typed, saved = [], quizFailures = 0;
+
+    lessonSubjectSelect.disabled = true;
+    await withButtonLoading(generateBtn, async () => {
+        if (typed.length < count) {
+            showLessonStatus(`Planning ${count === 1 ? "the lesson" : `${count} lessons`}… this can take a minute.`, "info");
+            titles = await completeTitles(count, typed, description, source);
+        }
+        for (let i = 0; i < titles.length; i++) {
+            showLessonStatus(`Writing lesson ${i + 1} of ${titles.length}: ${titles[i]}…`, "info");
+            const lesson = await postForm(lessonsUrl("/compose"),
+                lessonRequest(source, { title: titles[i], description, series: titles.join("\n"), save: "true" }));
+            saved.push(lesson);
+            await loadLessonList();
+            if (withQuiz) {
+                showLessonStatus(`Writing the quiz for lesson ${i + 1} of ${titles.length}: ${titles[i]}…`, "info");
+                try { await lessonPost(`${lesson.id}/quiz/generate`); } catch (_) { quizFailures++; }
+            }
+        }
+        const quizNote = quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "";
+        if (saved.length === 1) {
+            await editLesson(saved[0].id);   // open it so the teacher can read what the AI wrote
+            showLessonStatus(`Lesson saved. Read it below and edit anything you like.${quizNote}`, quizFailures ? "error" : "success");
+        } else {
+            startNewLesson();
+            showLessonStatus(`Done. ${saved.length} lessons saved.${quizNote} Review them before students see them.`, quizFailures ? "error" : "success");
+        }
+        loadStudents();
+    }).catch(error => {
+        const pending = titles.slice(saved.length);
+        if (pending.length > 1) { setCount(pending.length); lessonTitlesInput.value = pending.join("\n"); }
+        else if (pending.length === 1) { setCount(1); lessonTitleInput.value = pending[0]; }
+        refreshLessonForm();
+        const progress = saved.length ? ` ${saved.length} of ${titles.length} lesson(s) were saved before it stopped. The rest are still in the form, so you can press Generate again.` : "";
+        showLessonStatus(`${error.message}${progress}`, "error");
+    }).finally(() => {
+        lessonSubjectSelect.disabled = false;
+    });
+}
+
+// Edit mode: write new content from the title, description and file. Nothing is saved until Save changes.
+async function regenerateContent() {
+    const title = lessonTitleInput.value.trim();
+    if (!title) return showLessonStatus("A lesson title is required.", "error");
+    let source;
+    try { source = readSource(); } catch (error) { return showLessonStatus(error.message, "error"); }
+    if (lessonContentInput.value.trim() && !await uiConfirm(
+        "Replace the current content with new AI-written content?\n\nNothing is saved until you press Save changes.",
+        { title: "Rewrite content", okText: "Rewrite" })) return;
+    await withButtonLoading(regenBtn, async () => {
+        showLessonStatus("Writing the lesson… this can take a minute.", "info");
+        const result = await postForm(lessonsUrl("/compose"),
+            lessonRequest(source, { title, description: lessonDescriptionInput.value.trim(), save: "false" }));
+        lessonContentInput.value = result.content;
+        showLessonStatus("New content is ready. Read it, then press Save changes.", "success");
+    }).catch(error => showLessonStatus(error.message, "error"));
+}
+
+// Edit mode: save the title, description and content as they are in the form.
+async function saveLesson() {
+    if (activeLessonSubjectId === null || editingLessonId === null) return;
     const title = lessonTitleInput.value.trim();
     const content = lessonContentInput.value.trim();
-    if (!title || !content) {
-        showLessonStatus("Title and content are both required.", "error");
-        return;
-    }
-    const editing = editingLessonId !== null;
-    const url = `${API}/subjects/${activeLessonSubjectId}/lessons${editing ? `/${editingLessonId}` : ""}`;
-    try {
-        const response = await fetch(url, {
-            method: editing ? "PUT" : "POST",
+    if (!title) return showLessonStatus("A lesson title is required.", "error");
+    if (!content) return showLessonStatus("The content is empty. Press Rewrite content with AI first.", "error");
+    await withButtonLoading(saveBtn, async () => {
+        const response = await fetch(lessonsUrl(`/${editingLessonId}`), {
+            method: "PUT",
             headers: { "Content-Type": "application/json", ...getHeaders() },
-            body: JSON.stringify({ title, content }),
+            body: JSON.stringify({ title, content, description: lessonDescriptionInput.value.trim() }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.detail || "Couldn't save this lesson.");
         startNewLesson();
         showLessonStatus("Lesson saved.", "success");
         await loadLessonList();
-    } catch (error) {
-        showLessonStatus(error.message, "error");
-    }
+    }).catch(error => showLessonStatus(error.message, "error"));
 }
 
 loadLessonSubjects();
-
-const outlineBtn = document.getElementById("outlineBtn");
-const outlineInput = document.getElementById("outlineInput");
-const generateAllBtn = document.getElementById("generateAllBtn");
 
 async function lessonPost(path, body) {
     const response = await fetch(`${API}/subjects/${activeLessonSubjectId}/lessons/${path}`, {
@@ -371,60 +581,6 @@ async function lessonPost(path, body) {
     return result;
 }
 
-async function suggestOutline() {
-    if (activeLessonSubjectId === null) return showLessonStatus("Choose a subject first.", "error");
-    
-    await withButtonLoading(outlineBtn, async () => {
-        showLessonStatus("Planning the course… this can take a minute.", "");
-        const { titles } = await lessonPost("outline", { count: 6 });
-        outlineInput.value = titles.join("\n");
-        showLessonStatus("Edit the list if you like, then press Generate & save all.", "success");
-    }).catch(error => {
-        showLessonStatus(error.message, "error");
-    });
-}
-
-// One request per lesson so a slow local model never hits a timeout.
-// Finished titles leave the box, so after a failure you can just press the button again.
-async function generateAll() {
-    if (activeLessonSubjectId === null) return showLessonStatus("Choose a subject first.", "error");
-    const titles = outlineInput.value.split("\n").map(line => line.trim()).filter(Boolean);
-    if (!titles.length) return showLessonStatus("Add at least one lesson title first.", "error");
-    
-    await withButtonLoading(generateAllBtn, async () => {
-        let quizFailures = 0;
-        for (let i = 0; i < titles.length; i++) {
-            showLessonStatus(`Writing lesson ${i + 1} of ${titles.length}: ${titles[i]}…`, "");
-            const lesson = await lessonPost("generate", { topic: titles[i] });
-            outlineInput.value = titles.slice(i + 1).join("\n");
-            await loadLessonList();
-            if (document.getElementById("withQuizInput").checked) {
-                showLessonStatus(`Writing the quiz for lesson ${i + 1} of ${titles.length}: ${titles[i]}…`, "");
-                try {
-                    await lessonPost(`${lesson.id}/quiz/generate`);
-                } catch (_) {
-                    quizFailures++;
-                }
-            }
-        }
-        const quizNote = quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "";
-        showLessonStatus(`Done. ${titles.length} lesson(s) saved.${quizNote} Review them before students see them.`, quizFailures ? "error" : "success");
-    }).catch(error => {
-        showLessonStatus(error.message, "error");
-    });
-}
-
-async function reindexUploads() {
-    showLessonStatus("Re-indexing the uploaded files…", "");
-    try {
-        const response = await fetch(`${API}/materials/reindex`, { method: "POST", headers: getHeaders() });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || "Re-index failed.");
-        showLessonStatus(`Done. The AI now knows ${result.chunks} text chunks from your uploaded files.`, "success");
-    } catch (error) {
-        showLessonStatus(error.message, "error");
-    }
-}
 
 // --- Delete a subject: needs every admin's approval ---
 const deleteSubjectBtn = document.getElementById("deleteSubjectBtn");
@@ -604,10 +760,7 @@ async function requestSubjectDeletion() {
 window.addEventListener("focus", refreshDeletionState);
 setInterval(refreshDeletionState, 30000);
 
-// --- Generate lessons from an uploaded file; the AI picks the subject or proposes a new branch ---
-const materialSelect = document.getElementById("materialSelect");
-const fromFileBtn = document.getElementById("fromFileBtn");
-
+// --- The "Choose an uploaded file" list ---
 async function loadMaterialOptions() {
     try {
         const response = await fetch(`${API}/materials`, { headers: getHeaders() });
@@ -634,58 +787,4 @@ async function postJson(url, body) {
     return result;
 }
 
-async function generateFromFile() {
-    const filename = materialSelect.value;
-    if (!filename) return showLessonStatus("Choose an uploaded file first.", "error");
-    
-    lessonSubjectSelect.disabled = true;
-    
-    await withButtonLoading(fromFileBtn, async () => {
-        let written = 0, total = 0;
-        showLessonStatus("Reading the file and finding its branch… this can take a minute.", "");
-        const plan = await postJson(`${API}/subjects/analyze-material`, { filename, count: 5 });
-        if (plan.status === "not_math") {
-            throw new Error("The AI doesn't think this file is about mathematics, so no lessons were made.");
-        }
-
-        let subjectId = plan.subject_id;
-        if (plan.status === "new") {
-            if (!await uiConfirm(`The AI thinks this file is a different branch of math: "${plan.subject_name}".\n\nCreate it as a new subject and add the lessons there?`, { title: "New subject", okText: "Create" })) {
-                return showLessonStatus("Cancelled. Nothing was created.", "");
-            }
-            subjectId = (await postJson(`${API}/subjects/shared`, { name: plan.subject_name, description: plan.description })).id;
-        } else if (plan.status === "unclear") {
-            const current = lessonSubjectSelect.selectedOptions[0];
-            if (!current || !await uiConfirm(`The AI couldn't tell which branch this file belongs to.\n\nAdd the lessons to "${current.textContent}" instead?`, { title: "Which subject?", okText: "Add lessons" })) {
-                return showLessonStatus("Cancelled. Nothing was created.", "");
-            }
-            subjectId = activeLessonSubjectId;
-        }
-
-        await loadLessonSubjects(subjectId);
-        if (activeLessonSubjectId !== subjectId) throw new Error("Couldn't open the subject for this file.");
-        const subjectName = lessonSubjectSelect.selectedOptions[0].textContent;
-        startNewLesson();
-
-        total = plan.titles.length;
-        let quizFailures = 0;
-        for (let i = 0; i < total; i++) {
-            showLessonStatus(`Writing lesson ${i + 1} of ${total} for ${subjectName}: ${plan.titles[i]}…`, "");
-            const lesson = await lessonPost("generate-from-material", { filename, topic: plan.titles[i] });
-            written++;
-            await loadLessonList();
-            if (document.getElementById("withQuizInput").checked) {
-                showLessonStatus(`Writing the quiz for lesson ${i + 1} of ${total}: ${plan.titles[i]}…`, "");
-                try { await lessonPost(`${lesson.id}/quiz/generate`); } catch (_) { quizFailures++; }
-            }
-        }
-        const quizNote = quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "";
-        const where = plan.status === "new" ? `the new subject "${subjectName}"` : `"${subjectName}"`;
-        showLessonStatus(`Done. ${written} lesson(s) saved to ${where}.${quizNote} Review them before students see them.`, quizFailures ? "error" : "success");
-        loadStudents();
-    }).catch(error => {
-        showLessonStatus(error.message, "error");
-    }).finally(() => {
-        lessonSubjectSelect.disabled = false;
-    });
-}
+refreshLessonForm();

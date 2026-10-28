@@ -34,7 +34,7 @@ body { font-family: var(--font-body); font-size: 1rem; background: var(--bg); co
 .btn-sm { padding: 0.4rem 0.9rem; font-size: 0.85rem; border-radius: var(--r-sm); }
 .btn-block { width: 100%; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn:focus-visible, .branch-select:focus-visible, textarea:focus-visible, .lesson-form input:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+.btn:focus-visible, .branch-select:focus-visible, textarea:focus-visible, .lesson-form input[type="text"]:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
 
 /* ---- button loading state & spinner utility ---- */
 .btn.is-loading {
@@ -84,6 +84,10 @@ textarea { width: 100%; resize: vertical; }
 .file-chip .fremove { background: var(--border); border: none; color: var(--text); width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
                       font-size: 0.7rem; line-height: 1; flex-shrink: 0; }
 .file-chip .fremove:hover { background: var(--danger); color: #fff; }
+#sourceLibraryRow:not([hidden]) { display: grid; gap: 0.75rem; margin-top: 0.4rem; }
+#sourceLibraryRow .branch-select { width: 100%; max-width: 100%; text-overflow: ellipsis; }
+.drop-zone-compact { min-height: 4rem; padding: 0.9rem 1rem; margin: 0.6rem 0 0.3rem; }
+.drop-zone-compact:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
 .dup-warning { margin-top: 0.6rem; font-size: 0.82rem; color: #b45309; display: none; }
 .dup-warning.show { display: block; }
 
@@ -105,6 +109,7 @@ td.nowrap { white-space: nowrap; }
 
 /* ---- status messages ---- */
 .status { margin-top: 1rem; padding: 0.7rem 0.9rem; border-radius: 8px; display: none; font-size: 0.88rem; background: var(--bg-input); border: 1px solid var(--border); }
+.status.info { display: block; }
 .status.success { display: block; background: var(--ok2); color: var(--ok-ink); border-color: transparent; }
 .status.error { display: block; background: #FDE8E8; color: #7f1d1d; border-color: transparent; }
 [data-theme="dark"] .status.error { background: #4a1717; color: #fca5a5; }
@@ -125,9 +130,28 @@ td.nowrap { white-space: nowrap; }
 .lesson-row .lesson-delete { border: 0; background: transparent; color: var(--danger); cursor: pointer; font: inherit; font-size: 0.8rem; }
 .lesson-row .lesson-delete:hover { text-decoration: underline; }
 .lesson-form { display: grid; gap: 0.5rem; position: sticky; top: 1rem; }
-.lesson-form input { width: 100%; padding: 0.75rem 0.85rem; border: 1px solid var(--field-border); border-radius: var(--r-md); background: var(--bg-input); color: var(--text); font: inherit; }
+.lesson-form input[type="text"] { width: 100%; padding: 0.75rem 0.85rem; border: 1px solid var(--field-border); border-radius: var(--r-md); background: var(--bg-input); color: var(--text); font: inherit; }
 .lesson-form textarea { min-height: 340px; }
 .lesson-form .btn { justify-self: start; }
+.lesson-form h3 { font: 700 1.05rem var(--font-display); color: var(--heading); }
+.lesson-form [hidden] { display: none !important; }
+.lesson-form textarea.short { min-height: 0; }
+.lesson-form select, .lesson-form input[type="file"] { width: 100%; max-width: 100%; }
+.lf-group { display: grid; gap: 0.4rem; border: 0; min-width: 0; }
+.lf-group > legend { padding: 0; margin-bottom: 0.4rem; }
+.form-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.25rem; }
+.lesson-form .form-actions .btn { justify-self: auto; }
+
+/* one choice out of a few: source file, number of lessons */
+.seg { display: inline-flex; flex-wrap: wrap; gap: 0.35rem; }
+.seg-opt { position: relative; cursor: pointer; }
+.seg-opt input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.seg-opt span { display: block; padding: 0.45rem 0.9rem; border: 1px solid var(--field-border); border-radius: var(--r-md);
+                background: var(--bg-input); color: var(--text); font-size: 0.9rem; font-weight: 500; }
+.seg-opt:hover span { border-color: var(--accent); }
+.seg-opt input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.seg-opt input:focus-visible + span { outline: 3px solid var(--sun); outline-offset: 2px; }
+.seg-count .seg-opt span { min-width: 2.6rem; text-align: center; padding-inline: 0.6rem; }
 
 /* ---- admin: modals ---- */
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(14, 18, 38, 0.6); z-index: 100; align-items: center; justify-content: center; }

@@ -170,10 +170,12 @@ class Lesson(Base):
     id = Column(Integer, primary_key=True, index=True)
     subject_id = Column(Integer, ForeignKey("subjects.id"), index=True, nullable=False)
     title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)   # what the teacher asked for; the AI writes `content` from it
     content = Column(Text, nullable=False)
     order_index = Column(Integer, default=0)
     prerequisite_id = Column(Integer, ForeignKey("lessons.id"), nullable=True)
     created_by = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="published", index=True)  # draft | published
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

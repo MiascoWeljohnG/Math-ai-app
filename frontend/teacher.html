@@ -73,47 +73,76 @@
                     <h3>Lessons</h3>
                     <div id="lessonListEl" class="lesson-list"></div>
                 </div>
-                <div class="panel">
-                    <h3>AI draft</h3>
-                    <div class="stack">
-                        <label for="draftTopicInput" class="label">Topic</label>
-                        <input id="draftTopicInput" class="branch-select" maxlength="160" placeholder="e.g. linear equations">
-                        <button class="btn btn-secondary btn-block" type="button" id="draftBtn" onclick="draftLesson()">AI draft</button>
-                    </div>
-                </div>
-                <div class="panel">
-                    <h3>Generate a whole course</h3>
-                    <div class="stack">
-                        <button class="btn btn-secondary btn-block" type="button" id="outlineBtn" onclick="suggestOutline()">Suggest 6 lessons</button>
-                        <textarea id="outlineInput" rows="6" aria-label="Lesson titles, one per line" placeholder="One lesson title per line. Edit freely, then generate."></textarea>
-                        <label class="check"><input type="checkbox" id="withQuizInput" checked> Also create a quiz for each lesson</label>
-                        <button class="btn btn-primary btn-block" type="button" id="generateAllBtn" onclick="generateAll()">Generate &amp; save all</button>
-                    </div>
-                </div>
-                <div class="panel">
-                    <h3>Generate from an uploaded file</h3>
-                    <div class="stack">
-                        <label for="materialSelect" class="label">Uploaded file</label>
-                        <select id="materialSelect" class="branch-select"></select>
-                        <p class="hint">The AI reads the file and adds lessons to the matching subject. If it is a different branch of math, it offers to create a new subject. Uses the quiz option above.</p>
-                        <button class="btn btn-primary btn-block" type="button" id="fromFileBtn" onclick="generateFromFile()">Generate lessons from file</button>
-                    </div>
-                </div>
-                <div class="panel">
-                    <h3>Knowledge base</h3>
-                    <div class="stack">
-                        <button class="btn btn-secondary btn-block" type="button" onclick="reindexUploads()">Re-index uploaded files</button>
-                    </div>
-                </div>
             </div>
-            <div class="lesson-form">
-                <label for="lessonTitleInput" class="label">Lesson title</label>
-                <input id="lessonTitleInput" type="text" maxlength="200" placeholder="Lesson title">
-                <label for="lessonContentInput" class="label">Lesson content</label>
-                <textarea id="lessonContentInput" maxlength="100000" placeholder="Lesson content (Markdown and LaTeX supported)"></textarea>
-                <button class="btn btn-primary" type="button" onclick="saveLesson()">Save lesson</button>
+
+            <form class="lesson-form" id="lessonForm" onsubmit="return false" novalidate>
+                <h3 id="lessonFormHeading">Create lessons</h3>
+
+                <fieldset class="lf-group">
+                    <legend class="label" id="sourceLegend">Source file <span class="opt">(optional)</span></legend>
+                    <div class="seg" role="radiogroup">
+                        <label class="seg-opt"><input type="radio" name="lessonSource" value="none" checked><span>No file</span></label>
+                        <label class="seg-opt"><input type="radio" name="lessonSource" value="upload"><span>Upload a file</span></label>
+                        <label class="seg-opt"><input type="radio" name="lessonSource" value="library"><span>Choose an uploaded file</span></label>
+                    </div>
+                    <div id="sourceUploadRow" hidden>
+                        <div class="drop-zone drop-zone-compact" id="lessonDropZone" role="button" tabindex="0" aria-label="File to base the lessons on">
+                            <p class="placeholder" id="lessonDropPlaceholder">Drag &amp; drop a PDF or Word file here, or click to browse</p>
+                        </div>
+                        <input type="file" id="lessonFileInput" accept=".pdf,.docx,.txt,.md" style="display:none" aria-label="File to base the lessons on">
+                        <p class="hint">Only used to write these lessons. It is not added to Your Uploaded Files.</p>
+                    </div>
+                    <div id="sourceLibraryRow" hidden>
+                        <select id="materialSelect" class="branch-select" aria-label="Uploaded file to base the lessons on"></select>
+                        <button class="btn btn-secondary btn-block" type="button" id="suggestFromMaterialBtn" onclick="suggestLessonFromMaterial()">Suggest lesson from file</button>
+                    </div>
+                </fieldset>
+
+                <fieldset class="lf-group" id="countField">
+                    <legend class="label">How many lessons?</legend>
+                    <div class="seg seg-count" role="radiogroup">
+                        <label class="seg-opt"><input type="radio" name="lessonCount" value="1" checked><span>1</span></label>
+                        <label class="seg-opt"><input type="radio" name="lessonCount" value="2"><span>2</span></label>
+                        <label class="seg-opt"><input type="radio" name="lessonCount" value="3"><span>3</span></label>
+                        <label class="seg-opt"><input type="radio" name="lessonCount" value="4"><span>4</span></label>
+                        <label class="seg-opt"><input type="radio" name="lessonCount" value="5"><span>5</span></label>
+                        <label class="seg-opt"><input type="radio" name="lessonCount" value="6"><span>6</span></label>
+                    </div>
+                </fieldset>
+
+                <div class="lf-group" id="titleSingleField">
+                    <label for="lessonTitleInput" class="label">Lesson title</label>
+                    <input id="lessonTitleInput" type="text" maxlength="200" placeholder="e.g. Solving linear equations">
+                    <p class="hint" id="titleSingleHint">Leave it blank and the AI chooses a title.</p>
+                </div>
+
+                <div class="lf-group" id="titleMultiField" hidden>
+                    <label for="lessonTitlesInput" class="label">Lesson titles <span class="opt">(one per line)</span></label>
+                    <textarea id="lessonTitlesInput" class="short" rows="3" placeholder="Type the titles you already have. The AI fills in the rest."></textarea>
+                    <button class="btn btn-secondary btn-sm" type="button" id="suggestTitlesBtn" onclick="suggestTitles()">Suggest missing titles</button>
+                </div>
+
+                <div class="lf-group">
+                    <label for="lessonDescriptionInput" class="label" id="lessonDescriptionLabel">Lesson description</label>
+                    <textarea id="lessonDescriptionInput" class="short" maxlength="5000" rows="4" placeholder="What should students learn? Mention the level, examples to include, or anything to avoid."></textarea>
+                    <p class="hint" id="lessonDescriptionHint">The AI writes the full lesson from this.</p>
+                </div>
+
+                <div class="lf-group" id="lessonContentField" hidden>
+                    <label for="lessonContentInput" class="label">Lesson content <span class="opt">(written by the AI, Markdown and LaTeX supported)</span></label>
+                    <textarea id="lessonContentInput" maxlength="100000" placeholder="The lesson content appears here."></textarea>
+                </div>
+
+                <label class="check" id="withQuizField"><input type="checkbox" id="withQuizInput" checked> Also create a quiz for each lesson</label>
+
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="button" id="generateBtn" onclick="generateLessons()">Generate lesson</button>
+                    <button class="btn btn-primary" type="button" id="saveBtn" onclick="saveLesson()" hidden>Save changes</button>
+                    <button class="btn btn-secondary" type="button" id="regenBtn" onclick="regenerateContent()" hidden>Rewrite content with AI</button>
+                    <button class="btn btn-secondary" type="button" id="cancelBtn" onclick="startNewLesson()" hidden>Cancel</button>
+                </div>
                 <div class="status" id="lessonStatus" role="status" aria-live="polite"></div>
-            </div>
+            </form>
         </div>
     </div>
 
