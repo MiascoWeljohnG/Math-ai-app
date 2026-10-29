@@ -1,0 +1,72 @@
+/* Shared restyle layer for the inner pages. Loaded after each page's own <style>, before mobile.css. */
+:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+main, .wrap { font-family: var(--font-body); }
+
+/* page headings */
+.page-head h1, main > h1 { font: 800 clamp(1.9rem, 3.2vw, 2.6rem)/1.08 var(--font-display); letter-spacing: -0.025em; color: var(--text); }
+.page-head .back { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: var(--bg-elevated); border: 1px solid var(--border); font-size: 1.3rem; }
+.page-head .back:hover { background: var(--hover-bg); }
+@media (min-width: 821px) { body.has-sidebar .page-head .back { display: none; } }
+main { padding-left: clamp(1rem, 3vw, 2.5rem) !important; padding-right: clamp(1rem, 3vw, 2.5rem) !important; }
+
+/* cards */
+.card, .lesson-content, .panel { border-radius: var(--r-xl); box-shadow: none; border-color: var(--border); }
+.lesson-content { padding: clamp(1.25rem, 3vw, 2.2rem); }
+.lesson-modal, dialog.modal { border-radius: var(--r-xl); border-color: var(--border); box-shadow: var(--shadow-pop); }
+.lesson-modal::backdrop, dialog.modal::backdrop { background: rgba(14, 18, 38, 0.55); }
+.modal-header h2 { font: 700 1.35rem var(--font-display); letter-spacing: -0.02em; }
+
+/* subject pills, chips, buttons */
+.subjects-row { border-bottom: 0; }
+.subject-btn { border-color: var(--border); box-shadow: none; font-family: var(--font-body); }
+.subject-btn.active, .chip.next, .branch-chip.active, .lesson.done .num, .complete-btn.done { color: var(--on-accent); }
+.subject-btn.active, .branch-chip.active { background: var(--accent); border-color: var(--accent); }
+.complete-btn { border-radius: var(--r-md); border-color: var(--border); }
+.complete-btn:hover { background: var(--pri2); color: var(--accent); }
+.complete-btn.done { background: var(--accent); }
+#lessonListContainer button { border-radius: var(--r-md); }
+.progress-track, .track, .bar { background: var(--pri2); }
+.progress-fill, .track > *, .bar > span { background: var(--accent); }
+.chip.level-struggling { color: var(--danger); border-color: var(--danger); }
+.chip.level-developing { color: var(--sun-ink); border-color: var(--sun); background: var(--sun2); }
+.chip.level-mastered { color: var(--ok-ink); border-color: var(--ok); background: var(--ok2); }
+.lesson .num { border-color: var(--field-border); }
+
+/* quiz + practice use their own green tokens; point them at the palette */
+:root, [data-theme="light"], [data-theme="dark"] {
+    --q-mint: var(--pri2); --q-panel: var(--bg-elevated); --q-green: var(--accent); --q-ink: var(--accent); --q-on-green: var(--on-accent);
+}
+.btn { font-family: var(--font-body); }
+.answer-wrap input { font-family: var(--font-body); }
+.q.bad { border-color: var(--danger); }
+.error { color: var(--danger); }
+
+/* profile */
+.card .btn-save, .btn-save { background: var(--accent); color: var(--on-accent); border-color: var(--accent); border-radius: var(--r-sm); }
+[data-theme="dark"] .btn-save { background: var(--accent); color: var(--on-accent); }
+.btn-cancel, .btn-photo { border-radius: var(--r-sm); }
+.avatar img { background: var(--accent); }
+.msg.ok { color: var(--ok-ink); }
+.lbl .opt { font-weight: 400; color: var(--text-muted); }
+.inp input:focus, .inp select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* chat (user.html) */
+.msg { border-radius: var(--r-lg) !important; }
+.msg.user { color: var(--on-accent) !important; border-bottom-right-radius: 6px !important; }
+.msg.bot { border-bottom-left-radius: 6px !important; }
+.input-area button:not(.attach-btn) { color: var(--on-accent) !important; border-radius: var(--r-md) !important; }
+.input-area input[type="text"] { border-radius: var(--r-md) !important; }
+.new-chat-btn { border-radius: var(--r-md) !important; }
+.convo-item { border-left-color: transparent; border-radius: var(--r-sm) !important; }
+.convo-item.active { color: var(--accent) !important; }
+.sidebar { background: var(--bg-elevated) !important; }
+
+/* modules (materials.html) */
+.ask-msg.user, .ask-input-row button { color: var(--on-accent) !important; }
+.ask-msg { border-radius: var(--r-md) !important; }
+.file-item.active { background: var(--nav-active-bg) !important; color: var(--accent) !important; font-weight: 600; }
+.file-item { border-radius: var(--r-sm) !important; }
+.branch-chip { font-family: var(--font-body); }
+
+/* dashboard pages keep a visible gap below the last card */
+body > .page { padding-bottom: 4rem; }

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>School Admin Dashboard</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/mobile.css?v=1">
+    <link rel="stylesheet" href="css/admin-profile.css?v=1">
+</head>
+<body>
+<div class="page">
+    <div class="header">
+        <h1>School Admin <span class="tag" id="schoolBadge" style="display:none;"></span></h1>
+        <div class="header-actions">
+            <button class="btn btn-secondary" id="openTeacherModalBtn">+ Add Teacher</button>
+            <div class="bell-wrap" id="bellWrap">
+                <button type="button" class="btn btn-secondary bell-btn" id="bellBtn" aria-label="Notifications" aria-haspopup="true" aria-expanded="false">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                    <span class="bell-badge" id="bellBadge" style="display:none;">0</span>
+                </button>
+                <div class="bell-panel" id="bellPanel" role="dialog" aria-label="Notifications">
+                    <div class="bell-head">
+                        <strong>Notifications</strong>
+                        <span class="bell-head-actions">
+                            <button type="button" class="link-btn" id="bellReadAll">Mark all read</button>
+                            <button type="button" class="link-btn" id="bellClear">Clear</button>
+                        </span>
+                    </div>
+                    <div class="bell-list" id="bellList"></div>
+                    <p class="empty bell-empty" id="bellEmpty">You're all caught up.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section" id="approvalSection">
+        <div class="section-head">
+            <h2>Pending student approvals <span class="tag" id="pendingCount" style="display:none;">0</span></h2>
+            <p class="hint">Students who signed up for your school. Open the certificate, then approve or reject. A rejected student sees your reason and can send a new certificate.</p>
+        </div>
+        <div class="table-wrap">
+            <table id="pendingTable">
+                <thead><tr><th>Student ID</th><th>Name</th><th>Email</th><th>Submitted</th><th>Checks</th><th>Certificate</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <p id="noPending" class="empty">No one is waiting for approval.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <h2>Subject deletion requests <span class="tag" id="deletionCount" style="display:none;">0</span></h2>
+            <p class="hint">Teachers ask to delete a subject; you decide. Approving permanently deletes the subject, its lessons and quizzes, and students' progress on it.</p>
+        </div>
+        <div class="stack" id="deletionList"></div>
+        <p class="empty" id="noDeletions">No pending requests.</p>
+    </div>
+
+    <div class="section">
+        <h2>Teachers &amp; Students</h2>
+        <div class="field-row" style="margin-bottom:0.75rem;">
+            <label for="roleFilter" class="label">Show</label>
+            <select id="roleFilter" class="branch-select">
+                <option value="all">Everyone</option>
+                <option value="user">Students</option>
+                <option value="teacher">Teachers</option>
+                <option value="school_admin">School admins</option>
+            </select>
+            <span id="userCount" class="hint"></span>
+        </div>
+        <div class="table-wrap">
+            <table id="usersTable">
+                <thead><tr><th>Username</th><th>Last Name</th><th>First Name</th><th>Middle Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <h2>Files from your school</h2>
+            <p class="hint">Uploaded by your school's teachers, newest first.</p>
+        </div>
+        <div class="table-wrap">
+            <table id="filesTable">
+                <thead><tr><th>File</th><th>Branch</th><th>Uploaded by</th><th>Uploaded</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <p id="noFiles" class="empty">No files uploaded yet.</p>
+    </div>
+
+    <div class="section">
+        <div class="section-head">
+            <h2>Audit log</h2>
+            <p class="hint">What happened in your school, newest first: sign-ups, approvals and rejections, certificates opened, accounts created, files and subjects deleted. Only your school's events are shown.</p>
+            <button class="btn btn-secondary btn-sm" type="button" id="auditRefresh">Refresh</button>
+        </div>
+        <div class="table-wrap">
+            <table id="auditTable">
+                <thead><tr><th>When</th><th>Who</th><th>What</th><th>About</th><th>Note</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <p id="noAudit" class="empty">Nothing has happened yet.</p>
+    </div>
+
+    <div class="modal-overlay" id="teacherModal">
+        <div class="modal">
+            <button class="close-btn" id="closeTeacherModal">&times;</button>
+            <h2>Add Teacher Account</h2>
+            <form id="teacherForm">
+                <label>Username</label><input type="text" id="teacherUsername" required>
+                <label>Last name</label><input type="text" id="teacherLastName" required>
+                <label>First name</label><input type="text" id="teacherFirstName" required>
+                <label>Middle name <span class="opt">(optional)</span></label><input type="text" id="teacherMiddleName">
+                <label>Email</label><input type="email" id="teacherEmail" required>
+                <label>Birthday</label><input type="date" id="teacherBirthday" required>
+                <label>Temporary password (at least 8 characters)</label><input type="password" id="teacherPassword" required minlength="8">
+                <div class="status" id="teacherStatus"></div>
+                <button type="submit">Create Teacher Account</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/material-table.js"></script>
+    <script src="js/school-admin.js"></script>
+    <script src="js/approvals.js"></script>
+    <script src="js/school-admin-extras.js"></script>
+    <script>
+        requireRole("school_admin");
+        initNavDrawer({ staff: true });
+    </script>
+</body>
+</html>

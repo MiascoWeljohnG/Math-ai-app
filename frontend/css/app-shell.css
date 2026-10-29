@@ -1,0 +1,24 @@
+/* Page chrome shared by the student pages: the slim top bar (phones only, because on desktop the
+   sidebar carries the brand) and a quiet footer. */
+.app-header {
+    display: flex; align-items: center; gap: 0.9rem;
+    background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px);
+    padding: 0.6rem 1.25rem; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 30;
+}
+.brand { display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; }
+
+.bottom-footer {
+    width: 100%; background: none; color: var(--text-muted); text-align: left;
+    font: 400 0.82rem var(--font-body); padding: 1.25rem clamp(1rem, 3vw, 2.5rem) 1.5rem;
+    margin-top: auto;
+}
+.bottom-footer .sep { margin: 0 0.5rem; opacity: 0.5; }
+
+body { display: flex; flex-direction: column; min-height: 100vh; }
+main { flex: 1; }
+footer { width: 100%; }
+
+/* Shared page title: used by Lessons, Roadmap, Modules, Profile and the dashboards */
+.page-title { font: 800 clamp(1.9rem, 3.2vw, 2.6rem)/1.08 var(--font-display); letter-spacing: -0.025em; color: var(--text); }
+.page-sub { color: var(--text-muted); margin-top: 0.4rem; }

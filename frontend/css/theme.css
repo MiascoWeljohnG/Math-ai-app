@@ -1,0 +1,170 @@
+/* IsipNayan design tokens.
+   Palette and type follow the website reference: indigo for action, sun-yellow for emphasis, green for
+   success, on a cool off-white (light) or deep navy (dark). The older variable names (--accent, --border,
+   --heading ...) are kept and now point at this palette, so every page picks it up. */
+:root, [data-theme="light"] {
+    --bg: #F2F5FA;
+    --bg-elevated: #ffffff;
+    --bg-elevated-2: #ffffff;
+    --bg-input: #F7F9FD;
+    --text: #151B3A;
+    --text-muted: #5F678C;
+    --border: #E3E8F3;
+    --hover-bg: #EEF1FB;
+    --accent: #3446D6;
+    --accent-hover: #2A39B8;
+    --on-accent: #ffffff;
+    --danger: #D64545;
+    --danger-hover: #B93636;
+    --bubble-user: #3446D6;
+    --bubble-bot: #EEF1FB;
+
+    --heading: #151B3A;
+    --strip-bg: #151B3A;
+    --header-bg: #F2F5FA;
+    --card-cream: #ffffff;
+    --card-tile: #ffffff;
+    --card-mint: #ffffff;
+    --field-border: #CBD3E8;
+    --nav-active-bg: #E9ECFD;
+    --nav-active-bar: #3446D6;
+
+    --pri2: #E9ECFD;
+    --sun: #FFB627;
+    --sun2: #FFF3D6;
+    --sun-ink: #8A5A00;
+    --ok: #1FA37A;
+    --ok2: #DFF6EE;
+    --ok-ink: #11704F;
+    --hero-card: #151B3A;
+    --hero-card-text: #ffffff;
+
+    --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+    --font-body: 'Figtree', system-ui, sans-serif;
+    --r-sm: 10px;
+    --r-md: 14px;
+    --r-lg: 22px;
+    --r-xl: 28px;
+    --sidebar-w: 272px;
+    --shadow-pop: 0 12px 32px rgba(21, 27, 58, 0.14);
+}
+
+[data-theme="dark"] {
+    --bg: #0E1226;
+    --bg-elevated: #171C38;
+    --bg-elevated-2: #171C38;
+    --bg-input: #11152C;
+    --text: #EEF0FB;
+    --text-muted: #9AA2C6;
+    --border: #262C4F;
+    --hover-bg: #1F2547;
+    --accent: #7A8BFF;
+    --accent-hover: #93A0FF;
+    --on-accent: #0E1226;
+    --danger: #EF6B6B;
+    --danger-hover: #F28585;
+    --bubble-user: #7A8BFF;
+    --bubble-bot: #1F2547;
+
+    --heading: #EEF0FB;
+    --strip-bg: #0A0D1E;
+    --header-bg: #0E1226;
+    --card-cream: #171C38;
+    --card-tile: #171C38;
+    --card-mint: #171C38;
+    --field-border: #3A4270;
+    --nav-active-bg: #222A5C;
+    --nav-active-bar: #7A8BFF;
+
+    --pri2: #222A5C;
+    --sun2: #3A2F12;
+    --sun-ink: #FFC95C;
+    --ok2: #12352B;
+    --ok-ink: #5FD3AB;
+    --hero-card: #1D2352;
+    --hero-card-text: #EEF0FB;
+    --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Sun/moon theme switch (Uiverse.io by andrew-demchenk0), classes prefixed
+   ts- so it can't collide with this site's own `input { ... }` rules. */
+.ts-switch {
+    font-size: 17px;
+    position: relative;
+    display: inline-block;
+    width: 64px;
+    height: 34px;
+    vertical-align: middle;
+}
+.ts-switch .ts-input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.ts-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #C9D1F5;
+    transition: .4s;
+    border-radius: 30px;
+}
+.ts-slider:before {
+    position: absolute;
+    content: "";
+    height: 30px;
+    width: 30px;
+    border-radius: 20px;
+    left: 2px;
+    bottom: 2px;
+    z-index: 2;
+    background-color: #e8e8e8;
+    transition: .4s;
+}
+.ts-sun svg {
+    position: absolute;
+    top: 6px;
+    left: 36px;
+    z-index: 1;
+    width: 24px;
+    height: 24px;
+}
+.ts-moon svg {
+    fill: #C9D1F5;
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    z-index: 1;
+    width: 24px;
+    height: 24px;
+}
+.ts-sun svg { animation: ts-rotate 15s linear infinite; }
+@keyframes ts-rotate { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
+.ts-moon svg { animation: ts-tilt 5s linear infinite; }
+@keyframes ts-tilt {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+    100% { transform: rotate(0deg); }
+}
+.ts-input:checked + .ts-slider { background-color: #2A3263; }
+.ts-input:focus-visible + .ts-slider { outline: 3px solid var(--sun); outline-offset: 2px; }
+.ts-input:checked + .ts-slider:before { transform: translateX(30px); }
+
+/* Inline SVG icons (replace emojis). Size with font-size, colour with `color`. */
+.icon { width: 1.1em; height: 1.1em; flex: none; vertical-align: -0.18em; fill: none; stroke: currentColor;
+        stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+@media (prefers-reduced-motion: reduce) {
+    .ts-sun svg, .ts-moon svg { animation: none; }
+}
+
+/* Brand mark: indigo tile with a sun dot, plus the wordmark (matches the website reference). */
+.brand-lockup { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text);
+                font: 800 21px/1 var(--font-display); letter-spacing: -0.025em; }
+.brand-mark { width: 32px; height: 32px; border-radius: 10px; background: var(--accent); display: grid; place-items: center; flex: none; }
+.brand-mark::before { content: ""; width: 13px; height: 13px; border-radius: 50%; background: var(--sun); }
+
+/* Initials avatar used in the sidebar user card and in lists. */
+.avatar-initials { width: 40px; height: 40px; border-radius: 50%; background: var(--sun); color: #151B3A; flex: none;
+                   display: grid; place-items: center; font: 700 15px/1 var(--font-display); }
