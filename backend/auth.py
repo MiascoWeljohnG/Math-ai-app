@@ -9,6 +9,9 @@ import config
 from database import get_db
 from models import ACTIVE, PENDING, REJECTED, User
 
+# How often an account's "last seen" time is refreshed. Throttled so a busy page does not write on every request.
+LAST_SEEN_EVERY = timedelta(seconds=60)
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
@@ -30,6 +33,19 @@ def create_access_token(data: dict) -> str:
     expire = datetime.utcnow() + timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, config.SECRET_KEY, algorithm=config.ALGORITHM)
+
+def _touch_last_seen(db: Session, user: User) -> None:
+    """Remember that this account is using the system right now (the school admin's overview counts it).
+    Best effort: a failed write must never fail the request itself."""
+    now = datetime.utcnow()
+    if user.last_seen_at and now - user.last_seen_at < LAST_SEEN_EVERY:
+        return
+    try:
+        user.last_seen_at = now
+        db.commit()
+    except Exception:
+        db.rollback()
+
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
@@ -53,6 +69,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user.status != ACTIVE:
         detail = {PENDING: "Your account is waiting for approval.", REJECTED: "Your registration was not approved."}
         raise HTTPException(status_code=403, detail=detail.get(user.status, "This account is not active."))
+    _touch_last_seen(db, user)
     return user
 
 # Roles are user (student), teacher and school_admin. A school admin is the highest role and only ever works

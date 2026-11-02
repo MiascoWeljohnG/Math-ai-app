@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>Rankings — IsipNayan</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/app-shell.css">
+    <link rel="stylesheet" href="css/home.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/mobile.css?v=1">
+</head>
+<body class="home">
+    <header class="app-header">
+        <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+        <a class="brand-lockup" href="landing.html"><span class="brand-mark" aria-hidden="true"></span>IsipNayan</a>
+    </header>
+
+    <main class="content">
+        <header class="home-head">
+            <div>
+                <h1 class="page-title">Student rankings</h1>
+                <p class="page-sub">See how you stack up against other students in your school.</p>
+            </div>
+            <span class="tag" id="schoolBadge" style="display:none;"></span>
+        </header>
+
+        <section class="panel" id="rankingsPanel">
+            <div class="panel-bar">
+                <label for="rankBranch">Branch</label>
+                <select id="rankBranch"></select>
+            </div>
+            <p class="panel-note">Ranked by lessons passed, then average best score, then total time.</p>
+            <div class="table-scroll">
+                <table class="rank-table">
+                    <thead><tr><th>#</th><th>Student</th><th>Lessons passed</th><th>Avg score</th><th>Time</th></tr></thead>
+                    <tbody id="rankBody"></tbody>
+                </table>
+            </div>
+            <p class="panel-note" id="rankEmpty" hidden></p>
+        </section>
+    </main>
+
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/rankings.js"></script>
+    <script>
+        requireAuth(); initNavDrawer();
+
+        initRankings({
+            select: document.getElementById("rankBranch"),
+            body: document.getElementById("rankBody"),
+            empty: document.getElementById("rankEmpty"),
+            limit: 50,
+        });
+    </script>
+    <footer class="bottom-footer">All Rights Reserved <span class="sep">|</span> @2026</footer>
+</body>
+</html>

@@ -1,7 +1,7 @@
 """Works out what math topic an uploaded PDF/DOCX is about.
 
 Three jobs, all built on rag.generate_text (so they use whichever model the app is
-configured for: Groq, Hermes or local Ollama):
+configured for: Groq, Gemini or Hermes):
 
   * classify_branch    - Algebra / Geometry / Statistics / Calculus / not math (teacher + admin uploads)
   * check_relevance    - does this file belong to a given subject? (lesson generation)
@@ -10,7 +10,7 @@ configured for: Groq, Hermes or local Ollama):
 The model is asked for plain "Label: number" lines instead of JSON, like the quiz generator,
 because small local models break JSON and LaTeX backslashes.
 
-rag.py is imported inside the functions on purpose: it pulls in Chroma/Ollama, and keeping
+rag.py is imported inside the functions on purpose: it pulls in Chroma, and keeping
 this module's import light is what lets the parsing code be tested without them.
 """
 import json

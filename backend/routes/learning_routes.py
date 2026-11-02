@@ -163,6 +163,40 @@ def rankings(
         "branches": [{"id": s.id, "name": s.name} for s in shared],
         "entries": table[:limit],
         "me": next((r for r in table[limit:] if r["you"]), None),
+        "total": len(table),   # how many students are ranked
+    }
+
+
+# ---------------------------------------------------------------- overview (landing page)
+@router.get("/overview")
+def overview(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """The student's numbers for the landing page: lessons available and viewed, quizzes taken with the
+    average score and time spent, and their overall rank among the students of their own school."""
+    subject_ids = [i for (i,) in db.query(Subject.id).filter(visible_subjects(user))]
+    lesson_ids = [i for (i,) in db.query(Lesson.id).filter(
+        Lesson.subject_id.in_(subject_ids), Lesson.status == "published")]
+
+    viewed = db.query(LessonCompletion.lesson_id).filter(
+        LessonCompletion.user_id == user.id, LessonCompletion.lesson_id.in_(lesson_ids)).distinct().count()
+    quizzes_available = db.query(LessonQuiz.id).filter(LessonQuiz.lesson_id.in_(lesson_ids)).count()
+
+    attempts = db.query(QuizAttempt.lesson_id, QuizAttempt.score, QuizAttempt.total, QuizAttempt.seconds).filter(
+        QuizAttempt.user_id == user.id, QuizAttempt.lesson_id.in_(lesson_ids)).all()
+    percents = [score * 100 / max(total, 1) for _, score, total, _ in attempts]
+
+    board = rankings(subject_id=None, limit=1, user=user, db=db)   # same ranking as the table below, all branches
+    mine = next((r for r in [*board["entries"], board["me"]] if r and r["you"]), None)
+
+    return {
+        "lessons_available": len(lesson_ids),
+        "lessons_viewed": viewed,
+        "quizzes_available": quizzes_available,
+        "quizzes_done": len({lesson_id for lesson_id, *_ in attempts}),   # different quizzes taken at least once
+        "quiz_attempts": len(attempts),
+        "average_percent": round(sum(percents) / len(percents)) if percents else None,
+        "seconds": sum(seconds or 0 for *_, seconds in attempts),
+        "rank": mine["rank"] if mine else None,
+        "ranked_students": board["total"],
     }
 
 

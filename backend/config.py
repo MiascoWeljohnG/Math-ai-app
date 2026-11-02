@@ -44,8 +44,6 @@ MAX_SUBMISSIONS = int(os.getenv("MAX_SUBMISSIONS", "3"))   # first try + resubmi
 # Per client address per hour. Generous on purpose: a whole class signing up from one school network shares one address.
 SIGNUP_ATTEMPTS_PER_HOUR = int(os.getenv("SIGNUP_ATTEMPTS_PER_HOUR", "30"))
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-
 # File storage. "auto" = Google Drive when the four GOOGLE_*/DRIVE_* values below are set, otherwise the
 # local uploads folder (fine for development, but Render's disk is wiped on every redeploy/restart).
 # "drive" = always Drive (a missing value is reported as an error instead of silently using the disk),
@@ -56,12 +54,9 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN", "")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "")
 
-# Embeddings (used to index uploads). "ollama" = local dev. "gemini" = hosted, REQUIRED on Render,
-# because Render has no Ollama server to talk to.
-EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "ollama").lower()
+# Embeddings (used to index uploads and search them). Hosted through Gemini, so GEMINI_API_KEY is required.
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
 EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "50"))
-OLLAMA_MODEL = "gemma4:e4b"
 
 CHROMA_PERSIST_DIR = "./chroma_db"
 CHROMA_COLLECTION = "math_knowledge"
@@ -72,8 +67,7 @@ CHROMA_VAULT_COLLECTION = "obsidian_notes"
 MAX_CONCURRENT_CHATS = int(os.getenv("MAX_CONCURRENT_CHATS", "3"))
 MAX_CONTEXT_DISTANCE = float(os.getenv("MAX_CONTEXT_DISTANCE", "1.2"))   
 
-OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "32768"))
-OLLAMA_MAX_CONTINUATIONS = int(os.getenv("OLLAMA_MAX_CONTINUATIONS", "4"))
+MAX_CONTINUATIONS = int(os.getenv("MAX_CONTINUATIONS", "4"))   # extra rounds when an answer hits the token limit
 MAX_HISTORY_IMAGES = int(os.getenv("MAX_HISTORY_IMAGES", "2"))
 
 HERMES_API_URL = os.getenv("HERMES_API_URL", "")   

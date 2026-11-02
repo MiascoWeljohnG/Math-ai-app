@@ -179,8 +179,7 @@ button, a, summary, label.opt, .tile, .file-item, .convo-item { touch-action: ma
     .materials-page .file-panel { width: 100%; max-height: none; border-right: 0; border-bottom: 1px solid var(--border); flex: 1; min-height: 0; }
     .materials-page .file-panel-header { padding: 0.5rem 0.9rem; padding-top: calc(0.5rem + env(safe-area-inset-top)); }
     .materials-page .file-item { padding: 0.9rem 0.8rem; font-size: 0.95rem; border-bottom: 1px solid var(--border); border-radius: 0; }
-    .materials-page .branch-filter { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .materials-page .branch-chip { flex: none; }
+    .materials-page .file-search, .materials-page .branch-select { min-height: 44px; font-size: 16px; }   /* 16px stops iOS zooming into the field */
     .materials-page .main { display: none; flex: 1; }
     .materials-page.viewing .main { display: flex; }
     .materials-page.viewing .file-panel { display: none; }

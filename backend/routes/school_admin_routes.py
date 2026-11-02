@@ -1,8 +1,10 @@
 """The school admin's own page: everything here is limited to the admin's school, and the school comes
 from their account (never from the request), so it cannot be switched by editing the page."""
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import config
@@ -10,8 +12,10 @@ import drive_storage
 from accounts import CreateTeacherRequest, new_account
 from auth import require_school_admin
 from database import get_db
-from models import AuditLog, Material, User
+from models import ACTIVE, DISABLED, PENDING, AuditLog, Material, Subject, SubjectDeletionRequest, User
 from routes.materials_routes import material_summary
+from routes.subject_deletion_routes import OPEN as OPEN_DELETION_STATUSES
+from school import in_school, shared_subjects
 
 router = APIRouter(prefix="/school-admin", tags=["school-admin"])
 
@@ -33,6 +37,74 @@ def school_users(user: User = Depends(require_school_admin), db: Session = Depen
         }
         for u in rows
     ]
+
+
+# An account counts as "online now" if it made a request in this long (see auth._touch_last_seen).
+ONLINE_WINDOW = timedelta(minutes=15)
+
+
+@router.get("/overview")
+def school_overview(user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
+    """The four numbers at the top of the school admin page. Everything is counted for the admin's own school
+    only (the school comes from the account, never from the request)."""
+    now = datetime.utcnow()
+    in_my_school = in_school(User.school_id, user.school_id)
+
+    # Accounts: how many can sign in, out of every account the school has (retired ones are not counted).
+    total_accounts = db.query(func.count(User.id)).filter(in_my_school, User.status != DISABLED).scalar() or 0
+    active_by_role = dict(
+        db.query(User.role, func.count(User.id)).filter(in_my_school, User.status == ACTIVE).group_by(User.role).all()
+    )
+    active_accounts = sum(active_by_role.values())
+
+    # Files: what the school's teachers and admin have uploaded to the knowledge base.
+    in_my_files = in_school(Material.school_id, user.school_id)
+    total_files = db.query(func.count(Material.id)).filter(in_my_files).scalar() or 0
+    files_this_week = db.query(func.count(Material.id)).filter(in_my_files, Material.uploaded_at >= now - timedelta(days=7)).scalar() or 0
+    latest_upload = db.query(func.max(Material.uploaded_at)).filter(in_my_files).scalar()
+
+    # People using the system: active accounts that made a request recently.
+    seen_since = lambda delta: db.query(User.role, func.count(User.id)).filter(
+        in_my_school, User.status == ACTIVE, User.last_seen_at >= now - delta).group_by(User.role).all()
+    online_by_role = dict(seen_since(ONLINE_WINDOW))
+    seen_today = sum(dict(seen_since(timedelta(hours=24))).values())
+
+    # What needs the admin: students waiting for approval and subject deletions waiting for a decision.
+    waiting = db.query(func.count(User.id), func.min(User.created_at)).filter(in_my_school, User.role == "user", User.status == PENDING).one()
+    pending_approvals, oldest_waiting = waiting[0] or 0, waiting[1]
+    pending_deletions = (
+        db.query(func.count(SubjectDeletionRequest.id))
+        .join(Subject, Subject.id == SubjectDeletionRequest.subject_id)
+        .filter(SubjectDeletionRequest.status.in_(OPEN_DELETION_STATUSES), shared_subjects(user))
+        .scalar() or 0
+    )
+
+    return {
+        "accounts": {
+            "active": active_accounts,
+            "total": total_accounts,
+            "students": active_by_role.get("user", 0),
+            "teachers": active_by_role.get("teacher", 0),
+            "admins": active_by_role.get("school_admin", 0),
+        },
+        "files": {
+            "total": total_files,
+            "this_week": files_this_week,
+            "latest": (latest_upload.isoformat() + "Z") if latest_upload else None,
+        },
+        "online": {
+            "now": sum(online_by_role.values()),
+            "students": online_by_role.get("user", 0),
+            "teachers": online_by_role.get("teacher", 0),
+            "today": seen_today,
+            "window_minutes": int(ONLINE_WINDOW.total_seconds() // 60),
+        },
+        "attention": {
+            "approvals": pending_approvals,
+            "deletions": pending_deletions,
+            "oldest_approval_days": (date.today() - oldest_waiting).days if oldest_waiting else None,
+        },
+    }
 
 
 @router.post("/create-teacher")

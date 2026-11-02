@@ -54,6 +54,7 @@ class User(Base):
     reviewed_at = Column(DateTime, nullable=True)
     rejection_reason = Column(String, nullable=True)
     submissions = Column(Integer, nullable=True, default=1)                 # how many certificates this student has sent
+    last_seen_at = Column(DateTime, nullable=True)                          # last time this account made an authenticated request (UTC); drives the admin's "active now" count
 
     @property
     def person_name(self) -> str:

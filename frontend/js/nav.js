@@ -14,6 +14,7 @@ const ICONS = {
     modules:   navIcon('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>'),
     lessons:   navIcon('<path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H20v15H5.5A1.5 1.5 0 0 0 4 19.5z"/><path d="M4 19.5A1.5 1.5 0 0 0 5.5 21H20v-3"/>'),
     roadmap:   navIcon('<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h7"/>'),
+    rankings:  navIcon('<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/>'),
     profile:   navIcon('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
     chat:      navIcon('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
     signout:   navIcon('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>'),
@@ -36,6 +37,7 @@ const NAV_ITEMS = [
     { label: "Modules",  icon: ICONS.modules, href: "materials.html" },
     { label: "Lessons",  icon: ICONS.lessons, href: "lessons.html" },
     { label: "Roadmap",  icon: ICONS.roadmap, href: "roadmap.html" },
+    { label: "Rankings", icon: ICONS.rankings, href: "rankings.html" },
     { label: "Profile",  icon: ICONS.profile, href: "profile.html" },
     { label: "iChatbot", icon: ICONS.chat,    href: "user.html" },
 ];

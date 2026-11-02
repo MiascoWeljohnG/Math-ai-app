@@ -333,8 +333,47 @@ async function loadRoadmapSummary() {
     }
 }
 loadRoadmapSummary();
-initRankings({
-    select: document.getElementById("rankBranch"),
-    body: document.getElementById("rankBody"),
-    empty: document.getElementById("rankEmpty"),
-});
+// "Your overview": lessons viewed, quizzes done + average score, time spent on quizzes, rank in your school.
+function formatDuration(totalSeconds) {
+    const seconds = Math.max(0, Math.round(totalSeconds || 0));
+    const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60;
+    if (h) return `${h}h ${String(m).padStart(2, "0")}m`;
+    if (m) return `${m}m ${String(s).padStart(2, "0")}s`;
+    return `${s}s`;
+}
+function ordinal(n) {
+    const rest = n % 100;
+    if (rest >= 11 && rest <= 13) return `${n}th`;
+    return `${n}${{ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"}`;
+}
+async function loadOverview() {
+    const set = (id, text) => { document.getElementById(id).textContent = text; };
+    try {
+        const o = await getJson("/learning/overview");
+        const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+        const percentOf = (part, whole) => whole ? Math.round(part * 100 / whole) : 0;
+
+        countUp(document.getElementById("ovLessons"), o.lessons_viewed, n => `${n} of ${o.lessons_available}`);
+        setGauge("ovLessonsGauge", percentOf(o.lessons_viewed, o.lessons_available));
+        set("ovLessonsSub", o.lessons_available ? `${plural(o.lessons_available, "lesson")} available` : "No lessons available yet");
+
+        countUp(document.getElementById("ovQuizzes"), o.quizzes_done, n => `${n} of ${o.quizzes_available}`);
+        setGauge("ovQuizzesGauge", percentOf(o.quizzes_done, o.quizzes_available));
+        set("ovQuizzesSub", o.quiz_attempts
+            ? `Average score ${o.average_percent}% over ${plural(o.quiz_attempts, "attempt")}`
+            : "No quizzes taken yet");
+
+        countUp(document.getElementById("ovTime"), o.quiz_attempts ? o.seconds : 0, formatDuration);
+        set("ovTimeSub", o.quiz_attempts ? "Total time spent answering quizzes" : "Starts counting when you take a quiz");
+
+        set("ovRank", o.rank ? `#${o.rank}` : "Unranked");
+        set("ovRankSub", o.rank
+            ? `${ordinal(o.rank)} of ${plural(o.ranked_students, "student")} in your school`
+            : "Take a quiz to get on the school ranking");
+    } catch {
+        document.getElementById("overviewGrid").hidden = true;      // a bonus panel: the page works without it
+        document.querySelector(".ov-title").hidden = true;
+    }
+}
+loadOverview();
+

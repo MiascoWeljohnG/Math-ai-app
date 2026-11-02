@@ -57,6 +57,7 @@ async function decide(u, action, body) {
     if (!res.ok) await uiAlert(Array.isArray(data.detail) ? "Please give a reason of at least 3 characters." : (data.detail || "That didn't work."), { title: "Couldn't save" });
     loadApprovals();
     if (typeof loadUsers === "function") loadUsers();
+    if (typeof loadAdminOverview === "function") loadAdminOverview();
 }
 
 async function approveStudent(u) {

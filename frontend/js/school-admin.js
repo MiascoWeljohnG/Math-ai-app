@@ -46,6 +46,7 @@ async function deleteFile(file) {
     if (!res.ok) await uiAlert(data.detail || "Couldn't delete the file.", { title: "Delete file" });
     loadFiles();
     if (typeof loadAuditLog === "function") loadAuditLog();
+    if (typeof loadAdminOverview === "function") loadAdminOverview();
 }
 loadFiles();
 

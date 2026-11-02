@@ -24,22 +24,65 @@ const BRANCH_FILTERS = ["All", "Algebra", "Geometry", "Statistics", "Calculus", 
 const branchFilterEl = document.getElementById("branchFilter");
 let allFiles = [];
 let activeBranch = "All";
+let searchQuery = "";
 
-function renderBranchFilter() {
+// Built once (not on every change) so the search box keeps focus while the user types.
+function renderFilters() {
     branchFilterEl.innerHTML = "";
-    for (const b of BRANCH_FILTERS) {
-        const chip = document.createElement("button");
-        chip.className = "branch-chip" + (b === activeBranch ? " active" : "");
-        chip.textContent = b;
-        chip.addEventListener("click", () => { activeBranch = b; renderBranchFilter(); renderFiles(); });
-        branchFilterEl.appendChild(chip);
-    }
+
+    const searchWrap = document.createElement("div");
+    searchWrap.className = "search-wrap";
+    searchWrap.innerHTML = `
+        <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`;
+    const search = document.createElement("input");
+    search.type = "text";
+    search.id = "fileSearch";
+    search.className = "file-search";
+    search.placeholder = "Search modules...";
+    search.autocomplete = "off";
+    search.setAttribute("aria-label", "Search modules");
+    search.addEventListener("input", () => { searchQuery = search.value; clearBtn.hidden = !search.value; renderFiles(); });
+    search.addEventListener("keydown", (e) => { if (e.key === "Escape" && search.value) { clearSearch(); } });
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "search-clear";
+    clearBtn.setAttribute("aria-label", "Clear search");
+    clearBtn.textContent = "\u00d7";
+    clearBtn.hidden = true;
+    const clearSearch = () => { search.value = ""; searchQuery = ""; clearBtn.hidden = true; renderFiles(); search.focus(); };
+    clearBtn.addEventListener("click", clearSearch);
+    searchWrap.append(search, clearBtn);
+
+    const selectWrap = document.createElement("div");
+    selectWrap.className = "select-wrap";
+    const select = document.createElement("select");
+    select.id = "branchSelect";
+    select.className = "branch-select";
+    select.setAttribute("aria-label", "Filter by topic");
+    for (const b of BRANCH_FILTERS) select.add(new Option(b === "All" ? "All topics" : b, b));
+    select.value = activeBranch;
+    select.addEventListener("change", () => { activeBranch = select.value; renderFiles(); });
+    selectWrap.appendChild(select);
+
+    branchFilterEl.append(searchWrap, selectWrap);
 }
 
 function renderFiles() {
-    const files = activeBranch === "All" ? allFiles : allFiles.filter(f => f.branch === activeBranch);
+    const query = searchQuery.trim().toLowerCase();
+    const files = allFiles.filter(f =>
+        (activeBranch === "All" || f.branch === activeBranch) &&
+        (!query || (f.display_name || "").toLowerCase().includes(query))
+    );
     if (files.length === 0) {
-        fileList.innerHTML = `<div class="file-empty">${allFiles.length === 0 ? "No materials uploaded yet." : `No ${activeBranch} materials yet.`}</div>`;
+        let msg;
+        if (allFiles.length === 0) msg = "No materials uploaded yet.";
+        else if (query) msg = `No modules match "${searchQuery.trim()}"${activeBranch === "All" ? "" : ` in ${activeBranch}`}.`;
+        else msg = `No ${activeBranch} materials yet.`;
+        fileList.innerHTML = "";
+        const empty = document.createElement("div");
+        empty.className = "file-empty";
+        empty.textContent = msg;   // textContent so a typed query can't inject HTML
+        fileList.appendChild(empty);
         return;
     }
     fileList.innerHTML = "";
@@ -59,7 +102,7 @@ function renderFiles() {
 }
 
 async function loadFiles() {
-    renderBranchFilter();
+    renderFilters();
     try {
         const res = await fetch(`${API}/materials`, { headers: authHeaders() });
         if (!res.ok) throw new Error();

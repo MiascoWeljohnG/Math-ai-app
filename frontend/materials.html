@@ -59,7 +59,18 @@
         .ask-input-row input { flex: 1; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font-size: 0.85rem; }
         .ask-input-row button { padding: 0.6rem 1rem; border: none; border-radius: 8px; background: var(--accent); color: white; cursor: pointer; font-size: 0.85rem; }
         .ask-input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .branch-filter { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.7rem 0.8rem; border-bottom: 1px solid var(--border); }
+        .branch-filter { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.7rem 0.8rem; border-bottom: 1px solid var(--border); }
+        .search-wrap, .select-wrap { position: relative; }
+        .search-icon { position: absolute; left: 0.7rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+        .file-search, .branch-select { width: 100%; padding: 0.55rem 0.8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font-family: var(--font-body); font-size: 0.85rem; }
+        .file-search { padding-left: 2.1rem; padding-right: 2rem; }
+        .file-search::placeholder { color: var(--text-muted); }
+        .file-search:focus, .branch-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+        .search-clear { position: absolute; right: 0.35rem; top: 50%; transform: translateY(-50%); width: 1.6rem; height: 1.6rem; border: none; border-radius: 50%; background: none; color: var(--text-muted); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+        .search-clear:hover { background: var(--bg-elevated); color: var(--text); }
+        .search-clear[hidden] { display: none; }
+        .branch-select { appearance: none; -webkit-appearance: none; padding-right: 2rem; cursor: pointer; }
+        .select-wrap::after { content: ""; position: absolute; right: 0.9rem; top: 50%; width: 6px; height: 6px; border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted); transform: translateY(-70%) rotate(45deg); pointer-events: none; }
         .branch-chip { padding: 0.25rem 0.65rem; border-radius: 999px; border: 1px solid var(--border); background: none; color: var(--text-muted); font-size: 0.75rem; cursor: pointer; }
         .branch-chip:hover { background: var(--bg-elevated); }
         .branch-chip.active { background: var(--accent); border-color: var(--accent); color: white; }

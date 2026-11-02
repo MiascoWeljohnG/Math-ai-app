@@ -91,6 +91,12 @@ body.home .content { width: 100%; max-width: 1180px; margin: 0 auto; padding: cl
 .rank-table tr.you td { font-weight: 700; color: var(--accent); background: var(--pri2); }
 .tag { display: inline-block; padding: 0.2rem 0.8rem; border-radius: 999px; background: var(--sun2); color: var(--sun-ink); font-weight: 600; font-size: 0.85rem; }
 
+/* Smoother bars: topic progress fills ease in, and the Continue-learning ring sweeps instead of jumping */
+.tile-progress-fill { transition: width 1s cubic-bezier(0.22, 1, 0.36, 1); }
+@property --p { syntax: "<percentage>"; inherits: false; initial-value: 0%; }
+.ring { transition: --p 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
+@media (prefers-reduced-motion: reduce) { .tile-progress-fill, .ring { transition: none; } }
+
 @media (max-width: 700px) {
     .resume-card { flex-wrap: wrap; padding: 1.25rem; gap: 1rem; }
     .ring { width: 96px; height: 96px; } .ring::before { inset: 10px; } .ring span { font-size: 1.3rem; }

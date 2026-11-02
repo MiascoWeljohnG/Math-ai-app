@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="css/nav-drawer.css">
     <link rel="stylesheet" href="css/app-shell.css">
     <link rel="stylesheet" href="css/home.css">
+    <link rel="stylesheet" href="css/overview.css">
     <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
@@ -44,6 +45,46 @@
                 <p id="resumeMeta"></p>
             </div>
             <a class="resume-btn" id="resumeBtn" href="lessons.html">Resume lesson</a>
+        </section>
+
+        <h2 class="section-title ov-title"><span class="ov-title-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span>Your overview</h2>
+        <section class="ov-grid" id="overviewGrid" aria-label="Your progress overview">
+            <article class="ov-card" data-tone="lessons">
+                <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/></svg></span><span class="ov-label">Lessons viewed</span></div>
+                <div class="ov-body">
+                    <strong class="ov-value" id="ovLessons">&ndash;</strong>
+                    <div class="ov-gauge" id="ovLessonsGauge" role="img" aria-label="0 percent">
+                        <svg viewBox="0 0 80 80" aria-hidden="true"><circle class="g-track" cx="40" cy="40" r="33"/><circle class="g-fill" cx="40" cy="40" r="33" pathLength="100"/></svg>
+                        <span class="g-pct">0%</span>
+                    </div>
+                </div>
+                <span class="ov-sub" id="ovLessonsSub">Loading&hellip;</span>
+            </article>
+            <article class="ov-card" data-tone="quizzes">
+                <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span><span class="ov-label">Quizzes done</span></div>
+                <div class="ov-body">
+                    <strong class="ov-value" id="ovQuizzes">&ndash;</strong>
+                    <div class="ov-gauge" id="ovQuizzesGauge" role="img" aria-label="0 percent">
+                        <svg viewBox="0 0 80 80" aria-hidden="true"><circle class="g-track" cx="40" cy="40" r="33"/><circle class="g-fill" cx="40" cy="40" r="33" pathLength="100"/></svg>
+                        <span class="g-pct">0%</span>
+                    </div>
+                </div>
+                <span class="ov-sub" id="ovQuizzesSub">Loading&hellip;</span>
+            </article>
+            <article class="ov-card" data-tone="time">
+                <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg></span><span class="ov-label">Time answering quizzes</span></div>
+                <div class="ov-body">
+                    <strong class="ov-value" id="ovTime">&ndash;</strong>
+                </div>
+                <span class="ov-sub" id="ovTimeSub">Loading&hellip;</span>
+            </article>
+            <article class="ov-card" data-tone="rank">
+                <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg></span><span class="ov-label">Ranking in your school</span></div>
+                <div class="ov-body">
+                    <strong class="ov-value" id="ovRank">&ndash;</strong>
+                </div>
+                <span class="ov-sub" id="ovRankSub">Loading&hellip;</span>
+            </article>
         </section>
 
         <form class="topic-bar" id="topicForm" autocomplete="off">
@@ -89,22 +130,6 @@
             <ul class="roadmap-list" id="roadmapList"><li class="panel-note">Loading your roadmap…</li></ul>
             <a class="panel-link" href="roadmap.html">See the full roadmap and study plan</a>
         </section>
-
-        <h2 class="section-title panel-title">Student rankings</h2>
-        <section class="panel" id="rankingsPanel">
-            <div class="panel-bar">
-                <label for="rankBranch">Branch</label>
-                <select id="rankBranch"></select>
-            </div>
-            <p class="panel-note">Ranked by lessons passed, then average best score, then total time.</p>
-            <div class="table-scroll">
-                <table class="rank-table">
-                    <thead><tr><th>#</th><th>Student</th><th>Lessons passed</th><th>Avg score</th><th>Time</th></tr></thead>
-                    <tbody id="rankBody"></tbody>
-                </table>
-            </div>
-            <p class="panel-note" id="rankEmpty" hidden></p>
-        </section>
     </main>
 
     <dialog class="subject-dialog" id="addSubjectDialog" aria-labelledby="addSubjectTitle">
@@ -136,7 +161,7 @@
     <script src="js/modal.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/nav.js"></script>
-    <script src="js/rankings.js"></script>
+    <script src="js/overview.js"></script>
     <script src="js/landing.js"></script>
     <script>requireAuth(); initNavDrawer();</script>
     <footer class="bottom-footer">All Rights Reserved <span class="sep">|</span> @2026</footer>

@@ -85,6 +85,7 @@ async function decideDeletion(request, approve) {
         showNotification("Error", err.message, true);
     }
     loadDeletionRequests();
+    if (typeof loadAdminOverview === "function") loadAdminOverview();
 }
 
 loadDeletionRequests();

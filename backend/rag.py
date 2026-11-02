@@ -8,12 +8,10 @@ import re
 import uuid
 import chromadb
 import httpx
-import ollama
 from pathlib import Path, PurePosixPath
 from typing import Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.embeddings import Embeddings
-from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
 
 import config
@@ -26,7 +24,7 @@ collection = chroma_client.get_or_create_collection(name=config.CHROMA_COLLECTIO
 
 
 class GeminiEmbeddings(Embeddings):
-    """Hosted embeddings through Gemini's OpenAI-compatible endpoint, so no Ollama server is needed."""
+    """Hosted embeddings through Gemini's OpenAI-compatible endpoint (no local model server needed)."""
 
     def __init__(self, model: str, api_key: str, base_url: str, batch_size: int = 50, max_retries: int = 3):
         self.model = model
@@ -66,13 +64,9 @@ class GeminiEmbeddings(Embeddings):
         return self._embed([text])[0]
 
 
-if config.EMBEDDING_PROVIDER == "gemini":
-    embeddings = GeminiEmbeddings(
-        config.EMBEDDING_MODEL, config.GEMINI_API_KEY, config.GEMINI_BASE_URL, config.EMBEDDING_BATCH_SIZE,
-    )
-else:
-    embeddings = OllamaEmbeddings(model="nomic-embed-text", base_url=config.OLLAMA_BASE_URL)
-_async_ollama_client = ollama.AsyncClient(host=config.OLLAMA_BASE_URL)
+embeddings = GeminiEmbeddings(
+    config.EMBEDDING_MODEL, config.GEMINI_API_KEY, config.GEMINI_BASE_URL, config.EMBEDDING_BATCH_SIZE,
+)
 _chat_semaphore = asyncio.Semaphore(config.MAX_CONCURRENT_CHATS)
 _waiting_count = 0
 _waiting_lock = asyncio.Lock()
@@ -226,8 +220,8 @@ async def _gemini_generate(messages: list[dict]) -> str:
 
 
 # ---------------------------------------------------------------- Core RAG & Fallback Logic
-async def _answer_source(messages: list[dict], options: dict, image_index: int | None):
-    """Yields (text, finish_reason). Attempts Groq -> Gemini -> Ollama fallback chain."""
+async def _answer_source(messages: list[dict], image_index: int | None):
+    """Yields (text, finish_reason). Tries Groq, then Gemini."""
     started = False
 
     if _use_groq(messages, image_index):
@@ -250,18 +244,13 @@ async def _answer_source(messages: list[dict], options: dict, image_index: int |
         except RuntimeError as error:
             if started:
                 raise
-            print(f"[gemini] request failed ({error}); falling back to local Ollama...", flush=True)
+            print(f"[gemini] request failed ({error})", flush=True)
+            raise RuntimeError(f"The AI service could not answer: {error}")
 
-    # Final fallback if both external providers fail or are not configured
-    async for item in _ollama_stream(messages, options):
-        yield item
-
-async def _ollama_stream(messages: list[dict], options: dict):
-    stream = await _async_ollama_client.chat(
-        model=config.OLLAMA_MODEL, messages=messages, think=False, stream=True, options=options,
+    raise RuntimeError(
+        "No AI provider answered. Set GROQ_API_KEY or GEMINI_API_KEY in backend/.env "
+        "(and check the backend terminal for the provider's error message)."
     )
-    async for chunk in stream:
-        yield chunk["message"]["content"], chunk.get("done_reason")
 
 def _table_to_markdown(table: list[list]) -> str:
     rows = [["" if cell is None else str(cell).strip() for cell in row] for row in table if row]
@@ -685,11 +674,10 @@ async def ask_stream(
         async with _waiting_lock:
             _waiting_count -= 1
         full_answer = []
-        options = {"num_ctx": config.OLLAMA_NUM_CTX, "num_predict": -1}
-        for round_number in range(config.OLLAMA_MAX_CONTINUATIONS + 1):
+        for round_number in range(config.MAX_CONTINUATIONS + 1):
             round_text = []
             done_reason = None
-            source = _answer_source(messages, options, image_index)
+            source = _answer_source(messages, image_index)
             async for delta, reason in source:
                 if delta:
                     round_text.append(delta)
@@ -771,11 +759,7 @@ async def generate_text(system: str, prompt: str, branch: str, query: str) -> st
                 response.raise_for_status()
                 return response.json()["choices"][0]["message"]["content"].strip()
                 
-        # 4. Fallback to Local Ollama
-        response = await _async_ollama_client.chat(
-            model=config.OLLAMA_MODEL,
-            messages=messages,
-            think=False,
-            options={"num_ctx": config.OLLAMA_NUM_CTX, "num_predict": -1},
+        raise RuntimeError(
+            "No AI provider answered. Set GROQ_API_KEY or GEMINI_API_KEY in backend/.env "
+            "(and check the backend terminal for the provider's error message)."
         )
-    return response["message"]["content"].strip()
