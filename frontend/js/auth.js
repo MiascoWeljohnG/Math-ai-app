@@ -12,6 +12,24 @@ function detailText(data, fallback) {
     return d || fallback;
 }
 
+const SPINNER_HTML = '<span class="spinner" role="status"><span aria-hidden="true">' +
+    Array.from({ length: 12 }, (_, i) => `<i style="--i:${i}"></i>`).join("") +
+    '</span><span class="sr-only">Loading</span></span>';
+
+// Put a button into / out of its loading state (spinner + text, disabled so it cannot be double-submitted).
+function setLoading(btn, on, text) {
+    if (on) {
+        if (btn.dataset.label === undefined) btn.dataset.label = btn.textContent;
+        btn.innerHTML = SPINNER_HTML + "<span>" + text + "</span>";
+        btn.disabled = true;
+        btn.setAttribute("aria-busy", "true");
+    } else {
+        if (btn.dataset.label !== undefined) btn.textContent = btn.dataset.label;
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+    }
+}
+
 const MAX_CERT_BYTES = 5 * 1024 * 1024;
 // Cheap checks so a student learns about a wrong file before uploading it. The server re-checks everything
 // (it reads the file's real type), so this is only a convenience.
@@ -61,7 +79,10 @@ if (authForm) {
         const username = document.getElementById("username").value.trim();
         const password = document.getElementById("password").value;
         const errorEl = document.getElementById("error");
+        const loginBtn = document.getElementById("submitBtn");
+        if (loginBtn.disabled) return;
         errorEl.className = "form-msg";
+        setLoading(loginBtn, true, "Signing in...");
 
         try {
             const res = await fetch(`${API}/auth/login`, {
@@ -85,6 +106,7 @@ if (authForm) {
         } catch (err) {
             errorEl.textContent = err.message;
             errorEl.className = "form-msg error";
+            setLoading(loginBtn, false);
         }
     });
 }
@@ -219,7 +241,7 @@ if (registerForm) {
         if (certError) return fail(certError);
         if (!document.getElementById("regTerms").checked) return fail("Please agree to the Terms of Service and Privacy Policy.");
 
-        submitBtn.disabled = true;
+        setLoading(submitBtn, true, "Creating account...");
         try {
             // multipart (not JSON) because a file goes with it; the browser sets the Content-Type and boundary itself
             const body = new FormData();
@@ -233,6 +255,7 @@ if (registerForm) {
             // Nothing to log in to yet: the account waits for a school administrator. Say so in a popup, then go to login.
             registerForm.reset();
             errorEl.textContent = "";
+            submitBtn.removeAttribute("aria-busy");
             submitBtn.textContent = "Submitted";
             await uiAlert(
                 `${data.message}\n\nYour school admin will check your certificate of enrollment and accept or reject it. ` +
@@ -241,7 +264,7 @@ if (registerForm) {
             window.location.href = "login.html";
         } catch (err) {
             fail(err.message);
-            submitBtn.disabled = false;
+            setLoading(submitBtn, false);
         }
     });
 }
@@ -311,35 +334,4 @@ if (document.getElementById("resetForm")) {
 }
 
 // --- PROTECT PAGES (works on all pages) ---
-function requireAuth() {
-    const token = localStorage.getItem("token");
-    if (!token) window.location.href = "login.html";
-}
-
-function requireRole(expectedRole) {
-    const token = localStorage.getItem("token");
-    if (!token) { window.location.href = "login.html"; return; }
-    if (localStorage.getItem("role") !== expectedRole) {
-        window.location.href = homeFor(localStorage.getItem("role"));
-    }
-}
-
-function logout() {
-    const theme = localStorage.getItem("theme");   // keep the light/dark choice
-    localStorage.clear();
-    if (theme) localStorage.setItem("theme", theme);
-    window.location.href = "login.html";
-}
-
-// Pages with <span id="schoolBadge"> show the school the signed-in account belongs to
-document.addEventListener("DOMContentLoaded", () => {
-    const badge = document.getElementById("schoolBadge"), name = localStorage.getItem("school_name");
-    if (badge && name) { badge.textContent = name; badge.style.display = ""; }
-});
-
-// "Last, First Middle" for tables and pick-lists (the order the school uses). Empty when no name is set.
-function formatName(person) {
-    if (!person) return "";
-    const given = [person.first_name, person.middle_name].filter(Boolean).join(" ");
-    return [person.last_name, given].filter(Boolean).join(", ");
-}
+function requireAuth() { ... }
