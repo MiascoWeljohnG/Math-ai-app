@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import date, datetime, timedelta
 from hashlib import sha256
@@ -15,6 +16,7 @@ from auth import DUMMY_HASH, check_password_strength, create_access_token, hash_
 from database import get_db
 from models import ACTIVE, PENDING, REJECTED, AuditLog, PasswordResetToken, School, StudentCertificate, User
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 STUDENT_ID_FORMAT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,39}")
@@ -173,8 +175,11 @@ def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Sessio
         try:
             send_password_reset_email(user.email, link)
         except Exception:
+            log.exception("Password reset email failed for user %r", user.username)
             db.rollback()
             raise HTTPException(status_code=503, detail="Password recovery email is temporarily unavailable")
+    else:
+        log.warning("forgot-password: no account or no saved email for username %r", payload.username)
     return {"message": "If the account has a signup email, password reset instructions will be sent."}
 
 

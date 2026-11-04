@@ -282,12 +282,14 @@ if (document.getElementById("forgotForm")) {
     document.getElementById("forgotForm").addEventListener("submit", async e => {
         e.preventDefault();
         const msg = document.getElementById("message");
+        msg.className = "form-msg";
         try {
             const res = await fetch(`${API}/auth/forgot-password`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: document.getElementById("username").value.trim() }) });
             const data = await res.json();
             if (!res.ok) throw new Error(detailText(data, "Unable to request a reset"));
             msg.textContent = data.message;
-        } catch (err) { msg.textContent = err.message; }
+            msg.className = "form-msg ok";
+        } catch (err) { msg.textContent = err.message; msg.className = "form-msg error"; }
     });
 }
 if (document.getElementById("resetForm")) {
@@ -295,14 +297,16 @@ if (document.getElementById("resetForm")) {
     document.getElementById("resetForm").addEventListener("submit", async e => {
         e.preventDefault();
         const msg = document.getElementById("message");
+        msg.className = "form-msg";
         try {
             const res = await fetch(`${API}/auth/reset-password`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, password: document.getElementById("newPassword").value }) });
             const data = await res.json();
             if (!res.ok) throw new Error(detailText(data, "Unable to reset password"));
             msg.textContent = data.message;
+            msg.className = "form-msg ok";
             document.getElementById("resetForm").hidden = true;
             document.getElementById("loginLink").hidden = false;
-        } catch (err) { msg.textContent = err.message; }
+        } catch (err) { msg.textContent = err.message; msg.className = "form-msg error"; }
     });
 }
 
