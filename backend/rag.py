@@ -450,7 +450,7 @@ def _safe_branch(branch: str) -> str:
     return re.sub(r"[^A-Za-z0-9 _-]", "", branch).strip() or "General"
 
 
-def _prepare_uploads(files: list[tuple[str, bytes]], storage_ids: Optional[list[str]] = None) -> list[tuple[str, bytes, str]]:
+def _prepare_uploads(files: list[tuple[str, bytes]], storage_ids: Optional[list[str]] = None, check_text: bool = True) -> list[tuple[str, bytes, str]]:
     """Validate uploads (name, type, readable text) before anything is stored anywhere.
     Returns (safe file name, bytes, storage id) for each; raises ValueError for a bad file."""
     if storage_ids is not None and len(storage_ids) != len(files):
@@ -466,9 +466,10 @@ def _prepare_uploads(files: list[tuple[str, bytes]], storage_ids: Optional[list[
         if suffix not in {".pdf", ".docx", ".pptx", ".txt", ".md"}:
             raise ValueError(f"Unsupported material file type: {suffix or '(no extension)'}")
         safe_name = f"{Path(safe_name).stem[:100]}{suffix}"
-        pages = extract_text_from_bytes(safe_name, contents)
-        if not any(text.strip() or any(table.strip() for table in tables) for _, text, tables in pages):
-            raise ValueError(f"No readable text found in uploaded file: {display_name}")
+        if check_text:   # reading every page is slow; background indexing does this check itself
+            pages = extract_text_from_bytes(safe_name, contents)
+            if not any(text.strip() or any(table.strip() for table in tables) for _, text, tables in pages):
+                raise ValueError(f"No readable text found in uploaded file: {display_name}")
         storage_id = storage_ids[index] if storage_ids is not None else uuid.uuid4().hex
         prepared_files.append((safe_name, contents, storage_id))
     return prepared_files
@@ -478,11 +479,12 @@ def store_uploaded_materials(
     files: list[tuple[str, bytes]],
     branch: str,
     storage_ids: Optional[list[str]] = None,
+    check_text: bool = True,
 ) -> list[str]:
     """Local-disk storage: write validated uploads into the uploads folder."""
     vault_dir = Path(config.CHROMA_VAULT_DIR).expanduser()
     vault_dir.mkdir(parents=True, exist_ok=True)
-    prepared_files = _prepare_uploads(files, storage_ids)
+    prepared_files = _prepare_uploads(files, storage_ids, check_text)
     output_dir = vault_dir / "Uploaded Materials" / _safe_branch(branch)
     stored_paths = []
 
@@ -563,6 +565,50 @@ def sync_drive_index(materials: list[tuple[str, str, str]], force: bool = False)
     if stale:
         vault_collection.delete(ids=stale)
     return {"chunks": chunks, "indexed_files": indexed_files, "failed": failed, "removed_chunks": len(stale)}
+
+
+def save_originals(
+    files: list[tuple[str, bytes]],
+    branch: str = "General",
+    storage_ids: Optional[list[str]] = None,
+) -> list[StoredPath]:
+    """Step 1 of an upload (fast): put the original files in storage (Google Drive, or the local uploads
+    folder) WITHOUT indexing them. Only the name and type are checked here. Indexing is slow, so it
+    happens afterwards in the background: see indexing.py and index_document() below."""
+    import drive_storage
+
+    if not drive_storage.enabled():
+        return [StoredPath(path) for path in store_uploaded_materials(files, branch, storage_ids, check_text=False)]
+    prepared = _prepare_uploads(files, storage_ids, check_text=False)
+    safe_branch = _safe_branch(branch)
+    stored: list[StoredPath] = []
+    try:
+        for safe_name, contents, storage_id in prepared:
+            drive_name = f"{storage_id}_{safe_name}"
+            file_id = drive_storage.upload_bytes(drive_name, contents)
+            stored.append(StoredPath(f"Uploaded Materials/{safe_branch}/{drive_name}", file_id))
+    except Exception:
+        for item in stored:   # all or nothing: don't leave half a batch in Drive
+            try:
+                drive_storage.delete_file(item.drive_file_id)
+            except Exception:
+                log.warning("Couldn't remove Drive file %s after a failed upload", item.drive_file_id)
+        raise
+    return stored
+
+
+def index_document(source: str, branch: str, contents: bytes) -> int:
+    """Step 2 of an upload (slow): chunk, embed and store one saved file. `source` is the name it was
+    saved under (Material.filename). Safe to run again for the same file (a retry replaces its chunks).
+    Raises ValueError when the file has no readable text."""
+    source = _material_index_source(source)
+    delete_material_chunks(source)
+    file_name = PurePosixPath(source).name
+    count, _ = _index_documents([(source, _safe_branch(branch), file_name, contents)])
+    if count == 0:
+        shown = re.sub(r"^[a-f0-9]{32}_", "", file_name, flags=re.IGNORECASE)
+        raise ValueError(f"No readable text found in {shown}. If it is a scanned document, it needs to be a text PDF.")
+    return count
 
 
 def ingest_uploaded_materials(

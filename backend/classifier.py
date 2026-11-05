@@ -253,6 +253,12 @@ async def summarize_document(excerpt: str) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------- admin + teacher upload
+def _start_jobs(jobs, indexing) -> None:
+    """Queue background indexing for rows that are already committed."""
+    for material, contents in jobs:
+        indexing.start_indexing(material.id, contents)
+
+
 async def ingest_with_detection(files: list[UploadFile], branch: str, branches_json: str, username: str, db, school_id=None, user=None) -> dict:
     """Shared body of /admin/upload and /teacher/upload.
 
@@ -265,7 +271,8 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
     from notifications import notify_admins
     from progress import UPLOAD_BRANCHES
     from school import shared_subjects
-    from rag import ingest_uploaded_materials, EmbeddingQuotaError
+    from rag import save_originals
+    import indexing
 
     if not files:
         raise HTTPException(status_code=400, detail="Choose at least one file to upload")
@@ -320,31 +327,36 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
                 continue
         ready.setdefault(target, []).append((file.filename, contents))
 
+    # Step 1, fast: save each original and its database row, so the file is in the list right away.
+    # Step 2, slow: chunking + embedding runs in the background after the commit (see indexing.py).
     uploaded = []
+    jobs = []   # (Material, file bytes) to index once the rows are committed
     for target, group in ready.items():
         try:
-            stored = await run_in_threadpool(ingest_uploaded_materials, group, target)
+            stored = await run_in_threadpool(save_originals, group, target)
         except (ValueError, FileNotFoundError) as exc:
             db.commit()   # keep the records of groups that were already saved
+            _start_jobs(jobs, indexing)
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except EmbeddingQuotaError as exc:
-            db.commit()
-            raise HTTPException(status_code=429, detail=str(exc)) from exc
         except Exception as exc:
             # Without this, the error escapes as a bare 500 that carries no CORS headers, and the
             # browser can only report "Failed to fetch". An HTTPException reaches the page intact.
             db.commit()
-            logging.getLogger(__name__).exception("Upload failed while saving/indexing")
+            _start_jobs(jobs, indexing)
+            logging.getLogger(__name__).exception("Upload failed while saving")
             raise HTTPException(status_code=502, detail=f"The upload failed: {str(exc)[:200]}") from exc
-        for (original_name, _), stored_path in zip(group, stored):
-            db.add(Material(
+        for (original_name, contents), stored_path in zip(group, stored):
+            material = Material(
                 filename=str(stored_path),
                 display_name=Path(original_name.replace("\\", "/")).name,
                 branch=target,
                 uploaded_by=username,
                 school_id=school_id,
                 drive_file_id=getattr(stored_path, "drive_file_id", None),   # set when the original went to Google Drive
-            ))
+                index_status="indexing",
+            )
+            db.add(material)
+            jobs.append((material, contents))
             if original_name in picked:   # the AI wasn't sure, so a person chose the topic
                 notify_admins(db, "manual_topic", "Topic chosen by a person",
                               f'@{username} filed "{original_name}" under {target} after the AI wasn\'t sure.', about=username)
@@ -358,10 +370,12 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
                 "confidence": round(detected[original_name], 2) if original_name in detected else None,
             })
     db.commit()
+    _start_jobs(jobs, indexing)
 
     message = ""
     if uploaded:
-        message = f"Saved and indexed {len(uploaded)} file(s) under {', '.join(sorted(ready))}."
+        message = (f"Uploaded {len(uploaded)} file(s) under {', '.join(sorted(ready))}. "
+                   "The AI is reading them in the background: each shows as Ready in your list when it is done.")
     if needs_topic:
         message = f"{message} {len(needs_topic)} file(s) need a topic before they can be saved.".strip()
     return {"message": message, "uploaded": uploaded, "needs_topic": needs_topic}

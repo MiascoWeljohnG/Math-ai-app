@@ -89,6 +89,7 @@ async function uploadFiles() {
 }
 
 // --- Files this teacher uploaded (the server only returns their own) ---
+let lastReadyCount = null;
 async function loadMyFiles() {
     try {
         const res = await fetch(`${API}/teacher/files`, { headers: getHeaders() });
@@ -96,31 +97,32 @@ async function loadMyFiles() {
         const files = await res.json();
         document.getElementById("noFiles").style.display = files.length ? "none" : "block";
         document.getElementById("filesTable").style.display = files.length ? "" : "none";
-        renderMaterialRows(document.querySelector("#filesTable tbody"), files, false);
+        renderMaterialRows(document.querySelector("#filesTable tbody"), files, false, undefined, loadMyFiles);
+        // a file that just finished being read can now be picked for lessons
+        const readyCount = files.filter(f => f.index_status === "ready").length;
+        if (readyCount !== lastReadyCount) {
+            if (lastReadyCount !== null) loadMaterialOptions();
+            lastReadyCount = readyCount;
+        }
     } catch (_) { /* leave table empty on failure */ }
 }
 loadMyFiles();
 
 // --- Students + progress ---
-function showStudentsMessage(text) {
-    const el = document.getElementById("noStudents");
-    el.textContent = text;
-    el.style.display = "block";
-}
-
 async function loadStudents() {
     try {
         const res = await fetch(`${API}/teacher/students`, { headers: getHeaders() });
-        if (!res.ok) return showStudentsMessage("Couldn't load your students. Please refresh the page.");
+        if (!res.ok) return;
         const students = await res.json();
         const tbody = document.querySelector("#studentsTable tbody");
+        const noStudents = document.getElementById("noStudents");
 
         if (students.length === 0) {
             tbody.replaceChildren();
-            showStudentsMessage("No students registered yet.");
+            noStudents.style.display = "block";
             return;
         }
-        document.getElementById("noStudents").style.display = "none";
+        noStudents.style.display = "none";
         document.getElementById("studentsHead").replaceChildren(...["Student", "Email", ...students[0].progress.map(p => p.branch), "Mastery"].map(text => {
             const th = document.createElement("th");
             th.textContent = text;
@@ -161,10 +163,7 @@ async function loadStudents() {
             return row;
         });
         tbody.replaceChildren(...rows);
-    } catch (error) {
-        console.error("Couldn't show the students table:", error);
-        showStudentsMessage("Couldn't show your students. Please refresh the page.");
-    }
+    } catch (_) { /* leave table empty on failure */ }
 }
 loadStudents();
 

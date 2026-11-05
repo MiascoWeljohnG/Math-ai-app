@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from auth import get_current_user, require_staff
+import indexing
 from database import get_db
 from school import in_school
 from models import Material
@@ -35,6 +36,10 @@ def material_summary(material: Material) -> dict:
         "uploaded_by": material.uploaded_by,
         # stored as UTC; the trailing Z makes the browser show the viewer's local time
         "uploaded_at": uploaded.isoformat() + "Z" if uploaded else None,
+        # "indexing" (the AI is still reading it), "ready", or "failed" (index_error says why); rows from
+        # before background indexing have no status and are ready
+        "index_status": material.index_status or "ready",
+        "index_error": material.index_error,
     }
 
 
@@ -65,6 +70,8 @@ def list_materials(user=Depends(get_current_user), db: Session = Depends(get_db)
     materials = db.query(Material).filter(in_school(Material.school_id, user.school_id)).order_by(Material.id.asc()).all()
     result = []
     for material in materials:
+        if (material.index_status or "ready") != "ready":   # the AI can't use it yet (or at all)
+            continue
         if not material.drive_file_id:   # Drive files are trusted to exist; checking each would cost an API call per row
             try:
                 _vault_material_path(material.filename)
@@ -76,6 +83,25 @@ def list_materials(user=Depends(get_current_user), db: Session = Depends(get_db)
             "branch": material.branch or "General",
         })
     return result
+
+
+@router.post("/{filename:path}/retry-index")
+def retry_indexing(
+    filename: str,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Run the AI's reading of a file again after it failed (or got stuck). The uploader or a school admin
+    of the same school can do it; the file is not uploaded again."""
+    material = db.query(Material).filter(Material.filename == filename).first()
+    if material is None or material.school_id != user.school_id:
+        raise HTTPException(status_code=404, detail="File not found")
+    if not (user.role == "school_admin" or (user.role == "teacher" and material.uploaded_by == user.username)):
+        raise HTTPException(status_code=403, detail="Only the uploader or a school admin can retry this file")
+    if material.index_status == indexing.INDEXING and material.id in indexing._active:
+        return {"index_status": indexing.INDEXING}   # already running; nothing to do
+    indexing.retry(material, db)
+    return {"index_status": indexing.INDEXING}
 
 
 @router.get("/{filename:path}/file")

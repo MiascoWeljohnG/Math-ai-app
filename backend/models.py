@@ -152,6 +152,10 @@ class Material(Base):
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     school_id = Column(Integer, nullable=True, index=True)   # the uploader's school
     drive_file_id = Column(String, nullable=True)   # Google Drive file id of the original; None = a file on local disk
+    # Indexing (chunk + embed, the slow part) runs in the background after the upload is saved:
+    # "indexing" -> "ready" or "failed" (index_error says why). NULL = a file from before this existed = ready.
+    index_status = Column(String, nullable=True, default="ready")
+    index_error = Column(String, nullable=True)
 
 
 class Subject(Base):

@@ -33,6 +33,16 @@ def ingest_uploaded_materials(files, branch="General", storage_ids=None):
     return [f"Uploaded Materials/{branch}/id_{name}" for name, _ in files]
 
 
+def save_originals(files, branch="General", storage_ids=None):
+    """Uploads now save first and index later in the background (indexing.py)."""
+    fake_rag.ingested.append((branch, [name for name, _ in files]))
+    return [f"Uploaded Materials/{branch}/id_{name}" for name, _ in files]
+
+
+fake_rag.index_document = lambda source, branch, contents: 3   # chunks written
+fake_rag.save_originals = save_originals
+
+
 async def ask_stream(*args, **kwargs):  # imported by subjects_routes, unused here
     yield {"type": "done", "answer": ""}
 
@@ -45,6 +55,15 @@ fake_rag.ingest_uploads = lambda *args, **kwargs: 0   # imported by materials_ro
 fake_rag.deleted_chunks = []   # file names whose chunks were deleted
 fake_rag.delete_material_chunks = lambda filename: fake_rag.deleted_chunks.append(filename) or 0
 sys.modules["rag"] = fake_rag
+
+
+@pytest.fixture(autouse=True)
+def no_background_indexing(monkeypatch):
+    """Uploads queue a background thread; in tests just record which rows were queued."""
+    import indexing
+    queued = []
+    monkeypatch.setattr(indexing, "start_indexing", lambda material_id, contents=None: queued.append(material_id) or True)
+    return queued
 
 
 @pytest.fixture

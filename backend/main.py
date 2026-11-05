@@ -53,6 +53,8 @@ def _sync_drive_index_at_startup():
         log.info("Drive storage OK (folder %r). Indexing %d file(s)...", folder, len(files))
         result = sync_drive_index(files)
         log.info("Drive index ready: %s", result)
+        import indexing
+        indexing.settle_stale_jobs()   # rows left on "indexing" by the restart become ready or failed
     except Exception:
         log.exception("Couldn't sync the Drive files into the search index")
     finally:
@@ -71,6 +73,8 @@ else:
         ingest_uploads(config.CHROMA_VAULT_DIR)
     except Exception:
         log.exception("Startup indexing failed; continuing without re-indexing")
+    import indexing
+    indexing.settle_stale_jobs()
 
 # Uploaded documents live and are retrieved from the uploads folder; discard the
 # legacy-only collection after its documents have been migrated successfully.

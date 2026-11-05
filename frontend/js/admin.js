@@ -86,7 +86,7 @@ async function loadFiles() {
 
     document.getElementById("noFiles").style.display = files.length ? "none" : "block";
     document.getElementById("filesTable").style.display = files.length ? "" : "none";
-    renderMaterialRows(document.querySelector("#filesTable tbody"), files, true, deleteFile);
+    renderMaterialRows(document.querySelector("#filesTable tbody"), files, true, deleteFile, loadFiles);
     renderChips(); 
 }
 loadFiles();
