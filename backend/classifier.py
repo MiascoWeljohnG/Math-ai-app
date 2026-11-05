@@ -265,7 +265,7 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
     from notifications import notify_admins
     from progress import UPLOAD_BRANCHES
     from school import shared_subjects
-    from rag import ingest_uploaded_materials
+    from rag import ingest_uploaded_materials, EmbeddingQuotaError
 
     if not files:
         raise HTTPException(status_code=400, detail="Choose at least one file to upload")
@@ -327,6 +327,9 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
         except (ValueError, FileNotFoundError) as exc:
             db.commit()   # keep the records of groups that were already saved
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except EmbeddingQuotaError as exc:
+            db.commit()
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
         except Exception as exc:
             # Without this, the error escapes as a bare 500 that carries no CORS headers, and the
             # browser can only report "Failed to fetch". An HTTPException reaches the page intact.

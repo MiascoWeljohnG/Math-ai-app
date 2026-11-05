@@ -56,7 +56,12 @@ DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "")
 
 # Embeddings (used to index uploads and search them). Hosted through Gemini, so GEMINI_API_KEY is required.
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
-EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "50"))
+EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "25"))
+# Gemini rejects embedding calls over its per-minute token limit (the free tier's is about 30,000), so the
+# server paces itself to this many (estimated) tokens per minute. Set it to 0 to switch pacing off once the
+# key has billing enabled and a much higher limit.
+EMBEDDING_TOKENS_PER_MINUTE = int(os.getenv("EMBEDDING_TOKENS_PER_MINUTE", "25000"))
+EMBEDDING_MAX_RETRIES = int(os.getenv("EMBEDDING_MAX_RETRIES", "5"))   # waits as long as Gemini asks between tries
 
 CHROMA_PERSIST_DIR = "./chroma_db"
 CHROMA_COLLECTION = "math_knowledge"

@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import logging
+import threading
 import time
 import json
 import io
@@ -23,15 +24,61 @@ collection = chroma_client.get_or_create_collection(name=config.CHROMA_COLLECTIO
 
 
 
-class GeminiEmbeddings(Embeddings):
-    """Hosted embeddings through Gemini's OpenAI-compatible endpoint (no local model server needed)."""
+class EmbeddingQuotaError(RuntimeError):
+    """Gemini kept answering 429 (quota / rate limit) even after waiting and retrying."""
 
-    def __init__(self, model: str, api_key: str, base_url: str, batch_size: int = 50, max_retries: int = 3):
+
+class GeminiEmbeddings(Embeddings):
+    """Hosted embeddings through Gemini's OpenAI-compatible endpoint (no local model server needed).
+
+    Gemini limits embedding calls per minute (and per day), and the free tier is small. So this class
+    (1) paces itself to stay under `tokens_per_minute` (0 turns pacing off) and (2) when Gemini still
+    says 429, waits as long as Gemini asks (Retry-After / retryDelay) instead of a couple of seconds."""
+
+    def __init__(self, model: str, api_key: str, base_url: str, batch_size: int = 25,
+                 max_retries: int = 5, tokens_per_minute: int = 0):
         self.model = model
         self.api_key = api_key
         self.url = base_url.rstrip("/") + "/embeddings"
         self.batch_size = max(1, batch_size)
         self.max_retries = max_retries
+        self.tokens_per_minute = max(0, tokens_per_minute)
+        self._window: list[tuple[float, int]] = []   # (time sent, estimated tokens) for the last minute
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _estimate_tokens(texts: list[str]) -> int:
+        # Deliberately a little high (math text with symbols tokenizes poorly) so we stay under the limit.
+        return sum(len(text) for text in texts) // 3 + len(texts)
+
+    def _pace(self, tokens: int) -> None:
+        """Block until sending `tokens` more keeps us under the per-minute budget."""
+        if not self.tokens_per_minute:
+            return
+        tokens = min(tokens, self.tokens_per_minute)
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                self._window = [(sent, n) for sent, n in self._window if now - sent < 60]
+                if not self._window or sum(n for _, n in self._window) + tokens <= self.tokens_per_minute:
+                    self._window.append((now, tokens))
+                    return
+                wait = 60 - (now - self._window[0][0]) + 0.25
+            time.sleep(max(0.5, wait))
+
+    @staticmethod
+    def _retry_delay(response: "httpx.Response", attempt: int) -> float:
+        """How long to wait before retrying: what the server asked for, else a growing back-off."""
+        hint = response.headers.get("retry-after")
+        if not hint:
+            found = re.search(r'retry(?: in|Delay"?:?\s*")\s*([\d.]+)\s*s', response.text, re.IGNORECASE)
+            hint = found.group(1) if found else None
+        try:
+            if hint:
+                return min(90.0, float(hint) + 1)
+        except ValueError:
+            pass
+        return min(60.0, 5.0 * 2 ** attempt)
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
         if not self.api_key:
@@ -40,7 +87,9 @@ class GeminiEmbeddings(Embeddings):
         with httpx.Client(timeout=60) as client:
             for start in range(0, len(texts), self.batch_size):
                 batch = texts[start:start + self.batch_size]
+                tokens = self._estimate_tokens(batch)
                 for attempt in range(self.max_retries + 1):
+                    self._pace(tokens)
                     response = client.post(
                         self.url,
                         headers={"Authorization": f"Bearer {self.api_key}"},
@@ -48,9 +97,18 @@ class GeminiEmbeddings(Embeddings):
                     )
                     # rate limit / temporary server trouble: wait and try again
                     if response.status_code in (429, 500, 502, 503) and attempt < self.max_retries:
-                        time.sleep(2 ** attempt)
+                        delay = self._retry_delay(response, attempt)
+                        log.warning("Embedding request got %s; retrying in %.0fs (attempt %d/%d)",
+                                    response.status_code, delay, attempt + 1, self.max_retries)
+                        time.sleep(delay)
                         continue
                     break
+                if response.status_code == 429:
+                    raise EmbeddingQuotaError(
+                        "The embedding service (Gemini) is over its quota or rate limit. "
+                        "Wait a minute and try again with fewer files at a time. If it keeps happening, "
+                        "the Gemini API key has used up its quota: enable billing for it or use a different key."
+                    )
                 if response.status_code >= 400:
                     raise RuntimeError(f"Embedding request failed ({response.status_code}): {response.text[:200]}")
                 rows = sorted(response.json()["data"], key=lambda row: row.get("index", 0))
@@ -66,6 +124,7 @@ class GeminiEmbeddings(Embeddings):
 
 embeddings = GeminiEmbeddings(
     config.EMBEDDING_MODEL, config.GEMINI_API_KEY, config.GEMINI_BASE_URL, config.EMBEDDING_BATCH_SIZE,
+    max_retries=config.EMBEDDING_MAX_RETRIES, tokens_per_minute=config.EMBEDDING_TOKENS_PER_MINUTE,
 )
 _chat_semaphore = asyncio.Semaphore(config.MAX_CONCURRENT_CHATS)
 _waiting_count = 0
