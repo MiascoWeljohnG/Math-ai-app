@@ -184,3 +184,86 @@ def test_browser_style_crlf_line_breaks_in_titles_are_understood(api, rag, db):
     rag.reply = "Typed one\nNew one"
     res = api.post(f"{api.url}/plan", data={"count": 1, "existing": "Typed one\r\nTyped two"})
     assert res.json()["titles"] == ["New one"]
+
+
+# --- page ranges: write a lesson from, say, pages 20-30 of a long module -----------------------------------
+
+@pytest.fixture
+def module_pages(rag, monkeypatch):
+    """A 40-page 'module' where page N says 'content of page N', and a way to see what the model was shown."""
+    seen = []
+
+    def fake_extract(filename, contents, page_range=None):
+        if filename.endswith(".docx"):
+            return [(0, "no pages here", [])]
+        low, high = page_range or (1, 40)
+        return [(n, f"content of page {n}", []) for n in range(low, min(high, 40) + 1)]
+
+    async def fake_generate(system, prompt, branch, query):
+        seen.append(prompt)
+        return "## Lesson\nbody"
+
+    from routes import subjects_routes   # it imported generate_text by name, so patch it there
+    monkeypatch.setattr(rag, "extract_text_from_bytes", fake_extract)
+    monkeypatch.setattr(subjects_routes, "generate_text", fake_generate)
+    return seen
+
+
+def _compose(api, **extra):
+    data = {"title": "Factoring", "save": "false", **extra}
+    return api.post(f"{api.url}/compose", data=data, files={"file": ("module.pdf", b"x")})
+
+
+def test_compose_uses_only_the_requested_pages(api, module_pages):
+    res = _compose(api, page_start="20", page_end="30")
+    assert res.status_code == 200
+    prompt = module_pages[-1]
+    assert "content of page 20" in prompt and "content of page 30" in prompt
+    assert "content of page 19" not in prompt and "content of page 31" not in prompt
+    assert "pages 20-30" in prompt
+
+
+def test_compose_single_page_when_only_start_given(api, module_pages):
+    assert _compose(api, page_start="7").status_code == 200
+    prompt = module_pages[-1]
+    assert "content of page 7" in prompt and "content of page 8" not in prompt
+    assert "page 7 of a longer module" in prompt
+
+
+def test_compose_without_a_range_still_reads_the_whole_file(api, module_pages):
+    assert _compose(api).status_code == 200
+    assert "content of page 1" in module_pages[-1] and "content of page 40" in module_pages[-1]
+
+
+def test_page_range_outside_the_document_is_a_clear_400(api, module_pages):
+    res = _compose(api, page_start="300", page_end="310")
+    assert res.status_code == 400 and "last page with text is 40" in res.json()["detail"]
+
+
+@pytest.mark.parametrize("start,end", [("0", "5"), ("30", "20"), ("abc", "5")])
+def test_bad_page_numbers_are_rejected(api, module_pages, start, end):
+    assert _compose(api, page_start=start, page_end=end).status_code == 400
+
+
+def test_page_range_on_a_docx_explains_why_it_cant_work(api, module_pages):
+    res = api.post(f"{api.url}/compose", data={"title": "T", "save": "false", "page_start": "1", "page_end": "2"},
+                   files={"file": ("module.docx", b"x")})
+    assert res.status_code == 400 and "no page numbers" in res.json()["detail"]
+
+
+def test_page_range_without_a_file_is_rejected(api, module_pages):
+    res = api.post(f"{api.url}/compose", data={"title": "T", "save": "false", "page_start": "1", "page_end": "2"})
+    assert res.status_code == 400 and "needs a source file" in res.json()["detail"]
+
+
+def test_plan_titles_come_from_the_requested_pages(api, module_pages, monkeypatch):
+    from routes import subjects_routes
+
+    async def fake_generate(system, prompt, branch, query):
+        module_pages.append(prompt)
+        return "Topic A\nTopic B"
+    monkeypatch.setattr(subjects_routes, "generate_text", fake_generate)
+    res = api.post(f"{api.url}/plan", data={"count": 2, "page_start": "20", "page_end": "22"},
+                   files={"file": ("module.pdf", b"x")})
+    assert res.status_code == 200
+    assert "content of page 21" in module_pages[-1] and "content of page 23" not in module_pages[-1]

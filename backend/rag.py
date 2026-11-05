@@ -265,13 +265,20 @@ def extract_text_by_page(file_path: str) -> list[tuple[int, str, list[str]]]:
     path = Path(file_path)
     return extract_text_from_bytes(path.name, path.read_bytes())
 
-def extract_text_from_bytes(filename: str, contents: bytes) -> list[tuple[int, str, list[str]]]:
+def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[int, int] | None = None) -> list[tuple[int, str, list[str]]]:
+    """[(page number, text, tables)]. `page_range` = (first, last) makes a PDF read only those pages: on a
+    300-page module that is the difference between seconds and a minute. Other file types ignore it."""
     suffix = Path(filename).suffix.lower()
     if suffix == ".pdf":
         import pdfplumber
         pages = []
         with pdfplumber.open(io.BytesIO(contents)) as pdf:
             for i, page in enumerate(pdf.pages, start=1):
+                if page_range is not None:
+                    if i < page_range[0]:
+                        continue
+                    if i > page_range[1]:
+                        break
                 text = (page.extract_text() or "").strip()
                 tables = [_table_to_markdown(t) for t in page.extract_tables()]
                 tables = [t for t in tables if t]

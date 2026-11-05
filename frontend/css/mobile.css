@@ -80,7 +80,7 @@ button, a, summary, label.opt, .tile, .file-item, .convo-item { touch-action: ma
     .lesson-content { padding: 1.1rem !important; }
     .lesson-footer .complete-btn { flex: 1 1 100%; justify-content: center; text-align: center; }
     dialog { max-width: calc(100vw - 1.5rem) !important; }
-    .lesson-modal, .subject-dialog, dialog.modal { width: calc(100vw - 1.5rem) !important; max-height: 88dvh; overflow-y: auto; }
+    .lesson-modal, .subject-dialog, .lesson-dialog, dialog.modal { width: calc(100vw - 1.5rem) !important; max-height: 88dvh; overflow-y: auto; }
     .opt { padding: 0.8rem 0.9rem; min-height: 48px; }
     .q .choice { padding: 0.55rem 0; }
     .q input[type="text"] { max-width: 100% !important; }

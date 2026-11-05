@@ -82,7 +82,7 @@ if (authForm) {
         const loginBtn = document.getElementById("submitBtn");
         if (loginBtn.disabled) return;
         errorEl.className = "form-msg";
-        setLoading(loginBtn, true, "Signing in...");
+        setLoading(loginBtn, true, "Logging in...");
 
         try {
             const res = await fetch(`${API}/auth/login`, {

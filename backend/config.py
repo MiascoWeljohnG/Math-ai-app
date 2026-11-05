@@ -94,3 +94,7 @@ GEMINI_MAX_RETRIES = int(os.getenv("GEMINI_MAX_RETRIES", "3"))
 CLASSIFY_MIN_CONFIDENCE = float(os.getenv("CLASSIFY_MIN_CONFIDENCE", "0.70"))
 CLASSIFY_SAMPLE_CHARS = int(os.getenv("CLASSIFY_SAMPLE_CHARS", "4000"))   
 MAX_ANALYZE_BYTES = int(os.getenv("MAX_ANALYZE_BYTES", str(15 * 1024 * 1024)))
+# When a lesson is written from a page range, how much of those pages the model is shown (characters).
+# A dense text page is roughly 3,000-4,000 characters; longer ranges keep the parts that best match the
+# lesson title. Raise it if your model has a large context window.
+PAGE_RANGE_CHARS = int(os.getenv("PAGE_RANGE_CHARS", "14000"))

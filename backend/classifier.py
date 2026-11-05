@@ -62,17 +62,47 @@ def relevant_text(text: str, topic: str, limit: int = 8000, window: int = 1500) 
     return "\n...\n".join(chunk for _, chunk in chosen)
 
 
-def document_text(filename: str, contents: bytes) -> str:
-    """All readable text of a pdf/docx/txt/md. Raises ValueError if it can't be read."""
+def parse_page_range(start, end) -> tuple[int, int] | None:
+    """(first, last) from the form's "from page" / "to page" boxes, or None when both are empty.
+    Only a "from" page means that single page; only a "to" page means page 1 up to it."""
+    if start in (None, "") and end in (None, ""):
+        return None
+    try:
+        first = int(start) if start not in (None, "") else 1
+        last = int(end) if end not in (None, "") else first
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Page numbers must be whole numbers")
+    if first < 1 or last < 1:
+        raise HTTPException(status_code=400, detail="Page numbers start at 1")
+    if last < first:
+        raise HTTPException(status_code=400, detail=f"The last page ({last}) is before the first page ({first})")
+    return first, last
+
+
+def document_text(filename: str, contents: bytes, pages: tuple[int, int] | None = None) -> str:
+    """All readable text of a pdf/docx/pptx/txt/md, or only the text of pages first..last when `pages`
+    is given (slides for a .pptx). Raises ValueError if it can't be read or the range doesn't fit."""
     from rag import extract_text_from_bytes
-    pages = extract_text_from_bytes(filename, contents)
-    text = "\n\n".join("\n\n".join([page_text, *tables]) for _, page_text, tables in pages).strip()
+    if pages is None:
+        extracted = extract_text_from_bytes(filename, contents)
+    else:
+        name = Path(filename).name
+        if Path(filename).suffix.lower() not in {".pdf", ".pptx"}:   # .docx / .txt / .md have no fixed pages
+            raise ValueError(f"{name} has no page numbers, so a page range can't be used with it. Use a PDF or PowerPoint file, or clear the page range.")
+        first, last = pages
+        extracted = [item for item in extract_text_from_bytes(filename, contents, pages) if first <= item[0] <= last]
+        if not extracted:   # rare path, so reading the whole file again just to explain the problem is fine
+            highest = max((number for number, _, _ in extract_text_from_bytes(filename, contents)), default=0)
+            if highest:
+                raise ValueError(f"No readable text on pages {first}-{last} of {name} (its last page with text is {highest}). Scanned pages need OCR first.")
+            raise ValueError(f"No readable text found in {name} (scanned PDFs need OCR first)")
+    text = "\n\n".join("\n\n".join([page_text, *tables]) for _, page_text, tables in extracted).strip()
     if not text:
         raise ValueError(f"No readable text found in {Path(filename).name} (scanned PDFs need OCR first)")
     return text
 
 
-async def read_upload(file: UploadFile) -> tuple[str, str]:
+async def read_upload(file: UploadFile, pages: tuple[int, int] | None = None) -> tuple[str, str]:
     """(filename, text) for one uploaded file, or an HTTP 400/413 explaining why not."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="The uploaded file must have a filename")
@@ -80,7 +110,7 @@ async def read_upload(file: UploadFile) -> tuple[str, str]:
     if len(contents) > config.MAX_ANALYZE_BYTES:
         raise HTTPException(status_code=413, detail=f"File is too large (limit {config.MAX_ANALYZE_BYTES // 1024 // 1024} MB)")
     try:
-        return file.filename, await run_in_threadpool(document_text, file.filename, contents)
+        return file.filename, await run_in_threadpool(document_text, file.filename, contents, pages)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

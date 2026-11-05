@@ -16,7 +16,10 @@ import config
 from auth import get_current_user, require_staff
 from database import get_db
 from models import Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, Subject, User
-from classifier import check_relevance, choose_subject, document_text, read_upload, relevant_text, sample_text, summarize_document
+from classifier import (
+    check_relevance, choose_subject, document_text, parse_page_range, read_upload, relevant_text, sample_text,
+    summarize_document,
+)
 from rag import ask_stream, generate_text
 from routes.materials_routes import material_bytes
 from school import in_school, shared_subjects, visible_subjects
@@ -602,13 +605,14 @@ async def generate_lesson_from_file(
     return {"status": "ok", **await _lesson_from_text(db, subject, user, text, topic)}
 
 
-async def _read_material(db: Session, filename: str, user: User) -> tuple[Material, str]:
-    """An uploaded course file (from the knowledge base) of the user's own school, and its text."""
+async def _read_material(db: Session, filename: str, user: User, pages: Optional[tuple[int, int]] = None) -> tuple[Material, str]:
+    """An uploaded course file (from the knowledge base) of the user's own school, and its text
+    (only pages first..last when `pages` is given)."""
     material = db.query(Material).filter(Material.filename == filename, in_school(Material.school_id, user.school_id)).first()
     if material is None:
         raise HTTPException(status_code=404, detail="File not found")
     try:
-        text = await run_in_threadpool(lambda: document_text(Path(material.filename).name, material_bytes(material)))
+        text = await run_in_threadpool(lambda: document_text(Path(material.filename).name, material_bytes(material), pages))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return material, text
@@ -701,12 +705,17 @@ def _clean_description(description: str) -> str:
     return description
 
 
-async def _optional_source_text(db: Session, user: User, file: Optional[UploadFile], filename: str) -> Optional[str]:
-    """Text of the document to base the lessons on, or None when the teacher chose no file."""
+async def _optional_source_text(
+    db: Session, user: User, file: Optional[UploadFile], filename: str, pages: Optional[tuple[int, int]] = None,
+) -> Optional[str]:
+    """Text of the document to base the lessons on (only `pages` of it when a page range was given), or
+    None when the teacher chose no file."""
     if file is not None and file.filename:
-        return (await read_upload(file))[1]
+        return (await read_upload(file, pages))[1]
     if filename.strip():
-        return (await _read_material(db, filename.strip(), user))[1]
+        return (await _read_material(db, filename.strip(), user, pages))[1]
+    if pages is not None:
+        raise HTTPException(status_code=400, detail="A page range needs a source file. Choose a file, or clear the page range.")
     return None
 
 
@@ -748,6 +757,8 @@ async def plan_lessons(
     description: str = Form(""),
     existing: str = Form(""),
     filename: str = Form(""),
+    page_start: Optional[str] = Form(None),
+    page_end: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -756,7 +767,7 @@ async def plan_lessons(
     line: they are kept out of the answer and the new ones follow on from them."""
     subject = _writable_subject_or_404(db, subject_id, user)
     description = _clean_description(description)
-    text = await _optional_source_text(db, user, file, filename)
+    text = await _optional_source_text(db, user, file, filename, parse_page_range(page_start, page_end))
     have = [lesson.title for lesson in db.query(Lesson).filter(Lesson.subject_id == subject_id)] + _lines(existing)
 
     plural = "titles" if count != 1 else "title"
@@ -790,7 +801,8 @@ async def plan_lessons(
     return {"titles": fresh[:count]}
 
 
-def _compose_prompt(subject: Subject, title: str, description: str, series: list[str], source: Optional[str]) -> str:
+def _compose_prompt(subject: Subject, title: str, description: str, series: list[str], source: Optional[str],
+                    pages: Optional[tuple[int, int]] = None) -> str:
     parts = [f'Write a lesson titled "{title}" for the subject {subject.name}, for a student new to it.']
     if description:
         parts.append(
@@ -803,7 +815,15 @@ def _compose_prompt(subject: Subject, title: str, description: str, series: list
             f'Cover only "{title}" and do not repeat what the other lessons teach.'
         )
     if source is not None:
-        parts.append("Base the lesson ONLY on the source document at the end (ignore anything in it that is off-topic).")
+        if pages is not None:
+            where = f"page {pages[0]}" if pages[0] == pages[1] else f"pages {pages[0]}-{pages[1]}"
+            parts.append(
+                f"Base the lesson ONLY on the source text at the end, which is {where} of a longer module. "
+                "Teach what those pages teach: do not add topics from other parts of the module, and do not "
+                "mention page numbers (ignore anything in the text that is off-topic)."
+            )
+        else:
+            parts.append("Base the lesson ONLY on the source document at the end (ignore anything in it that is off-topic).")
     parts.append(
         "Use markdown with 2-4 sections (## headers), plain-language explanations, at least one "
         "fully worked example, and 3 short practice questions at the end (answers after them). "
@@ -811,7 +831,8 @@ def _compose_prompt(subject: Subject, title: str, description: str, series: list
     )
     prompt = "\n\n".join(parts)
     if source is not None:
-        prompt += f'\n\nSource document:\n"""\n{relevant_text(source, f"{title} {description}")}\n"""'
+        limit = config.PAGE_RANGE_CHARS if pages is not None else 8000
+        prompt += f'\n\nSource document:\n"""\n{relevant_text(source, f"{title} {description}", limit=limit)}\n"""'
     return prompt
 
 
@@ -823,6 +844,8 @@ async def compose_lesson(
     series: str = Form(""),
     save: bool = Form(True),
     filename: str = Form(""),
+    page_start: Optional[str] = Form(None),
+    page_end: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -835,8 +858,9 @@ async def compose_lesson(
     if not title:
         raise HTTPException(status_code=400, detail="Lesson title is required")
     description = _clean_description(description)
-    source = await _optional_source_text(db, user, file, filename)
-    prompt = _compose_prompt(subject, title, description, _lines(series), source)
+    pages = parse_page_range(page_start, page_end)
+    source = await _optional_source_text(db, user, file, filename, pages)
+    prompt = _compose_prompt(subject, title, description, _lines(series), source, pages)
     if source is not None:
         branch, query = "", ""
     else:

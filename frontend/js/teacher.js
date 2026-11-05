@@ -169,13 +169,17 @@ const lessonTitlesInput = document.getElementById("lessonTitlesInput");
 const lessonDescriptionInput = document.getElementById("lessonDescriptionInput");
 const lessonContentInput = document.getElementById("lessonContentInput");
 const lessonStatus = document.getElementById("lessonStatus");
+const lessonDialog = document.getElementById("lessonDialog");
+const lessonListStatus = document.getElementById("lessonListStatus");   // status line under the lessons list (shown while the dialog is closed)
+let lessonBusy = false;   // true while lessons are being written: the dialog can't be closed meanwhile
 
 let activeLessonSubjectId = null;
 let editingLessonId = null;
 
 function showLessonStatus(message, kind) {
-    lessonStatus.className = `status ${kind}`;
-    lessonStatus.textContent = message;
+    const target = lessonDialog.open ? lessonStatus : lessonListStatus;
+    target.className = `status ${kind}`;
+    target.textContent = message;
 }
 
 async function loadLessonSubjects(selectId) {
@@ -251,6 +255,22 @@ function markActiveLesson() {
     lessonListEl.querySelectorAll(".lesson-row").forEach(row => row.classList.toggle("active", Number(row.dataset.id) === editingLessonId));
 }
 
+// "+ New lesson": a blank form in the modal.
+function openNewLessonDialog() {
+    startNewLesson();
+    lessonListStatus.textContent = "";
+    lessonListStatus.className = "status";
+    if (!lessonDialog.open) lessonDialog.showModal();
+}
+
+function closeLessonDialog() {
+    if (lessonBusy) return;
+    if (lessonDialog.open) lessonDialog.close();
+}
+
+lessonDialog.addEventListener("cancel", event => { if (lessonBusy) event.preventDefault(); });   // Esc is ignored while the AI is writing
+lessonDialog.addEventListener("close", () => startNewLesson());   // however it was closed, the next open starts clean
+
 function startNewLesson() {
     editingLessonId = null;
     markActiveLesson();
@@ -279,7 +299,9 @@ async function editLesson(lessonId) {
         lessonStatus.textContent = "";
         lessonStatus.className = "status";
         refreshLessonForm();
-        lessonForm.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        lessonListStatus.textContent = "";
+        lessonListStatus.className = "status";
+        if (!lessonDialog.open) lessonDialog.showModal();
     } catch (error) {
         showLessonStatus(error.message, "error");
     }
@@ -307,6 +329,9 @@ const sourceUploadRow = document.getElementById("sourceUploadRow");
 const sourceLibraryRow = document.getElementById("sourceLibraryRow");
 const sourceFileInput = document.getElementById("lessonFileInput");
 const materialSelect = document.getElementById("materialSelect");
+const pageRangeRow = document.getElementById("pageRangeRow");
+const pageStartInput = document.getElementById("pageStartInput");
+const pageEndInput = document.getElementById("pageEndInput");
 
 // Drop zone for the lesson source file (same look as Upload Course Material, but one file; the hidden input still holds it).
 const lessonDropZone = document.getElementById("lessonDropZone");
@@ -388,7 +413,7 @@ function refreshLessonForm() {
     document.getElementById("lessonContentField").hidden = !editing;
     document.getElementById("withQuizField").hidden = editing;
     generateBtn.hidden = editing;
-    saveBtn.hidden = regenBtn.hidden = cancelBtn.hidden = !editing;
+    saveBtn.hidden = regenBtn.hidden = !editing;   // Cancel is always shown: it just closes the modal
     generateBtn.textContent = count === 1 ? "Generate lesson" : `Generate ${count} lessons`;
     lessonTitlesInput.rows = Math.max(3, count);
     document.getElementById("lessonDescriptionLabel").textContent = multi ? "Description of the lessons" : "Lesson description";
@@ -400,6 +425,7 @@ function refreshLessonForm() {
     document.getElementById("titleSingleHint").hidden = editing;
     sourceUploadRow.hidden = sourceMode() !== "upload";
     sourceLibraryRow.hidden = sourceMode() !== "library";
+    pageRangeRow.hidden = sourceMode() === "none";   // a page range only makes sense with a file
 }
 
 // Going from 1 lesson to several (or back) carries the typed title over.
@@ -415,17 +441,30 @@ lessonForm.addEventListener("change", event => {
 });
 
 // The file the lessons are based on: { file, filename } (one of them, or neither). Throws if "upload"/"choose" is picked but empty.
+// The optional page range, as { pageStart, pageEnd } ("" when empty). Throws on a range that can't be right,
+// so the teacher hears about it before a slow AI request starts.
+function readPageRange() {
+    const start = pageStartInput.value.trim(), end = pageEndInput.value.trim();
+    if (!start && !end) return { pageStart: "", pageEnd: "" };
+    const first = Number(start || 1), last = Number(end || start);
+    if (!Number.isInteger(first) || !Number.isInteger(last) || first < 1 || last < 1) {
+        throw new Error("Page numbers must be whole numbers starting at 1.");
+    }
+    if (last < first) throw new Error(`The last page (${last}) is before the first page (${first}).`);
+    return { pageStart: String(first), pageEnd: String(last) };
+}
+
 function readSource() {
     if (sourceMode() === "upload") {
         const file = sourceFileInput.files[0];
         if (!file) throw new Error("Choose a file to upload, or pick \"No file\".");
-        return { file, filename: "" };
+        return { file, filename: "", ...readPageRange() };
     }
     if (sourceMode() === "library") {
         if (!materialSelect.value) throw new Error("Choose one of your uploaded files, or pick \"No file\".");
-        return { file: null, filename: materialSelect.value };
+        return { file: null, filename: materialSelect.value, ...readPageRange() };
     }
-    return { file: null, filename: "" };
+    return { file: null, filename: "", pageStart: "", pageEnd: "" };
 }
 
 function lessonRequest(source, fields) {
@@ -433,6 +472,8 @@ function lessonRequest(source, fields) {
     Object.entries(fields).forEach(([key, value]) => form.append(key, value));
     if (source.file) form.append("file", source.file);
     if (source.filename) form.append("filename", source.filename);
+    if (source.pageStart) form.append("page_start", source.pageStart);
+    if (source.pageEnd) form.append("page_end", source.pageEnd);
     return form;
 }
 
@@ -495,6 +536,7 @@ async function generateLessons() {
     let titles = typed, saved = [], quizFailures = 0;
 
     lessonSubjectSelect.disabled = true;
+    lessonBusy = true;
     await withButtonLoading(generateBtn, async () => {
         if (typed.length < count) {
             showLessonStatus(`Planning ${count === 1 ? "the lesson" : `${count} lessons`}… this can take a minute.`, "info");
@@ -514,9 +556,10 @@ async function generateLessons() {
         const quizNote = quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "";
         if (saved.length === 1) {
             await editLesson(saved[0].id);   // open it so the teacher can read what the AI wrote
-            showLessonStatus(`Lesson saved. Read it below and edit anything you like.${quizNote}`, quizFailures ? "error" : "success");
+            showLessonStatus(`Lesson saved. Read it here and edit anything you like.${quizNote}`, quizFailures ? "error" : "success");
         } else {
             startNewLesson();
+            lessonDialog.close();   // not closeLessonDialog(): lessonBusy is still set until the finally below
             showLessonStatus(`Done. ${saved.length} lessons saved.${quizNote} Review them before students see them.`, quizFailures ? "error" : "success");
         }
         loadStudents();
@@ -528,6 +571,7 @@ async function generateLessons() {
         const progress = saved.length ? ` ${saved.length} of ${titles.length} lesson(s) were saved before it stopped. The rest are still in the form, so you can press Generate again.` : "";
         showLessonStatus(`${error.message}${progress}`, "error");
     }).finally(() => {
+        lessonBusy = false;
         lessonSubjectSelect.disabled = false;
     });
 }
@@ -566,6 +610,7 @@ async function saveLesson() {
         const result = await response.json();
         if (!response.ok) throw new Error(result.detail || "Couldn't save this lesson.");
         startNewLesson();
+        lessonDialog.close();
         showLessonStatus("Lesson saved.", "success");
         await loadLessonList();
     }).catch(error => showLessonStatus(error.message, "error"));
@@ -697,7 +742,7 @@ async function createSubject() {
     subjectDialog.close();
     await loadLessonSubjects(subject.id);
     startNewLesson();
-    if (!writeLessons) return showLessonStatus(`Subject "${subject.name}" created. Add its first lesson below.`, "success");
+    if (!writeLessons) return showLessonStatus(`Subject "${subject.name}" created. Add its first lesson with + New lesson.`, "success");
     await writeLessonsFromFile(subject, file, withQuiz);
 }
 
