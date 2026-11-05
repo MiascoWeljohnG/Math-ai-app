@@ -28,3 +28,13 @@ async function withButtonLoading(buttonEl, asyncCallback) {
         buttonEl.disabled = false;
     }
 }
+
+/**
+ * A person's name as "Last, First Middle" (same style as the approvals list).
+ * Returns "" when the account has no name filled in, so callers can fall back to the username.
+ */
+function formatName(person) {
+    if (!person) return "";
+    const given = [person.first_name, person.middle_name].filter(Boolean).join(" ");
+    return [person.last_name, given].filter(Boolean).join(", ");
+}

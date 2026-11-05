@@ -102,20 +102,25 @@ async function loadMyFiles() {
 loadMyFiles();
 
 // --- Students + progress ---
+function showStudentsMessage(text) {
+    const el = document.getElementById("noStudents");
+    el.textContent = text;
+    el.style.display = "block";
+}
+
 async function loadStudents() {
     try {
         const res = await fetch(`${API}/teacher/students`, { headers: getHeaders() });
-        if (!res.ok) return;
+        if (!res.ok) return showStudentsMessage("Couldn't load your students. Please refresh the page.");
         const students = await res.json();
         const tbody = document.querySelector("#studentsTable tbody");
-        const noStudents = document.getElementById("noStudents");
 
         if (students.length === 0) {
             tbody.replaceChildren();
-            noStudents.style.display = "block";
+            showStudentsMessage("No students registered yet.");
             return;
         }
-        noStudents.style.display = "none";
+        document.getElementById("noStudents").style.display = "none";
         document.getElementById("studentsHead").replaceChildren(...["Student", "Email", ...students[0].progress.map(p => p.branch), "Mastery"].map(text => {
             const th = document.createElement("th");
             th.textContent = text;
@@ -156,7 +161,10 @@ async function loadStudents() {
             return row;
         });
         tbody.replaceChildren(...rows);
-    } catch (_) { /* leave table empty on failure */ }
+    } catch (error) {
+        console.error("Couldn't show the students table:", error);
+        showStudentsMessage("Couldn't show your students. Please refresh the page.");
+    }
 }
 loadStudents();
 
