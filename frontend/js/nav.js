@@ -344,3 +344,19 @@ function initNavDrawer(options = {}) {
         });
     }, { passive: true });
 }
+
+// School badge: the pages have a hidden <span id="schoolBadge"> that nothing ever filled in, so it never showed.
+// Fill it with the school name saved at login (auth.js stores it as "school_name") and reveal it.
+// Accounts in the main pool have no school, so the badge simply stays hidden for them.
+(function showSchoolBadge() {
+    const fill = () => {
+        const badge = document.getElementById("schoolBadge");
+        const name = localStorage.getItem("school_name");
+        if (!badge || !name) return;
+        badge.textContent = name;
+        badge.title = name;
+        badge.style.display = "";
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fill);
+    else fill();
+})();
