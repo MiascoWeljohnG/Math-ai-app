@@ -35,9 +35,22 @@ document.getElementById("topicForm").addEventListener("submit", (e) => {
 // fixed tiles in the HTML; personal subjects are drawn below from /subjects.
 const authHeader = { "Authorization": `Bearer ${localStorage.getItem("token")}` };
 const tilesGrid = document.getElementById("tilesGrid");
-const coreSubjectIds = new Map();
 
-const PERSONAL_ICON = '<svg class="tile-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2V4Z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7V4Z"/></svg>';
+// Icons for the classic branches; every other subject gets the book icon. Tone picks the icon colour (see home.css).
+const SUBJECT_ICONS = {
+    Algebra: '<svg class="tile-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3Zm3.2 4.6h1.6V6.4H9.4V5H7.8V3.8H6.2V5H5v1.4h1.2v1.2ZM13 3h8v8h-8V3Zm1.6 4.7h4.8V6.3h-4.8v1.4ZM3 13h8v8H3v-8Zm1.6 1.6 4.8 4.8 1-1-4.8-4.8-1 1Zm0 3.8 1 1 4.8-4.8-1-1-4.8 4.8ZM13 13h8v8h-8v-8Zm1.6 2.4h4.8v1.4h-4.8v-1.4Zm0 2.8h4.8v1.4h-4.8v-1.4Z"/></svg>',
+    Geometry: '<svg class="tile-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Zm0 2.3 5.9 3.3L12 10.9 6.1 7.6 12 4.3ZM5 9.3l6 3.4v6.9l-6-3.3V9.3Zm8 10.3v-6.9l6-3.4v7l-6 3.3Z"/></svg>',
+    Statistics: '<svg class="tile-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10h-10V2Z"/><path d="M14 2.2V10h7.8A10 10 0 0 0 14 2.2Z"/></svg>',
+    Calculus: '<svg class="tile-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3c-2 0-3 1-3.4 3.2L9 17c-.4 2.3-1.5 3.6-3.5 3.6"/><path d="M13 9h4M15 7v4M14 17h5"/></svg>',
+};
+const DEFAULT_ICON = '<svg class="tile-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2V4Z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7V4Z"/></svg>';
+const CLASSIC_DESCRIPTIONS = {
+    Algebra: "Algebra is a branch of mathematics that uses symbols to represent unknown numbers and express relationships between quantities.",
+    Geometry: "Geometry is the branch of mathematics that studies shapes, sizes, angles and the properties of space.",
+    Statistics: "Statistics is the branch of applied mathematics that deals with collecting, analyzing, and presenting data.",
+    Calculus: "Calculus is the branch of mathematics that studies continuous change through rates of change and accumulation of quantities.",
+};
+const CLASSIC_TONES = { Algebra: 0, Geometry: 1, Statistics: 2, Calculus: 3 };
 
 async function getJson(path) {
     const res = await fetch(`${API}${path}`, { headers: authHeader });
@@ -66,41 +79,26 @@ function openLessons(subjectId) {
     window.location.href = `lessons.html?subject=${encodeURIComponent(subjectId)}`;
 }
 
-// Core tiles: open that subject's lessons (fall back to the chatbot if the
-// subject row doesn't exist yet, as before).
-function openBranch(tile) {
-    const subjectId = coreSubjectIds.get(tile.dataset.branch);
-    if (subjectId) {
-        openLessons(subjectId);
-        return;
-    }
-    sessionStorage.setItem("landingPendingQuestion", `I'd like to practice ${tile.dataset.branch}. Can you help me get started?`);
-    window.location.href = "user.html";
-}
-document.querySelectorAll(".tile[data-branch]").forEach(tile => {
-    tile.addEventListener("click", () => openBranch(tile));
-    tile.addEventListener("keydown", (e) => {
-        if (e.target === tile && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openBranch(tile); }
-    });
-});
-
 // Personal subject tile: same layout as a core tile, plus Open / Remove.
-function renderPersonalSubject(subject, entry, beforeElement) {
+// removable=false is used for subjects a teacher created for the school: students can open them
+// but not delete them.
+function renderPersonalSubject(subject, entry, beforeElement, removable = true, toneIndex = 0) {
     const tile = document.createElement("div");
-    tile.className = "tile personal-tile";
+    tile.className = removable ? "tile personal-tile" : "tile shared-tile";
     tile.tabIndex = 0;
-    tile.innerHTML = PERSONAL_ICON +
+    tile.dataset.tone = String(toneIndex % 4);
+    tile.innerHTML = (SUBJECT_ICONS[subject.name] || DEFAULT_ICON) +
         '<div class="tile-name"></div>' +
         '<div class="tile-progress-track"><div class="tile-progress-fill"></div></div>' +
         '<div class="tile-progress-meta"><span class="tile-lessons"></span><span class="tile-progress-pct"></span></div>' +
         '<p class="tile-desc"></p>' +
         '<div class="tile-actions">' +
         '<button type="button" class="tile-btn open">Open lessons</button>' +
-        '<button type="button" class="tile-btn danger remove">Remove</button>' +
+        (removable ? '<button type="button" class="tile-btn danger remove">Remove</button>' : '') +
         '</div>';
     // textContent (not innerHTML) for anything the student typed.
     tile.querySelector(".tile-name").textContent = subject.name;
-    tile.querySelector(".tile-desc").textContent = subject.description || "Your personal subject";
+    tile.querySelector(".tile-desc").textContent = subject.description || CLASSIC_DESCRIPTIONS[subject.name] || (removable ? "Your personal subject" : "Subject from your teacher");
     paintProgress(tile, entry);
 
     tile.addEventListener("click", () => openLessons(subject.id));
@@ -108,7 +106,8 @@ function renderPersonalSubject(subject, entry, beforeElement) {
         if (e.target === tile && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openLessons(subject.id); }
     });
     tile.querySelector(".open").addEventListener("click", (e) => { e.stopPropagation(); openLessons(subject.id); });
-    tile.querySelector(".remove").addEventListener("click", async (e) => {
+    const removeBtn = tile.querySelector(".remove");
+    if (removeBtn) removeBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
         if (!await uiConfirm(`Remove "${subject.name}"?`, { title: "Remove subject", okText: "Remove", danger: true })) return;
         try {
@@ -264,27 +263,27 @@ function renderAddSubjectTile() {
 async function loadSubjectsAndProgress() {
     // Fetch both at once; either can fail without breaking the other.
     const [subjectsResult, progressResult] = await Promise.allSettled([getJson("/subjects"), getJson("/progress")]);
-    const subjects = subjectsResult.status === "fulfilled" ? subjectsResult.value : [];
     const progress = progressResult.status === "fulfilled" ? progressResult.value : null;
+    const loadingNote = document.getElementById("tilesLoading");
+    if (loadingNote) loadingNote.remove();
 
-    coreSubjectIds.clear();
-    for (const subject of subjects) {
-        if (!subject.is_personal) coreSubjectIds.set(subject.name, subject.id);
+    if (subjectsResult.status !== "fulfilled") {
+        tilesGrid.innerHTML = '<p class="panel-note">Couldn\'t load your subjects. Please refresh the page.</p>';
+        return;
+    }
+    const subjects = subjectsResult.value;
+    if (!subjects.length) {
+        tilesGrid.innerHTML = '<p class="panel-note">No subjects yet. Your teacher can add some from the teacher dashboard.</p>';
+        return;
     }
 
-    if (progress) {
-        document.querySelectorAll(".tile[data-branch]").forEach(tile => {
-            paintProgress(tile, progress.find(p => !p.is_personal && p.branch === tile.dataset.branch));
-        });
-    } else {
-        paintProgressUnavailable();
-    }
-
-    for (const subject of subjects.filter(s => s.is_personal)) {
-        const entry = progress ? progress.find(p => p.is_personal && p.subject_id === subject.id) : null;
-        renderPersonalSubject(subject, entry);
-    }
-    // Personal subjects remain available on other pages; don't render the add-subject UI here.
+    // One tile per subject straight from the database: the school's (teacher-made) subjects first,
+    // then this student's personal ones (the API already returns them in that order).
+    subjects.forEach((subject, index) => {
+        const entry = progress ? progress.find(p => p.subject_id === subject.id) : null;
+        const tone = subject.name in CLASSIC_TONES ? CLASSIC_TONES[subject.name] : index;
+        renderPersonalSubject(subject, entry, null, subject.is_personal, tone);
+    });
     if (!progress) paintProgressUnavailable();
 }
 

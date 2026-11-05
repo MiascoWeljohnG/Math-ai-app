@@ -33,10 +33,10 @@ body.home .content { width: 100%; max-width: 1180px; margin: 0 auto; padding: cl
 .tile:hover { border-color: var(--accent); }
 .tile:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
 .tile-icon { width: 54px; height: 54px; padding: 14px; border-radius: 16px; background: var(--pri2); color: var(--accent); margin-bottom: 1rem; }
-.tile[data-branch="Geometry"] .tile-icon { background: var(--sun2); color: var(--sun-ink); }
-.tile[data-branch="Statistics"] .tile-icon { background: var(--ok2); color: var(--ok-ink); }
-.tile[data-branch="Calculus"] .tile-icon { background: #FDEAEA; color: #C23B3B; }
-[data-theme="dark"] .tile[data-branch="Calculus"] .tile-icon { background: #3A1A22; color: #F28585; }
+.tile[data-tone="1"] .tile-icon { background: var(--ok2); color: var(--ok-ink); }
+.tile[data-tone="2"] .tile-icon { background: var(--sun2); color: var(--sun-ink); }
+.tile[data-tone="3"] .tile-icon { background: #FDEAEA; color: #C23B3B; }
+[data-theme="dark"] .tile[data-tone="3"] .tile-icon { background: #3A1A22; color: #F28585; }
 .tile-name { font: 700 1.2rem/1.2 var(--font-display); margin-bottom: 0.7rem; overflow-wrap: anywhere; }
 .tile-progress-track { width: 100%; background: var(--pri2); border-radius: 999px; height: 8px; overflow: hidden; }
 .tile-progress-fill { background: var(--accent); height: 100%; border-radius: 999px; width: 0%; transition: width 0.5s ease; }

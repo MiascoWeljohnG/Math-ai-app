@@ -333,5 +333,31 @@ if (document.getElementById("resetForm")) {
     });
 }
 
+// Clear the client-side session and return to sign-in. No server request is
+// needed because the API uses stateless bearer tokens.
+function logout() {
+    ["token", "role", "username", "full_name", "first_name", "school_name"].forEach(key => localStorage.removeItem(key));
+    window.location.replace("login.html");
+}
+
 // --- PROTECT PAGES (works on all pages) ---
-function requireAuth() { ... }
+function requireAuth() {
+    const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
+    if (!token || !role) {
+        window.location.href = "login.html";
+        return false;
+    }
+    return true;
+}
+
+function requireRole(expectedRole) {
+    if (!requireAuth()) return false;
+    const role = localStorage.getItem("role");
+    const allowedRoles = expectedRole === "admin" ? ["school_admin", "admin"] : [expectedRole];
+    if (!allowedRoles.includes(role)) {
+        window.location.replace(({ school_admin: "school-admin.html", teacher: "teacher.html" })[role] || "login.html");
+        return false;
+    }
+    return true;
+}

@@ -149,7 +149,18 @@ async function selectFile(filename, displayName, btnEl) {
     viewerHeader.textContent = displayName;
     pdfPane.innerHTML = `<div class="pdf-placeholder">Loading ${displayName}...</div>`;
 
+    const isPptx = displayName.toLowerCase().endsWith(".pptx");
+
     try {
+        if (isPptx) {
+            const res = await fetch(`${API}/materials/${encodeURIComponent(filename)}/slides`, { headers: authHeaders() });
+            if (res.ok) {
+                const data = await res.json();
+                renderPptxViewer(data, filename, displayName);
+                return;
+            }
+        }
+
         const res = await fetch(`${API}/materials/${encodeURIComponent(filename)}/file`, { headers: authHeaders() });
         if (!res.ok) throw new Error();
         const blob = await res.blob();
@@ -163,6 +174,104 @@ async function selectFile(filename, displayName, btnEl) {
     } catch (_) {
         pdfPane.innerHTML = `<div class="pdf-placeholder">Couldn't load this file.</div>`;
     }
+}
+
+function renderPptxViewer(data, filename, displayName) {
+    const slides = data.slides || [];
+    if (slides.length === 0) {
+        pdfPane.innerHTML = `<div class="pdf-placeholder">Presentation is empty or contains no readable slides.<br><a href="${API}/materials/${encodeURIComponent(filename)}/file" download="${displayName}" style="color:#93c5fd; margin-top:0.5rem; display:inline-block;">Download ${displayName}</a></div>`;
+        return;
+    }
+
+    let currentSlideIdx = 0;
+
+    function buildSlideHtml(slide) {
+        const bulletsHtml = slide.bullets && slide.bullets.length > 0
+            ? `<ul class="pptx-bullet-list">${slide.bullets.map(b => `<li>${escapeHtml(b)}</li>`).join("")}</ul>`
+            : `<p style="color:#94a3b8; font-style:italic; font-size:0.9rem;">No bullet points on this slide</p>`;
+
+        let tablesHtml = "";
+        if (slide.tables && slide.tables.length > 0) {
+            tablesHtml = slide.tables.map(table => {
+                const rows = table.map((row, rIdx) => {
+                    const tag = rIdx === 0 ? "th" : "td";
+                    return `<tr>${row.map(c => `<${tag}>${escapeHtml(c)}</${tag}>`).join("")}</tr>`;
+                }).join("");
+                return `<table class="pptx-table">${rows}</table>`;
+            }).join("");
+        }
+
+        const notesHtml = slide.notes
+            ? `<div class="pptx-notes-box"><div class="pptx-notes-label">Speaker Notes</div><div>${escapeHtml(slide.notes)}</div></div>`
+            : "";
+
+        return `
+            <div class="pptx-card">
+                <div class="pptx-card-title">${escapeHtml(slide.title || `Slide ${slide.slide_number}`)}</div>
+                ${bulletsHtml}
+                ${tablesHtml}
+                ${notesHtml}
+            </div>
+        `;
+    }
+
+    function update() {
+        const slide = slides[currentSlideIdx];
+        const container = pdfPane.querySelector(".pptx-preview-container");
+        if (!container) return;
+
+        const stage = container.querySelector(".pptx-stage");
+        const info = container.querySelector(".pptx-slide-info");
+        const prevBtn = container.querySelector("#pptxPrevBtn");
+        const nextBtn = container.querySelector("#pptxNextBtn");
+
+        stage.innerHTML = buildSlideHtml(slide);
+        info.textContent = `Slide ${currentSlideIdx + 1} of ${slides.length}`;
+        prevBtn.disabled = currentSlideIdx === 0;
+        nextBtn.disabled = currentSlideIdx === slides.length - 1;
+    }
+
+    pdfPane.innerHTML = `
+        <div class="pptx-preview-container">
+            <div class="pptx-toolbar">
+                <div class="pptx-nav-group">
+                    <button class="pptx-nav-btn" id="pptxPrevBtn">◀ Prev</button>
+                    <span class="pptx-slide-info">Slide 1 of ${slides.length}</span>
+                    <button class="pptx-nav-btn" id="pptxNextBtn">Next ▶</button>
+                </div>
+                <div class="pptx-actions">
+                    <a class="pptx-action-btn" href="${API}/materials/${encodeURIComponent(filename)}/file" download="${displayName}">Download PPTX</a>
+                </div>
+            </div>
+            <div class="pptx-stage"></div>
+        </div>
+    `;
+
+    pdfPane.querySelector("#pptxPrevBtn").addEventListener("click", () => {
+        if (currentSlideIdx > 0) {
+            currentSlideIdx--;
+            update();
+        }
+    });
+
+    pdfPane.querySelector("#pptxNextBtn").addEventListener("click", () => {
+        if (currentSlideIdx < slides.length - 1) {
+            currentSlideIdx++;
+            update();
+        }
+    });
+
+    update();
+}
+
+function escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 function addAskMessage(text, role) {

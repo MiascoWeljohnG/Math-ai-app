@@ -223,7 +223,7 @@ async def summarize_document(excerpt: str) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------- admin + teacher upload
-async def ingest_with_detection(files: list[UploadFile], branch: str, branches_json: str, username: str, db, school_id=None) -> dict:
+async def ingest_with_detection(files: list[UploadFile], branch: str, branches_json: str, username: str, db, school_id=None, user=None) -> dict:
     """Shared body of /admin/upload and /teacher/upload.
 
     `branch` is a real branch (as before) or AUTO. Under AUTO each file is classified; files the
@@ -231,21 +231,34 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
     saved and come back in `needs_topic` so the uploader can pick. `branches_json` is that pick:
     {"file name": "Algebra"}, sent when the uploader re-submits those files.
     """
-    from models import Material
+    from models import Material, Subject
     from notifications import notify_admins
     from progress import UPLOAD_BRANCHES
+    from school import shared_subjects
     from rag import ingest_uploaded_materials
 
-    if branch != AUTO and branch not in UPLOAD_BRANCHES:
-        raise HTTPException(status_code=400, detail=f"Branch must be one of: {', '.join([AUTO, *UPLOAD_BRANCHES])}")
     if not files:
         raise HTTPException(status_code=400, detail="Choose at least one file to upload")
+
+    # File branches must come from the uploader's own school. Keep the
+    # legacy fixed branches usable only when they exist in that school's DB.
+    school_subjects = []
+    if school_id is not None:
+        if user is None:
+            raise HTTPException(status_code=401, detail="Upload user context is required")
+        school_subjects = db.query(Subject).filter(shared_subjects(user)).all()
+    school_branch_names = {subject.name for subject in school_subjects}
+    valid_targets = school_branch_names if school_id is not None else set(UPLOAD_BRANCHES)
+    if school_id is not None and not school_branch_names:
+        raise HTTPException(status_code=400, detail="No subjects are configured for your school yet")
     try:
         picked = json.loads(branches_json) if branches_json else {}
     except ValueError:
         picked = None
-    if not isinstance(picked, dict) or any(value not in UPLOAD_BRANCHES for value in picked.values()):
-        raise HTTPException(status_code=400, detail=f"Chosen topics must be one of: {', '.join(UPLOAD_BRANCHES)}")
+    if not isinstance(picked, dict) or any(value not in valid_targets for value in picked.values()):
+        raise HTTPException(status_code=400, detail=f"Chosen subjects must be from your school's subject list")
+    if branch != AUTO and branch not in valid_targets:
+        raise HTTPException(status_code=400, detail="Choose a subject available in your school")
 
     ready: dict[str, list[tuple[str, bytes]]] = {}   # branch -> files to save
     detected: dict[str, float] = {}                  # file name -> confidence, for auto-detected files

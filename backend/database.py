@@ -1,9 +1,13 @@
 import os
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Get the Supabase URL from Render. If it doesn't exist (like on your local PC), use SQLite.
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
+# Anchor the default SQLite database path to the backend directory so it resolves
+# consistently regardless of the working directory the server was launched from.
+_DEFAULT_DB = f"sqlite:///{(Path(__file__).resolve().parent / 'app.db').as_posix()}"
+DATABASE_URL = os.getenv("DATABASE_URL", _DEFAULT_DB)
 
 # PostgreSQL (Supabase) and SQLite require different connection setups
 if DATABASE_URL.startswith("sqlite"):

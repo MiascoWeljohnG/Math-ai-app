@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
     <meta name="theme-color" content="#F2F5FA">
+    <link rel="icon" href="data:,">
     <title>Teacher Dashboard</title>
     <script src="js/theme.js"></script>
     <link rel="stylesheet" href="css/theme.css">
@@ -25,18 +26,13 @@
     <div class="section">
         <h2>Upload Course Material</h2>
         <div class="drop-zone" id="dropZone">
-            <p class="placeholder" id="dropPlaceholder">Drag & drop text, PDF, or Word files here, or click to browse</p>
+            <p class="placeholder" id="dropPlaceholder">Drag & drop text, PDF, Word, or PowerPoint files here, or click to browse</p>
         </div>
-        <input type="file" id="fileInput" multiple accept=".txt,.pdf,.docx" style="display:none">
+        <input type="file" id="fileInput" multiple accept=".txt,.pdf,.docx,.pptx" style="display:none">
         <div class="field-row" style="margin-top:1rem;">
             <label for="branchSelect" class="label">Math branch</label>
             <select id="branchSelect" class="branch-select">
                 <option value="Auto" selected>Auto-detect (AI)</option>
-                <option value="Algebra">Algebra</option>
-                <option value="Geometry">Geometry</option>
-                <option value="Statistics">Statistics</option>
-                <option value="Calculus">Calculus</option>
-                <option value="General">General (no specific branch)</option>
             </select>
         </div>
         <button class="btn btn-primary" id="uploadBtn" onclick="uploadFiles()" disabled>Upload & Ingest</button>
@@ -87,9 +83,9 @@
                     </div>
                     <div id="sourceUploadRow" hidden>
                         <div class="drop-zone drop-zone-compact" id="lessonDropZone" role="button" tabindex="0" aria-label="File to base the lessons on">
-                            <p class="placeholder" id="lessonDropPlaceholder">Drag &amp; drop a PDF or Word file here, or click to browse</p>
+                            <p class="placeholder" id="lessonDropPlaceholder">Drag &amp; drop a PDF, Word, or PowerPoint file here, or click to browse</p>
                         </div>
-                        <input type="file" id="lessonFileInput" accept=".pdf,.docx,.txt,.md" style="display:none" aria-label="File to base the lessons on">
+                        <input type="file" id="lessonFileInput" accept=".pdf,.docx,.pptx,.txt,.md" style="display:none" aria-label="File to base the lessons on">
                         <p class="hint">Only used to write these lessons. It is not added to Your Uploaded Files.</p>
                     </div>
                     <div id="sourceLibraryRow" hidden>
@@ -209,8 +205,8 @@
     <dialog id="subjectDialog" class="subject-dialog" aria-labelledby="subjectDialogTitle">
         <h2 id="subjectDialogTitle">New subject</h2>
         <label for="subjectFileInput">Upload a file (optional)</label>
-        <input id="subjectFileInput" type="file" accept=".pdf,.docx,.txt,.md">
-        <p class="hint">PDF, DOCX, TXT or MD. The AI reads it, fills in the name and description, and can write the lessons too.</p>
+        <input id="subjectFileInput" type="file" accept=".pdf,.docx,.pptx,.txt,.md">
+        <p class="hint">PDF, DOCX, PPTX, TXT or MD. The AI reads it, fills in the name and description, and can write the lessons too.</p>
         <label for="subjectNameInput">Name</label>
         <input id="subjectNameInput" type="text" maxlength="80" placeholder="e.g. Geometry">
         <label for="subjectDescInput">Description</label>

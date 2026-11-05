@@ -4,13 +4,18 @@ from sqlalchemy.orm import Session
 from auth import require_teacher
 from database import get_db
 from adaptive import level_counts
-from school import in_school, shared_subjects
+from school import in_school, shared_subjects, visible_subjects
 from models import ACTIVE, Lesson, Material, Subject, User
 from classifier import AUTO, ingest_with_detection
 from progress import progress_for_user
 from routes.materials_routes import material_summary
 
 router = APIRouter(prefix="/teacher", tags=["teacher"])
+
+
+@router.get("/subjects")
+def teacher_subjects(user=Depends(require_teacher), db: Session = Depends(get_db)):
+    return [{"id": subject.id, "name": subject.name} for subject in db.query(Subject).filter(visible_subjects(user)).order_by(Subject.name).all()]
 
 
 @router.post("/upload")
@@ -25,7 +30,7 @@ async def teacher_upload(
     # same shared knowledge base admins manage, just through their own
     # endpoint so the two roles stay clearly separate in the API.
     # branch=Auto: the AI picks each file's branch and only asks when it isn't sure (classifier.py)
-    return await ingest_with_detection(files, branch, branches, user.username, db, school_id=user.school_id)
+    return await ingest_with_detection(files, branch, branches, user.username, db, school_id=user.school_id, user=user)
 
 
 @router.get("/files")

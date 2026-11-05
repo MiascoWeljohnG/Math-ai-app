@@ -1,4 +1,5 @@
 import asyncio
+import io
 import mimetypes
 import re
 from pathlib import Path
@@ -88,13 +89,84 @@ def get_material_file(
     if material is None or material.school_id != user.school_id:
         raise HTTPException(status_code=404, detail="File not found")
     name = material.display_name or _display_name(material.filename)
+    guessed_type = mimetypes.guess_type(name)[0]
+    if not guessed_type and name.lower().endswith(".pptx"):
+        guessed_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    media_type = guessed_type or "application/octet-stream"
+
     if material.drive_file_id:
         return Response(
             content=material_bytes(material),
-            media_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
+            media_type=media_type,
             headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"},
         )
-    return FileResponse(_vault_material_path(material.filename), filename=name)
+    return FileResponse(_vault_material_path(material.filename), filename=name, media_type=media_type)
+
+
+@router.get("/{filename:path}/slides")
+def get_material_slides(
+    filename: str,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    material = db.query(Material).filter(Material.filename == filename).first()
+    if material is None or material.school_id != user.school_id:
+        raise HTTPException(status_code=404, detail="File not found")
+    name = material.display_name or _display_name(material.filename)
+    if not name.lower().endswith(".pptx"):
+        raise HTTPException(status_code=400, detail="Only PowerPoint presentations (.pptx) have slide structures")
+    
+    raw = material_bytes(material)
+    try:
+        from pptx import Presentation
+        prs = Presentation(io.BytesIO(raw))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to read presentation: {exc}")
+
+    slides_data = []
+    for i, slide in enumerate(prs.slides, 1):
+        titles = []
+        body_bullets = []
+        tables = []
+        notes = ""
+
+        # Title shape
+        if slide.shapes.title and slide.shapes.title.text:
+            titles.append(slide.shapes.title.text.strip())
+
+        for shape in slide.shapes:
+            if shape == slide.shapes.title:
+                continue
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    line = "".join(r.text for r in para.runs).strip()
+                    if line:
+                        body_bullets.append(line)
+            elif shape.has_table:
+                tbl = []
+                for row in shape.table.rows:
+                    row_cells = [" ".join(cell.text.split()) for cell in row.cells]
+                    tbl.append(row_cells)
+                if tbl:
+                    tables.append(tbl)
+
+        if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
+            notes = slide.notes_slide.notes_text_frame.text.strip()
+
+        slides_data.append({
+            "slide_number": i,
+            "title": " ".join(titles) if titles else f"Slide {i}",
+            "bullets": body_bullets,
+            "tables": tables,
+            "notes": notes,
+        })
+
+    return {
+        "filename": filename,
+        "display_name": name,
+        "total_slides": len(slides_data),
+        "slides": slides_data,
+    }
 
 
 @router.post("/reindex")

@@ -66,12 +66,15 @@ async function uploadFiles() {
     if (!selectedFiles.length) return;
     const statusEl = document.getElementById("uploadStatus");
     statusEl.className = "status";
-    statusEl.textContent = "Uploading & ingesting...";
+    statusEl.textContent = "Checking your school's available subjects...";
     statusEl.style.display = "block";
 
     await withButtonLoading(uploadBtn, async () => {
+        const subjects = await loadUploadSubjects(`${API}/teacher/subjects`);
+        populateUploadSubjects(document.getElementById("branchSelect"), subjects);
+        statusEl.textContent = subjects.length ? "Select a subject, or leave Auto-detect (AI) to classify each file." : "No subjects are configured for this school. Uploading with AI auto-detection.";
         const branch = document.getElementById("branchSelect").value;
-        const { message, savedNames } = await uploadWithTopics(`${API}/teacher/upload`, getHeaders(), selectedFiles, branch);
+        const { message, savedNames } = await uploadWithTopics(`${API}/teacher/upload`, getHeaders(), selectedFiles, branch, subjects);
 
         statusEl.className = "status success";
         statusEl.textContent = message;
@@ -775,6 +778,18 @@ async function loadMaterialOptions() {
     } catch (_) { /* leave the list as it was */ }
 }
 loadMaterialOptions();
+
+async function initUploadSubjects() {
+    const branchSelect = document.getElementById("branchSelect");
+    if (!branchSelect) return;
+    try {
+        const subjects = await loadUploadSubjects(`${API}/teacher/subjects`);
+        populateUploadSubjects(branchSelect, subjects);
+    } catch (_) {
+        // Fall back gracefully to existing select state if fetch fails
+    }
+}
+initUploadSubjects();
 
 async function postJson(url, body) {
     const response = await fetch(url, {

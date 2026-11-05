@@ -125,8 +125,8 @@ mjx-container::-webkit-scrollbar-thumb {
             
             <div id="generateBox" hidden style="margin-top:1.5rem;">
                 <input id="generateTopic" maxlength="160" placeholder="What do you want to learn?" style="width:100%; padding:0.7rem; border:1px solid var(--field-border); border-radius:8px; background:var(--bg-elevated); color:var(--text); font:inherit;">
-                <label for="generateFile" style="display:block; margin-top:0.7rem; font-size:0.8rem; color:var(--text-muted);">Or build the lesson from a file <span>(PDF or DOCX; the title is optional)</span>
-                    <input id="generateFile" type="file" accept=".pdf,.docx,.txt" style="display:block; width:100%; margin-top:0.25rem; padding:0.5rem; border:1px solid var(--field-border); border-radius:8px; background:var(--bg-elevated); color:var(--text); font:inherit; font-size:0.85rem;">
+                <label for="generateFile" style="display:block; margin-top:0.7rem; font-size:0.8rem; color:var(--text-muted);">Or build the lesson from a file <span>(PDF, DOCX, or PPTX; the title is optional)</span>
+                    <input id="generateFile" type="file" accept=".pdf,.docx,.pptx,.txt" style="display:block; width:100%; margin-top:0.25rem; padding:0.5rem; border:1px solid var(--field-border); border-radius:8px; background:var(--bg-elevated); color:var(--text); font:inherit; font-size:0.85rem;">
                 </label>
                 <button id="generateBtn" type="button" class="complete-btn" style="margin-top:0.5rem; width:100%;"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15v4M17 17h4"/></svg> Generate lesson</button>
                 <p id="generateStatus" class="lesson-empty" style="font-size:0.8rem; margin-top:0.4rem;" aria-live="polite"></p>

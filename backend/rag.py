@@ -297,6 +297,34 @@ def extract_text_from_bytes(filename: str, contents: bytes) -> list[tuple[int, s
                 tables.append(md)
         return [(0, text, tables)]
 
+    elif suffix == ".pptx":
+        from pptx import Presentation
+        prs = Presentation(io.BytesIO(contents))
+        slides = []
+        for i, slide in enumerate(prs.slides, start=1):
+            slide_texts = []
+            slide_tables = []
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    t = shape.text_frame.text.strip()
+                    if t:
+                        slide_texts.append(t)
+                elif shape.has_table:
+                    table_rows = []
+                    for row in shape.table.rows:
+                        table_rows.append([cell.text.strip() for cell in row.cells])
+                    md = _table_to_markdown(table_rows)
+                    if md:
+                        slide_tables.append(md)
+            body = "\n".join(slide_texts)
+            if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
+                notes = slide.notes_slide.notes_text_frame.text.strip()
+                if notes:
+                    body = f"{body}\n[Notes: {notes}]" if body else f"[Notes: {notes}]"
+            if body or slide_tables:
+                slides.append((i, body, slide_tables))
+        return slides
+
     raise ValueError(f"Unsupported material file type: {suffix or '(no extension)'}")
 
 def _index_files(vault_files: list[Path], vault_dir: Path, branch: str = "General") -> tuple[int, set[str]]:
@@ -369,7 +397,7 @@ def _prepare_uploads(files: list[tuple[str, bytes]], storage_ids: Optional[list[
         if not safe_name:
             raise ValueError("Uploaded material must have a valid filename")
         suffix = Path(safe_name).suffix.lower()
-        if suffix not in {".pdf", ".docx", ".txt", ".md"}:
+        if suffix not in {".pdf", ".docx", ".pptx", ".txt", ".md"}:
             raise ValueError(f"Unsupported material file type: {suffix or '(no extension)'}")
         safe_name = f"{Path(safe_name).stem[:100]}{suffix}"
         pages = extract_text_from_bytes(safe_name, contents)
@@ -501,7 +529,7 @@ def ingest_uploads(uploads_path: str, branch: str = "General"):
     materials_dir = vault_dir / "Uploaded Materials"
     vault_files = [
         path for path in (materials_dir.rglob("*") if materials_dir.is_dir() else [])
-        if path.is_file() and path.suffix.lower() in {".pdf", ".docx", ".txt", ".md"}
+        if path.is_file() and path.suffix.lower() in {".pdf", ".docx", ".pptx", ".txt", ".md"}
     ]
     chunk_count, current_ids = _index_files(sorted(vault_files), vault_dir, branch)
 

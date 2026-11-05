@@ -17,6 +17,13 @@ import drive_storage
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+@router.get("/subjects")
+def admin_subjects(user=Depends(require_school_admin), db: Session = Depends(get_db)):
+    from models import Subject
+    from school import visible_subjects
+    return [{"id": subject.id, "name": subject.name} for subject in db.query(Subject).filter(visible_subjects(user)).order_by(Subject.name).all()]
+
+
 @router.post("/upload")
 async def upload_documents(
     files: list[UploadFile] = File(...),
@@ -26,10 +33,10 @@ async def upload_documents(
     db: Session = Depends(get_db),
 ):
     # branch=Auto: the AI picks each file's branch and only asks when it isn't sure (classifier.py)
-    return await ingest_with_detection(files, branch, branches, user.username, db)
+    return await ingest_with_detection(files, branch, branches, user.username, db, school_id=user.school_id, user=user)
 
 @router.get("/users")
-def list_users(user=Depends(require_admin), db: Session = Depends(get_db)):
+def list_users(user=Depends(require_school_admin), db: Session = Depends(get_db)):
     users = db.query(User).filter(User.school_id == user.school_id).all()
     schools = {s.id: s.name for s in db.query(School)}
     return [
@@ -50,14 +57,14 @@ def list_users(user=Depends(require_admin), db: Session = Depends(get_db)):
     ]
 
 @router.get("/files")
-def list_files(user=Depends(require_admin), db: Session = Depends(get_db)):
+def list_files(user=Depends(require_school_admin), db: Session = Depends(get_db)):
     """Every uploaded file with who uploaded it and when (newest first)."""
     names = {u.username: u.person_name for u in db.query(User).all()}
     rows = db.query(Material).filter(Material.school_id == user.school_id).order_by(Material.uploaded_at.desc(), Material.id.desc()).all()
     return [{**material_summary(m), "uploaded_by_name": names.get(m.uploaded_by, "")} for m in rows]
 
 @router.delete("/files/{filename:path}")
-def delete_file(filename: str, user=Depends(require_admin), db: Session = Depends(get_db)):
+def delete_file(filename: str, user=Depends(require_school_admin), db: Session = Depends(get_db)):
     """Delete one uploaded file: its record, the original on disk, and the AI's chunks from it."""
     from rag import delete_material_chunks
     material = db.query(Material).filter(Material.filename == filename, Material.school_id == user.school_id).first()
@@ -84,7 +91,7 @@ def delete_file(filename: str, user=Depends(require_admin), db: Session = Depend
 
 
 @router.delete("/knowledge-base")
-def clear_knowledge_base(user=Depends(require_admin), db: Session = Depends(get_db)):
+def clear_knowledge_base(user=Depends(require_school_admin), db: Session = Depends(get_db)):
     """Wipes the vector store, uploaded files, and their branch
     records together, so the materials list and the AI's searchable content
     can never disagree about what exists."""
@@ -275,16 +282,16 @@ def remove_registered(db: Session, row: Optional[RegisteredStudent]) -> dict:
 
 
 @router.post("/registered-students")
-def add_registered_students(req: RegisteredNumbersRequest, user=Depends(require_admin), db: Session = Depends(get_db)):
+def add_registered_students(req: RegisteredNumbersRequest, user=Depends(require_school_admin), db: Session = Depends(get_db)):
     school = school_or_400(db, req.school_id)
     return add_registered(db, req.numbers, school.id)
 
 
 @router.get("/registered-students")
-def list_registered_students(user=Depends(require_admin), db: Session = Depends(get_db)):
+def list_registered_students(user=Depends(require_school_admin), db: Session = Depends(get_db)):
     return registry_items(db, db.query(RegisteredStudent).order_by(RegisteredStudent.id.desc()).all())
 
 
 @router.delete("/registered-students/{row_id}")
-def delete_registered_student(row_id: int, user=Depends(require_admin), db: Session = Depends(get_db)):
+def delete_registered_student(row_id: int, user=Depends(require_school_admin), db: Session = Depends(get_db)):
     return remove_registered(db, db.query(RegisteredStudent).filter(RegisteredStudent.id == row_id).first())

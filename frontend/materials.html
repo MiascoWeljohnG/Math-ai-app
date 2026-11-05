@@ -42,9 +42,29 @@
         .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
         .viewer-header { padding: 0.9rem 1.5rem; background: var(--bg-elevated); border-bottom: 1px solid var(--border); font-size: 0.95rem; }
         .viewer-body { flex: 1; display: flex; min-height: 0; }
-        .pdf-pane { flex: 2; background: #525659; }
+        .pdf-pane { flex: 2; background: #525659; overflow: hidden; display: flex; flex-direction: column; }
         .pdf-pane iframe { width: 100%; height: 100%; border: none; }
-        .pdf-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; color: #cbd5e1; font-size: 0.9rem; }
+        .pdf-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; color: #cbd5e1; font-size: 0.9rem; text-align: center; padding: 1.5rem; }
+        .pptx-preview-container { display: flex; flex-direction: column; height: 100%; background: #1e293b; color: #f8fafc; }
+        .pptx-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 0.65rem 1rem; background: #0f172a; border-bottom: 1px solid #334155; }
+        .pptx-nav-group { display: flex; align-items: center; gap: 0.5rem; }
+        .pptx-nav-btn { background: #334155; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 0.35rem 0.75rem; font-size: 0.8rem; cursor: pointer; transition: background 0.15s; }
+        .pptx-nav-btn:hover:not(:disabled) { background: #475569; }
+        .pptx-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pptx-slide-info { font-size: 0.82rem; color: #94a3b8; font-weight: 500; min-width: 80px; text-align: center; }
+        .pptx-actions { display: flex; gap: 0.5rem; }
+        .pptx-action-btn { background: #2563eb; color: #fff; text-decoration: none; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; border: none; display: inline-flex; align-items: center; cursor: pointer; }
+        .pptx-action-btn:hover { background: #1d4ed8; }
+        .pptx-stage { flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+        .pptx-card { width: 100%; max-width: 780px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 1.8rem; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4); }
+        .pptx-card-title { font-size: 1.3rem; font-weight: 600; color: #38bdf8; margin-bottom: 1.2rem; padding-bottom: 0.6rem; border-bottom: 1px solid #1e293b; }
+        .pptx-bullet-list { list-style: disc; padding-left: 1.5rem; margin-bottom: 1.2rem; display: flex; flex-direction: column; gap: 0.55rem; color: #e2e8f0; font-size: 0.95rem; line-height: 1.5; }
+        .pptx-table { width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1rem; font-size: 0.85rem; }
+        .pptx-table th, .pptx-table td { border: 1px solid #334155; padding: 0.5rem 0.75rem; text-align: left; }
+        .pptx-table th { background: #1e293b; color: #38bdf8; font-weight: 600; }
+        .pptx-table td { color: #cbd5e1; }
+        .pptx-notes-box { margin-top: 1.2rem; padding: 0.75rem 1rem; background: #1e293b; border-left: 4px solid #f59e0b; border-radius: 4px; font-size: 0.82rem; color: #cbd5e1; line-height: 1.4; }
+        .pptx-notes-label { font-weight: 600; color: #fbbf24; margin-bottom: 0.25rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
 
         .ask-pane { flex: 1; min-width: 280px; max-width: 380px; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg-elevated-2); }
         .ask-pane-header { padding: 0.9rem 1.1rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; color: var(--text-muted); }
