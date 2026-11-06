@@ -51,15 +51,19 @@ def _sync_drive_index_at_startup():
         rows = session.query(Material).filter(Material.drive_file_id.isnot(None)).all()
         files = [(m.filename, m.branch or "General", m.drive_file_id) for m in rows]
         log.info("Drive storage OK (folder %r). Indexing %d file(s)...", folder, len(files))
-        result = sync_drive_index(files)
+        # files still being read (or failed) belong to the background queue: don't embed them a second time here
+        busy = frozenset(m.filename for m in rows if (m.index_status or "ready") != "ready")
+        result = sync_drive_index(files, skip=busy)
         log.info("Drive index ready: %s", result)
-        import indexing
-        indexing.settle_stale_jobs()   # rows left on "indexing" by the restart become ready or failed
     except Exception:
         log.exception("Couldn't sync the Drive files into the search index")
     finally:
         session.close()
 
+
+# Files that were being read when the server last stopped carry on first, so a restart never leaves them stuck.
+import indexing
+indexing.resume_stale_jobs()
 
 # Index the uploaded files (the knowledge base). If anything here fails the app must still start,
 # otherwise every request fails and the browser just says "Failed to fetch".
@@ -73,8 +77,6 @@ else:
         ingest_uploads(config.CHROMA_VAULT_DIR)
     except Exception:
         log.exception("Startup indexing failed; continuing without re-indexing")
-    import indexing
-    indexing.settle_stale_jobs()
 
 # Uploaded documents live and are retrieved from the uploads folder; discard the
 # legacy-only collection after its documents have been migrated successfully.

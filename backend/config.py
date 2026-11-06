@@ -62,6 +62,9 @@ EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "25"))
 # key has billing enabled and a much higher limit.
 EMBEDDING_TOKENS_PER_MINUTE = int(os.getenv("EMBEDDING_TOKENS_PER_MINUTE", "25000"))
 EMBEDDING_MAX_RETRIES = int(os.getenv("EMBEDDING_MAX_RETRIES", "5"))   # waits as long as Gemini asks between tries
+# A background indexing job is stopped (shown as failed, with Retry) after this long, so one stuck file can never
+# hold up every file behind it.
+INDEX_JOB_MAX_MINUTES = int(os.getenv("INDEX_JOB_MAX_MINUTES", "45"))
 
 CHROMA_PERSIST_DIR = "./chroma_db"
 CHROMA_COLLECTION = "math_knowledge"

@@ -28,6 +28,22 @@ class EmbeddingQuotaError(RuntimeError):
     """Gemini kept answering 429 (quota / rate limit) even after waiting and retrying."""
 
 
+_job = threading.local()   # the deadline of the background indexing job running on this thread, if any
+
+
+def set_job_deadline(seconds: Optional[float]) -> None:
+    """Called by indexing.py around a job: embedding calls then stop with TimeoutError once time is up
+    (None removes the limit)."""
+    _job.deadline = time.monotonic() + seconds if seconds else None
+
+
+def _check_deadline() -> None:
+    deadline = getattr(_job, "deadline", None)
+    if deadline is not None and time.monotonic() > deadline:
+        raise TimeoutError("Reading this file took too long and was stopped. Press Retry to try again, "
+                           "or upload it in smaller parts.")
+
+
 class GeminiEmbeddings(Embeddings):
     """Hosted embeddings through Gemini's OpenAI-compatible endpoint (no local model server needed).
 
@@ -57,6 +73,7 @@ class GeminiEmbeddings(Embeddings):
             return
         tokens = min(tokens, self.tokens_per_minute)
         while True:
+            _check_deadline()
             with self._lock:
                 now = time.monotonic()
                 self._window = [(sent, n) for sent, n in self._window if now - sent < 60]
@@ -89,6 +106,7 @@ class GeminiEmbeddings(Embeddings):
                 batch = texts[start:start + self.batch_size]
                 tokens = self._estimate_tokens(batch)
                 for attempt in range(self.max_retries + 1):
+                    _check_deadline()
                     self._pace(tokens)
                     response = client.post(
                         self.url,
@@ -531,11 +549,12 @@ def _ingest_to_drive(files: list[tuple[str, bytes]], branch: str, storage_ids: O
     return [stored for stored, _, _ in uploaded]
 
 
-def sync_drive_index(materials: list[tuple[str, str, str]], force: bool = False) -> dict:
+def sync_drive_index(materials: list[tuple[str, str, str]], force: bool = False, skip: frozenset = frozenset()) -> dict:
     """Make the vector store match the files in Drive. `materials` is (filename, branch, drive file id) for
     every Material row stored in Drive. Files with no chunks yet are downloaded and indexed (all of them
     after a Render restart, which wipes the index); with `force`, every file is re-indexed. Chunks of files
-    that no longer have a row are dropped. A file that can't be fetched is skipped and reported, not fatal."""
+    that no longer have a row are dropped. A file that can't be fetched is skipped and reported, not fatal.
+    Files named in `skip` are left alone (the background indexing queue is handling them) but their chunks are kept."""
     import drive_storage
 
     vault_collection = chroma_client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
@@ -546,6 +565,8 @@ def sync_drive_index(materials: list[tuple[str, str, str]], force: bool = False)
 
     for filename, branch, file_id in materials:
         source = _material_index_source(filename)
+        if filename in skip or source in skip:
+            continue
         if not force and vault_collection.get(where={"source": source}, limit=1)["ids"]:
             continue
         try:

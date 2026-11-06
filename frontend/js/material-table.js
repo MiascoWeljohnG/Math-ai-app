@@ -58,10 +58,15 @@ function renderMaterialRows(tbody, files, showUploader, onDelete, onRefresh) {
         branch.className = "tag";
         branch.textContent = file.branch;
         const nameCell = [file.display_name];
+        // reading normally takes minutes; after 15 the job was probably lost (e.g. the server restarted)
+        const waitedMinutes = file.uploaded_at ? (Date.now() - new Date(file.uploaded_at).getTime()) / 60000 : 0;
+        const stuck = file.index_status === "indexing" && waitedMinutes > 15;
         if (file.index_status === "indexing") {
             const note = document.createElement("span");
             note.className = "cell-sub";
-            note.textContent = "The AI is reading this file… it can take a few minutes.";
+            note.textContent = stuck
+                ? "This is taking longer than usual. Press Retry to start it again."
+                : "The AI is reading this file… it can take a few minutes.";
             nameCell.push(note);
         } else if (file.index_status === "failed") {
             const note = document.createElement("span");
@@ -85,7 +90,7 @@ function renderMaterialRows(tbody, files, showUploader, onDelete, onRefresh) {
         button.textContent = "Download";
         button.addEventListener("click", () => downloadMaterial(file));
         const actions = [button];
-        if (file.index_status === "failed") {
+        if (file.index_status === "failed" || stuck) {
             const retry = document.createElement("button");
             retry.type = "button";
             retry.className = "btn btn-primary btn-sm";

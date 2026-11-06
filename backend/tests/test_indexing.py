@@ -89,30 +89,28 @@ def test_retry_puts_a_failed_file_back_in_the_queue(db, no_background_indexing):
     assert no_background_indexing == [row.id]
 
 
-class FakeCollection:
-    def __init__(self, indexed):
-        self.indexed = indexed
-
-    def get(self, where, limit=None):
-        return {"ids": ["x"] if where["source"] in self.indexed else []}
-
-
-def test_restart_settles_unfinished_files(db, jobs, monkeypatch):
+def test_restart_requeues_files_that_were_being_read(db, jobs, no_background_indexing):
     long_ago = datetime(2000, 1, 1)
-    done = add_material(db, index_status="indexing", uploaded_at=long_ago)
-    lost = Material(filename="Uploaded Materials/Algebra/id_b.pdf", display_name="b.pdf", branch="Algebra",
-                    uploaded_by="teacher1", index_status="indexing", uploaded_at=long_ago)
+    lost = add_material(db, index_status="indexing", uploaded_at=long_ago)
+    done = Material(filename="Uploaded Materials/Algebra/id_b.pdf", display_name="b.pdf", branch="Algebra",
+                    uploaded_by="teacher1", index_status="ready", uploaded_at=long_ago)
     fresh = Material(filename="Uploaded Materials/Algebra/id_c.pdf", display_name="c.pdf", branch="Algebra",
-                     uploaded_by="teacher1", index_status="indexing")   # uploaded after this start: left alone
-    db.add_all([lost, fresh])
+                     uploaded_by="teacher1", index_status="indexing")   # uploaded after this start: not ours
+    db.add_all([done, fresh])
     db.commit()
-    monkeypatch.setattr(jobs, "chroma_client", type("C", (), {"get_or_create_collection": lambda self, name: FakeCollection({done.filename})})(), raising=False)
-    indexing.settle_stale_jobs()
-    for row in (done, lost, fresh):
-        db.refresh(row)
-    assert done.index_status == "ready"
-    assert lost.index_status == "failed" and "Retry" in lost.index_error
-    assert fresh.index_status == "indexing"
+    indexing.resume_stale_jobs()
+    assert no_background_indexing == [lost.id]   # only the interrupted one is picked up again
+
+
+def test_a_job_that_runs_out_of_time_fails_with_a_clear_message(db, jobs):
+    row = add_material(db, index_status="indexing")
+
+    def too_slow(source, branch, contents):
+        raise TimeoutError("Reading this file took too long and was stopped. Press Retry to try again.")
+    jobs.index_document = too_slow
+    indexing._index(row.id, b"bytes")
+    db.refresh(row)
+    assert row.index_status == "failed" and "took too long" in row.index_error
 
 
 def test_old_rows_without_a_status_count_as_ready(db):

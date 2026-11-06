@@ -65,12 +65,15 @@ def _index(material_id: int, contents: bytes | None) -> None:
         db.close()
 
     try:
+        rag.set_job_deadline(config.INDEX_JOB_MAX_MINUTES * 60)
         data = contents if contents is not None else _load_bytes(source, drive_file_id)
         chunks = rag.index_document(source, branch, data)
     except Exception as exc:
         log.exception("Indexing %s failed", source)
         _finish(material_id, FAILED, _explain(exc))
         return
+    finally:
+        rag.set_job_deadline(None)
     if _finish(material_id, READY, None):
         log.info("Indexed %s (%d chunks)", source, chunks)
     else:   # deleted while we were indexing it: don't leave its chunks behind
@@ -108,7 +111,7 @@ def _load_bytes(filename: str, drive_file_id: str | None) -> bytes:
 
 def _explain(exc: Exception) -> str:
     """The sentence the page shows next to a failed file."""
-    if isinstance(exc, (ValueError, FileNotFoundError)):
+    if isinstance(exc, (ValueError, FileNotFoundError, TimeoutError)):
         return str(exc)[:300]
     if type(exc).__name__ == "EmbeddingQuotaError":   # carries its own plain-language advice
         return str(exc)[:400]
@@ -122,28 +125,18 @@ def retry(material: Material, db) -> None:
     start_indexing(material.id)
 
 
-def settle_stale_jobs() -> None:
-    """Run once at startup, after the knowledge base has been rebuilt. A restart kills background jobs, so a
-    row that still says "indexing" from before this start has no job: it becomes "ready" if its chunks made
-    it into the search index, otherwise "failed" (the page then offers Retry)."""
-    import rag
-
+def resume_stale_jobs() -> None:
+    """Run once at startup, BEFORE the search index is rebuilt. A restart (Render sleeping, a redeploy) kills
+    background jobs, leaving rows on "indexing" with nobody working on them. Queue each one again: the file
+    is read back from storage, so nothing needs uploading twice."""
     db = SessionLocal()
     try:
-        rows = db.query(Material).filter(Material.index_status == INDEXING, Material.uploaded_at < _STARTED).all()
-        if not rows:
-            return
-        collection = rag.chroma_client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
-        for material in rows:
-            with _active_lock:
-                if material.id in _active:   # re-queued by a Retry since startup
-                    continue
-            indexed = bool(collection.get(where={"source": material.filename}, limit=1)["ids"])
-            material.index_status = READY if indexed else FAILED
-            material.index_error = None if indexed else "Indexing was interrupted by a server restart. Press Retry."
-        db.commit()
+        ids = [m.id for m in db.query(Material).filter(Material.index_status == INDEXING, Material.uploaded_at < _STARTED).all()]
     except Exception:
-        db.rollback()
-        log.exception("Couldn't settle unfinished indexing jobs")
+        log.exception("Couldn't look for unfinished indexing jobs")
+        return
     finally:
         db.close()
+    for material_id in ids:
+        if start_indexing(material_id):
+            log.info("Resuming interrupted indexing of material %s", material_id)

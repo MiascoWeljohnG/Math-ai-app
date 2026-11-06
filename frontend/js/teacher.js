@@ -90,12 +90,29 @@ async function uploadFiles() {
 
 // --- Files this teacher uploaded (the server only returns their own) ---
 let lastReadyCount = null;
+let filesRetryTimer = null;
+
+// A failed load must not look like "no files": say what happened, and try again by itself.
+function showFilesProblem(message) {
+    const note = document.getElementById("noFiles");
+    note.textContent = message;
+    note.style.display = "block";
+    document.getElementById("filesTable").style.display = "none";
+    clearTimeout(filesRetryTimer);
+    filesRetryTimer = setTimeout(loadMyFiles, 8000);
+}
+
 async function loadMyFiles() {
     try {
         const res = await fetch(`${API}/teacher/files`, { headers: getHeaders() });
-        if (!res.ok) return;
+        if (!res.ok) {
+            showFilesProblem(`Couldn't load your files (server error ${res.status}). Your uploads are safe. Trying again…`);
+            return;
+        }
         const files = await res.json();
-        document.getElementById("noFiles").style.display = files.length ? "none" : "block";
+        const note = document.getElementById("noFiles");
+        note.textContent = "You haven't uploaded any files yet.";
+        note.style.display = files.length ? "none" : "block";
         document.getElementById("filesTable").style.display = files.length ? "" : "none";
         renderMaterialRows(document.querySelector("#filesTable tbody"), files, false, undefined, loadMyFiles);
         // a file that just finished being read can now be picked for lessons
@@ -104,7 +121,10 @@ async function loadMyFiles() {
             if (lastReadyCount !== null) loadMaterialOptions();
             lastReadyCount = readyCount;
         }
-    } catch (_) { /* leave table empty on failure */ }
+    } catch (err) {
+        console.error("Loading the teacher's files failed:", err);
+        showFilesProblem("Couldn't reach the server (it may be waking up). Your uploads are safe. Trying again…");
+    }
 }
 loadMyFiles();
 
