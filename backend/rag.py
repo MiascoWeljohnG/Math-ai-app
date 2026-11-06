@@ -116,7 +116,7 @@ class GeminiEmbeddings(Embeddings):
 
     def _embed(self, texts: list[str]) -> list[list[float]]:
         if not self.api_key:
-            raise RuntimeError("GEMINI_API_KEY is not set on the server, so uploads can't be indexed")
+            raise RuntimeError("EMBEDDING_API_KEY (or GEMINI_API_KEY) is not set on the server, so uploads can't be indexed")
         vectors: list[list[float]] = []
         _report(phase="embedding", done=0, total=len(texts))
         with httpx.Client(timeout=60) as client:
@@ -166,7 +166,7 @@ class GeminiEmbeddings(Embeddings):
 
 
 embeddings = GeminiEmbeddings(
-    config.EMBEDDING_MODEL, config.GEMINI_API_KEY, config.GEMINI_BASE_URL, config.EMBEDDING_BATCH_SIZE,
+    config.EMBEDDING_MODEL, config.EMBEDDING_API_KEY, config.EMBEDDING_BASE_URL, config.EMBEDDING_BATCH_SIZE,
     max_retries=config.EMBEDDING_MAX_RETRIES, tokens_per_minute=config.EMBEDDING_TOKENS_PER_MINUTE,
 )
 # Where the searchable chunks live: Postgres (pgvector) when available, so they survive restarts; see vectorstore.py

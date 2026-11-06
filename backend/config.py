@@ -55,6 +55,9 @@ GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN", "")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "")
 
 # Embeddings (used to index uploads and search them). Hosted through Gemini, so GEMINI_API_KEY is required.
+# Embeddings can use a different OpenAI-compatible endpoint than chat (e.g. OmniRoute). Defaults to Gemini.
+EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"))
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", os.getenv("GEMINI_API_KEY", ""))
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
 EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "25"))
 # Gemini rejects embedding calls over its per-minute token limit (the free tier's is about 30,000), so the
