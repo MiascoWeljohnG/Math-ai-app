@@ -15,9 +15,6 @@ from typing import Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.embeddings import Embeddings
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_community.chat_models import ChatOllama
-from langchain_community.embeddings import OllamaEmbeddings
-
 import config
 import vectorstore
 
