@@ -8,6 +8,7 @@ row to "ready" or "failed" (with a reason the page shows, and a Retry button).
 Because the row exists from the first second, a file can no longer be saved to storage and then vanish from
 the list when the request dies half-way.
 """
+from langchain_ollama import OllamaEmbeddings
 import logging
 import threading
 from datetime import datetime

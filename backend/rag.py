@@ -9,6 +9,7 @@ import re
 import uuid
 import chromadb
 import httpx
+from langchain_ollama import ChatOllama
 from pathlib import Path, PurePosixPath
 from typing import Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
