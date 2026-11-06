@@ -117,3 +117,28 @@ def test_old_rows_without_a_status_count_as_ready(db):
     row = add_material(db)
     row.index_status = None
     assert material_summary(row)["index_status"] == "ready"
+
+
+def test_progress_is_shown_while_a_file_is_read_and_cleared_afterwards(db, jobs):
+    row = add_material(db, index_status="indexing")
+    seen = {}
+
+    def reading(source, branch, contents):
+        jobs.progress_callback(phase="embedding", done=10, total=40)
+        seen["during"] = indexing.get_progress(row.id)
+        return 3
+    jobs.index_document = reading
+    indexing._run(row.id, b"bytes")
+    assert seen["during"] == {"phase": "embedding", "done": 10, "total": 40}
+    assert indexing.get_progress(row.id) is None          # nothing left behind once the job is over
+
+
+def test_file_list_carries_the_progress_of_files_still_being_read(db):
+    row = add_material(db, index_status="indexing")
+    indexing._progress[row.id] = {"phase": "embedding", "done": 5, "total": 20}
+    try:
+        assert material_summary(row)["index_progress"] == {"phase": "embedding", "done": 5, "total": 20}
+        row.index_status = "ready"
+        assert material_summary(row)["index_progress"] is None
+    finally:
+        indexing._progress.pop(row.id, None)

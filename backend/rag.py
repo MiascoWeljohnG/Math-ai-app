@@ -13,9 +13,9 @@ from pathlib import Path, PurePosixPath
 from typing import Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.embeddings import Embeddings
-from langchain_community.vectorstores import Chroma
 
 import config
+import vectorstore
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +28,24 @@ class EmbeddingQuotaError(RuntimeError):
     """Gemini kept answering 429 (quota / rate limit) even after waiting and retrying."""
 
 
-_job = threading.local()   # the deadline of the background indexing job running on this thread, if any
+DAILY_QUOTA_MESSAGE = ("Gemini's daily free limit for embeddings has been used up. It resets at midnight Pacific time. "
+                       "Enabling billing on the Gemini API key lifts the limit straight away.")
+
+_job = threading.local()   # the deadline and progress callback of the background indexing job on this thread
+
+
+def set_job_progress(callback) -> None:
+    """indexing.py gives each background job a function that records how far along it is (None removes it)."""
+    _job.progress = callback
+
+
+def _report(**info) -> None:
+    callback = getattr(_job, "progress", None)
+    if callback:
+        try:
+            callback(**info)
+        except Exception:   # progress is a nicety: it must never break indexing
+            pass
 
 
 def set_job_deadline(seconds: Optional[float]) -> None:
@@ -101,6 +118,7 @@ class GeminiEmbeddings(Embeddings):
         if not self.api_key:
             raise RuntimeError("GEMINI_API_KEY is not set on the server, so uploads can't be indexed")
         vectors: list[list[float]] = []
+        _report(phase="embedding", done=0, total=len(texts))
         with httpx.Client(timeout=60) as client:
             for start in range(0, len(texts), self.batch_size):
                 batch = texts[start:start + self.batch_size]
@@ -113,11 +131,17 @@ class GeminiEmbeddings(Embeddings):
                         headers={"Authorization": f"Bearer {self.api_key}"},
                         json={"model": self.model, "input": batch},
                     )
+                    # A daily limit won't clear by waiting a few minutes: stop at once with a clear message.
+                    if response.status_code == 429 and re.search(r"per ?day|daily", response.text, re.IGNORECASE):
+                        log.warning("Gemini embedding daily quota is used up: %s", response.text[:300].replace("\n", " "))
+                        raise EmbeddingQuotaError(DAILY_QUOTA_MESSAGE)
                     # rate limit / temporary server trouble: wait and try again
                     if response.status_code in (429, 500, 502, 503) and attempt < self.max_retries:
                         delay = self._retry_delay(response, attempt)
-                        log.warning("Embedding request got %s; retrying in %.0fs (attempt %d/%d)",
-                                    response.status_code, delay, attempt + 1, self.max_retries)
+                        log.warning("Embedding request got %s; retrying in %.0fs (attempt %d/%d): %s",
+                                    response.status_code, delay, attempt + 1, self.max_retries,
+                                    response.text[:200].replace("\n", " "))
+                        _report(phase="waiting", seconds=int(delay), done=len(vectors), total=len(texts))
                         time.sleep(delay)
                         continue
                     break
@@ -131,6 +155,7 @@ class GeminiEmbeddings(Embeddings):
                     raise RuntimeError(f"Embedding request failed ({response.status_code}): {response.text[:200]}")
                 rows = sorted(response.json()["data"], key=lambda row: row.get("index", 0))
                 vectors.extend(row["embedding"] for row in rows)
+                _report(phase="embedding", done=len(vectors), total=len(texts))
         return vectors
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
@@ -144,6 +169,8 @@ embeddings = GeminiEmbeddings(
     config.EMBEDDING_MODEL, config.GEMINI_API_KEY, config.GEMINI_BASE_URL, config.EMBEDDING_BATCH_SIZE,
     max_retries=config.EMBEDDING_MAX_RETRIES, tokens_per_minute=config.EMBEDDING_TOKENS_PER_MINUTE,
 )
+# Where the searchable chunks live: Postgres (pgvector) when available, so they survive restarts; see vectorstore.py
+store = vectorstore.make_store(embeddings, chroma_client)
 _chat_semaphore = asyncio.Semaphore(config.MAX_CONCURRENT_CHATS)
 _waiting_count = 0
 _waiting_lock = asyncio.Lock()
@@ -416,6 +443,8 @@ def _index_files(vault_files: list[Path], vault_dir: Path, branch: str = "Genera
     documents = []
     for vault_file in vault_files:
         rel_path = vault_file.relative_to(vault_dir)
+        if store.persistent and store.has_source(rel_path.as_posix()):
+            continue   # already embedded and kept across restarts: don't spend quota on it again
         note_branch = rel_path.parts[1] if len(rel_path.parts) > 2 else branch
         documents.append((rel_path.as_posix(), note_branch, vault_file.name, vault_file.read_bytes()))
     return _index_documents(documents)
@@ -425,7 +454,7 @@ def _index_documents(documents: list[tuple[str, str, str, bytes]]) -> tuple[int,
     """Chunk, embed and store files given as (source, branch, file name, bytes). `source` is the stable key
     the chunks are filed under (and later searched by); it is the same string whether the original lives
     on disk or in Google Drive."""
-    vault_collection = chroma_client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
+    _report(phase="reading")
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000, chunk_overlap=100,
         separators=["\n\n", "\n", " ", ""]
@@ -455,12 +484,7 @@ def _index_documents(documents: list[tuple[str, str, str, bytes]]) -> tuple[int,
                 all_ids.append(f"obsidian_{path_hash}_page{page_number}_part{j}")
 
     if all_chunks:
-        vault_collection.upsert(
-            documents=all_chunks,
-            metadatas=all_metadatas,
-            ids=all_ids,
-            embeddings=embeddings.embed_documents(all_chunks)
-        )
+        store.upsert(all_ids, all_chunks, all_metadatas, embeddings.embed_documents(all_chunks))
 
     return len(all_chunks), set(all_ids)
 
@@ -556,36 +580,39 @@ def sync_drive_index(materials: list[tuple[str, str, str]], force: bool = False,
     that no longer have a row are dropped. A file that can't be fetched is skipped and reported, not fatal.
     Files named in `skip` are left alone (the background indexing queue is handling them) but their chunks are kept."""
     import drive_storage
+    import indexing
 
-    vault_collection = chroma_client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
     wanted = {_material_index_source(filename) for filename, _, _ in materials}
     chunks = 0
     indexed_files = 0
     failed: list[str] = []
+    stopped_for_quota = False
 
     for filename, branch, file_id in materials:
         source = _material_index_source(filename)
         if filename in skip or source in skip:
             continue
-        if not force and vault_collection.get(where={"source": source}, limit=1)["ids"]:
+        if not force and store.has_source(source):
             continue
         try:
             contents = drive_storage.download_bytes(file_id)
-            count, _ = _index_documents([(source, branch, PurePosixPath(source).name, contents)])
+            with indexing._one_at_a_time:   # one file at a time, shared with the upload queue
+                count, _ = _index_documents([(source, branch, PurePosixPath(source).name, contents)])
             chunks += count
             indexed_files += 1
+        except EmbeddingQuotaError as exc:
+            # Every remaining file would hit the same wall (and waste minutes each): stop the rebuild.
+            log.warning("Stopping the search-index rebuild: %s", exc)
+            failed.append(filename)
+            stopped_for_quota = True
+            break
         except Exception as exc:
             log.warning("Couldn't index %s from Drive: %s", filename, exc)
             failed.append(filename)
 
-    existing = vault_collection.get(where={"type": "uploaded_material"}, include=["metadatas"])
-    stale = [
-        doc_id for doc_id, metadata in zip(existing["ids"], existing["metadatas"])
-        if (metadata or {}).get("source") not in wanted
-    ]
-    if stale:
-        vault_collection.delete(ids=stale)
-    return {"chunks": chunks, "indexed_files": indexed_files, "failed": failed, "removed_chunks": len(stale)}
+    removed = store.delete_sources_not_in(wanted)   # chunks of files that no longer have a row
+    return {"chunks": chunks, "indexed_files": indexed_files, "failed": failed, "removed_chunks": removed,
+            "stopped_for_quota": stopped_for_quota}
 
 
 def save_originals(
@@ -656,7 +683,6 @@ def ingest_uploaded_materials(
     return stored_paths
 
 def ingest_uploads(uploads_path: str, branch: str = "General"):
-    vault_collection = chroma_client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
     vault_dir = Path(uploads_path).expanduser()
     vault_dir.mkdir(parents=True, exist_ok=True)
     materials_dir = vault_dir / "Uploaded Materials"
@@ -666,17 +692,12 @@ def ingest_uploads(uploads_path: str, branch: str = "General"):
     ]
     chunk_count, current_ids = _index_files(sorted(vault_files), vault_dir, branch)
 
-    existing = vault_collection.get(
-        include=["metadatas"],
-    )
-    managed_types = {"obsidian_note", "uploaded_material"}
-    stale_ids = sorted(
-        doc_id
-        for doc_id, metadata in zip(existing["ids"], existing["metadatas"])
-        if (metadata or {}).get("type") in managed_types and doc_id not in current_ids
-    )
-    if stale_ids:
-        vault_collection.delete(ids=stale_ids)
+    if store.persistent:
+        # files that were already embedded were skipped above, so judge "no longer wanted" by file, not by chunk
+        store.delete_sources_not_in({path.relative_to(vault_dir).as_posix() for path in vault_files})
+    else:
+        stale_ids = sorted(set(store.managed_ids()) - current_ids)
+        store.delete_ids(stale_ids)
 
     return chunk_count
 
@@ -700,22 +721,18 @@ def _material_index_source(filename: str) -> str:
 def delete_material_chunks(filename: str) -> int:
     """Remove the AI's chunks for one uploaded file (every page). Returns how many were removed.
     (admin_routes.delete_file already called this, but it was never defined, so deleting a file always failed.)"""
-    vault_collection = chroma_client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
-    ids = vault_collection.get(where={"source": _material_index_source(filename)})["ids"]
-    if ids:
-        vault_collection.delete(ids=ids)
-    return len(ids)
+    return store.delete_source(_material_index_source(filename))
+
+
+def clear_material_chunks() -> int:
+    """Remove the chunks of every uploaded file (the admin's "clear the knowledge base")."""
+    return store.clear()
+
 
 def _chunks_for_pages(source: str, start: int, end: int, limit: int = 8):
-    vector_store = Chroma(
-        collection_name=config.CHROMA_VAULT_COLLECTION,
-        embedding_function=embeddings,
-        client=chroma_client,
-    )
-    got = vector_store._collection.get(where={"source": source}, include=["documents", "metadatas"])
+    got = store.chunks_for_source(source)
     matches = []
-    for text, meta in zip(got["documents"], got["metadatas"]):
-        page = (meta or {}).get("page")
+    for page, text in got:
         if page is not None and start <= page <= end:
             matches.append((page, text))
     matches.sort(key=lambda t: t[0])
@@ -868,24 +885,13 @@ def queue_status() -> dict:
     return {"waiting": _waiting_count, "max_concurrent": config.MAX_CONCURRENT_CHATS}
 
 def _similarity_search(question: str, source_filter: str = None):
-    vector_store = Chroma(
-        collection_name=config.CHROMA_VAULT_COLLECTION,
-        embedding_function=embeddings,
-        client=chroma_client,
-    )
-    kwargs = {"filter": {"source": source_filter}} if source_filter else {}
     k = 5 if source_filter else 3
-    results = vector_store.similarity_search_with_score(question, k=k, **kwargs)
+    results = store.search(question, k, {"source": source_filter} if source_filter else None)
     docs = [doc for doc, distance in results if distance <= config.MAX_CONTEXT_DISTANCE]
     return docs
 
 def _material_context(query: str, branch: str, k: int = 6) -> str:
-    store = Chroma(
-        collection_name=config.CHROMA_VAULT_COLLECTION,
-        embedding_function=embeddings,
-        client=chroma_client,
-    )
-    hits = store.similarity_search_with_score(query, k=k, filter={"branch": branch})
+    hits = store.search(query, k, {"branch": branch})
     return "\n\n".join(d.page_content for d, distance in hits if distance <= config.MAX_CONTEXT_DISTANCE)
 
 async def generate_text(system: str, prompt: str, branch: str, query: str) -> str:

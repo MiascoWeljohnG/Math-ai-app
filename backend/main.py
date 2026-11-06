@@ -4,6 +4,11 @@ import os
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Without this, only warnings reach the Render logs, so the "Indexed ..." progress lines never show up.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
+for _noisy in ("httpx", "httpcore", "chromadb", "pdfminer", "pdfplumber"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware

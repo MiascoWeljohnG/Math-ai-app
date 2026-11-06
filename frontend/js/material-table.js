@@ -24,7 +24,7 @@ let indexingRefreshTimer = null;
 function scheduleIndexingRefresh(files, onRefresh) {
     clearTimeout(indexingRefreshTimer);
     if (onRefresh && files.some(file => file.index_status === "indexing")) {
-        indexingRefreshTimer = setTimeout(onRefresh, 5000);
+        indexingRefreshTimer = setTimeout(onRefresh, 4000);
     }
 }
 
@@ -39,6 +39,18 @@ async function retryIndexing(file, onRefresh) {
         uiAlert(err.message);
     }
     if (onRefresh) onRefresh();
+}
+
+// What the server says it is doing with a file right now (index_progress comes from indexing.py).
+function progressText(progress) {
+    if (!progress || !progress.phase) return "The AI is reading this file… it can take a few minutes.";
+    if (progress.phase === "queued") return "Waiting in line…";
+    if (progress.phase === "reading") return "Reading the pages…";
+    const percent = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+    if (progress.phase === "waiting") {
+        return `Paused by the AI service's rate limit, continuing in about ${progress.seconds}s… (${percent}% done)`;
+    }
+    return `Learning the content: ${progress.done} of ${progress.total} sections (${percent}%)`;
 }
 
 // Teacher table: File | Branch | Uploaded.  Admin table (showUploader): File | Branch | Uploaded by | Uploaded.
@@ -60,14 +72,24 @@ function renderMaterialRows(tbody, files, showUploader, onDelete, onRefresh) {
         const nameCell = [file.display_name];
         // reading normally takes minutes; after 15 the job was probably lost (e.g. the server restarted)
         const waitedMinutes = file.uploaded_at ? (Date.now() - new Date(file.uploaded_at).getTime()) / 60000 : 0;
-        const stuck = file.index_status === "indexing" && waitedMinutes > 15;
+        // Only "stuck" if the server isn't working on it (no progress info). A big file can legitimately take longer.
+        const working = Boolean(file.index_progress && file.index_progress.phase);
+        const stuck = file.index_status === "indexing" && waitedMinutes > 15 && !working;
         if (file.index_status === "indexing") {
             const note = document.createElement("span");
             note.className = "cell-sub";
             note.textContent = stuck
                 ? "This is taking longer than usual. Press Retry to start it again."
-                : "The AI is reading this file… it can take a few minutes.";
+                : progressText(file.index_progress);
             nameCell.push(note);
+            const progress = file.index_progress;
+            if (progress && progress.total) {
+                const bar = document.createElement("progress");
+                bar.max = progress.total;
+                bar.value = progress.done || 0;
+                bar.style.cssText = "display:block;width:100%;max-width:260px;margin-top:0.35rem;";
+                nameCell.push(bar);
+            }
         } else if (file.index_status === "failed") {
             const note = document.createElement("span");
             note.className = "cell-sub";

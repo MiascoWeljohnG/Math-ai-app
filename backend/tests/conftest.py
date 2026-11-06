@@ -41,6 +41,8 @@ def save_originals(files, branch="General", storage_ids=None):
 
 fake_rag.index_document = lambda source, branch, contents: 3   # chunks written
 fake_rag.set_job_deadline = lambda seconds: None
+fake_rag.progress_callback = None
+fake_rag.set_job_progress = lambda callback: setattr(fake_rag, "progress_callback", callback)
 fake_rag.save_originals = save_originals
 
 

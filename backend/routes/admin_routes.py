@@ -110,13 +110,8 @@ def clear_knowledge_base(user=Depends(require_school_admin), db: Session = Depen
     except Exception:
         pass
 
-    vault_collection = client.get_or_create_collection(name=config.CHROMA_VAULT_COLLECTION)
-    uploaded_material_chunks = vault_collection.get(
-        where={"type": "uploaded_material"},
-        include=["metadatas"],
-    )
-    if uploaded_material_chunks["ids"]:
-        vault_collection.delete(ids=uploaded_material_chunks["ids"])
+    from rag import clear_material_chunks   # wherever the chunks live (Postgres or the on-disk index)
+    clear_material_chunks()
 
     import shutil
     uploaded_material_dir = Path(config.CHROMA_VAULT_DIR).expanduser() / "Uploaded Materials"

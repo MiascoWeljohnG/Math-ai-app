@@ -24,7 +24,15 @@ READY, INDEXING, FAILED = "ready", "indexing", "failed"
 _one_at_a_time = threading.Semaphore(1)   # files queue up: keeps memory low and Gemini's rate limit happy
 _active: set[int] = set()                 # material ids queued or running in THIS process
 _active_lock = threading.Lock()
+_progress: dict[int, dict] = {}           # material id -> how far along its job is (phase, done, total)
 _STARTED = datetime.utcnow()              # rows older than this and still "indexing" lost their job in a restart
+
+
+def get_progress(material_id: int) -> dict | None:
+    """What the page shows while a file is being read: {"phase": "queued" | "reading" | "embedding" | "waiting",
+    "done": n, "total": n}. None when no job in this process is working on it."""
+    info = _progress.get(material_id)
+    return dict(info) if info else None
 
 
 def start_indexing(material_id: int, contents: bytes | None = None) -> bool:
@@ -34,6 +42,7 @@ def start_indexing(material_id: int, contents: bytes | None = None) -> bool:
         if material_id in _active:
             return False
         _active.add(material_id)
+    _progress[material_id] = {"phase": "queued"}
     threading.Thread(target=_run, args=(material_id, contents), name=f"index-{material_id}", daemon=True).start()
     return True
 
@@ -46,6 +55,7 @@ def _run(material_id: int, contents: bytes | None) -> None:
         log.exception("Indexing job %s crashed", material_id)
         _finish(material_id, FAILED, "Indexing crashed unexpectedly. Press Retry.")
     finally:
+        _progress.pop(material_id, None)
         with _active_lock:
             _active.discard(material_id)
 
@@ -65,6 +75,9 @@ def _index(material_id: int, contents: bytes | None) -> None:
         db.close()
 
     try:
+        log.info("Indexing %s ...", source)
+        _progress[material_id] = {"phase": "reading"}
+        rag.set_job_progress(lambda **info: _progress.__setitem__(material_id, info))
         rag.set_job_deadline(config.INDEX_JOB_MAX_MINUTES * 60)
         data = contents if contents is not None else _load_bytes(source, drive_file_id)
         chunks = rag.index_document(source, branch, data)
@@ -74,6 +87,7 @@ def _index(material_id: int, contents: bytes | None) -> None:
         return
     finally:
         rag.set_job_deadline(None)
+        rag.set_job_progress(None)
     if _finish(material_id, READY, None):
         log.info("Indexed %s (%d chunks)", source, chunks)
     else:   # deleted while we were indexing it: don't leave its chunks behind

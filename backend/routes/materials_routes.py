@@ -40,6 +40,8 @@ def material_summary(material: Material) -> dict:
         # before background indexing have no status and are ready
         "index_status": material.index_status or "ready",
         "index_error": material.index_error,
+        # how far along the AI's reading is, while it is being read (see indexing.get_progress)
+        "index_progress": indexing.get_progress(material.id) if material.index_status == "indexing" else None,
     }
 
 

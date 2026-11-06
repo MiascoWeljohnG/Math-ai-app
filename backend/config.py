@@ -71,6 +71,10 @@ CHROMA_COLLECTION = "math_knowledge"
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 CHROMA_VAULT_DIR = os.getenv("CHROMA_VAULT_DIR", str(Path(__file__).resolve().parent / "uploads"))
 CHROMA_VAULT_COLLECTION = "obsidian_notes"
+# Where the AI's searchable chunks live. "auto" = the Postgres database (pgvector) when the app runs on Postgres,
+# so they survive Render restarts and each file is embedded only once; otherwise the old on-disk Chroma index.
+# Set "chroma" to switch back to the old index.
+VECTOR_BACKEND = os.getenv("VECTOR_BACKEND", "auto")
 
 MAX_CONCURRENT_CHATS = int(os.getenv("MAX_CONCURRENT_CHATS", "3"))
 MAX_CONTEXT_DISTANCE = float(os.getenv("MAX_CONTEXT_DISTANCE", "1.2"))   
