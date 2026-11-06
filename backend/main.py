@@ -91,9 +91,15 @@ chroma_client.get_or_create_collection(name=config.CHROMA_COLLECTION)
 
 app = FastAPI(title="Math AI App")
 
+_ALLOWED_ORIGINS = [
+    "https://isipnayan.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -107,7 +113,13 @@ async def unhandled_error(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error - check the backend logs"},
-        headers={"Access-Control-Allow-Origin": request.headers.get("origin", "*")},
+        headers={
+            "Access-Control-Allow-Origin": (
+                request.headers.get("origin", "")
+                if request.headers.get("origin") in _ALLOWED_ORIGINS
+                else ""
+            )
+        },
     )
 
 app.include_router(auth_routes.router)

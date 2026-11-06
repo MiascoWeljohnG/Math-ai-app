@@ -98,6 +98,13 @@ GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "4096"))
 GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", "low")
 GROQ_MAX_RETRIES = int(os.getenv("GROQ_MAX_RETRIES", "3"))
 
+# Ollama / Cloudflare Tunnel
+# Set OLLAMA_ENABLED=true to use local/Cloudflare-hosted Ollama for embeddings and chat.
+OLLAMA_ENABLED = os.getenv("OLLAMA_ENABLED", "").lower() in ("1", "true", "yes", "on")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
+OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text:latest")
+
 # Gemini Config
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # Use Gemini's official OpenAI-compatible endpoint

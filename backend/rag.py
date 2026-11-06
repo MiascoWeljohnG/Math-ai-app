@@ -13,6 +13,9 @@ from pathlib import Path, PurePosixPath
 from typing import Optional
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.embeddings import Embeddings
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_community.chat_models import ChatOllama
+from langchain_community.embeddings import OllamaEmbeddings
 
 import config
 import vectorstore
@@ -165,10 +168,28 @@ class GeminiEmbeddings(Embeddings):
         return self._embed([text])[0]
 
 
-embeddings = GeminiEmbeddings(
-    config.EMBEDDING_MODEL, config.EMBEDDING_API_KEY, config.EMBEDDING_BASE_URL, config.EMBEDDING_BATCH_SIZE,
-    max_retries=config.EMBEDDING_MAX_RETRIES, tokens_per_minute=config.EMBEDDING_TOKENS_PER_MINUTE,
-)
+def get_ollama_embeddings():
+    return OllamaEmbeddings(
+        model=config.OLLAMA_EMBED_MODEL,
+        base_url=config.OLLAMA_BASE_URL,
+    )
+
+
+def get_ollama_chat_model():
+    return ChatOllama(
+        model=config.OLLAMA_CHAT_MODEL,
+        base_url=config.OLLAMA_BASE_URL,
+        temperature=0.3,
+    )
+
+
+if config.OLLAMA_ENABLED:
+    embeddings = get_ollama_embeddings()
+else:
+    embeddings = GeminiEmbeddings(
+        config.EMBEDDING_MODEL, config.EMBEDDING_API_KEY, config.EMBEDDING_BASE_URL, config.EMBEDDING_BATCH_SIZE,
+        max_retries=config.EMBEDDING_MAX_RETRIES, tokens_per_minute=config.EMBEDDING_TOKENS_PER_MINUTE,
+    )
 # Where the searchable chunks live: Postgres (pgvector) when available, so they survive restarts; see vectorstore.py
 store = vectorstore.make_store(embeddings, chroma_client)
 _chat_semaphore = asyncio.Semaphore(config.MAX_CONCURRENT_CHATS)
@@ -352,7 +373,7 @@ async def _answer_source(messages: list[dict], image_index: int | None):
             raise RuntimeError(f"The AI service could not answer: {error}")
 
     raise RuntimeError(
-        "No AI provider answered. Set GROQ_API_KEY or GEMINI_API_KEY in backend/.env "
+        "No AI provider answered. Set OLLAMA_ENABLED=true, GROQ_API_KEY, or GEMINI_API_KEY in backend/.env "
         "(and check the backend terminal for the provider's error message)."
     )
 
@@ -901,21 +922,37 @@ async def generate_text(system: str, prompt: str, branch: str, query: str) -> st
     messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
     
     async with _chat_semaphore:
-        # 1. Try Groq
+        # 1. Try Ollama
+        if config.OLLAMA_ENABLED:
+            try:
+                llm = get_ollama_chat_model()
+                response = await asyncio.to_thread(
+                    llm.invoke,
+                    [
+                        SystemMessage(content=system),
+                        HumanMessage(content=prompt),
+                    ],
+                )
+                content = response.content if hasattr(response, "content") else str(response)
+                return content.strip() if isinstance(content, str) else str(content).strip()
+            except Exception as error:
+                print(f"[ollama] generation failed ({error}); falling back...", flush=True)
+
+        # 2. Try Groq
         if config.GROQ_API_KEY:
             try:
                 return await _groq_generate(messages)
             except RuntimeError as error:
                 print(f"[groq] generation failed ({error}); falling back...", flush=True)
 
-        # 2. Try Gemini
+        # 3. Try Gemini
         if config.GEMINI_API_KEY:
             try:
                 return await _gemini_generate(messages)
             except RuntimeError as error:
                 print(f"[gemini] generation failed ({error}); falling back...", flush=True)
 
-        # 3. Try Hermes
+        # 4. Try Hermes
         if config.HERMES_API_URL:
             async with httpx.AsyncClient(timeout=config.HERMES_TIMEOUT) as client:
                 response = await client.post(
