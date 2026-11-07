@@ -214,7 +214,7 @@ class OllamaBackupEmbeddings:
                         batch = [f"{label}: {text}" for text in batch]
                     response = client.post(self.url, json={"model": self.model, "input": batch})
                     if response.status_code >= 400:
-                        raise RuntimeError(f"Ollama embedding failed ({response.status_code}): {response.text[:200]}")
+                        raise _ollama_http_error("Ollama embedding", response)
                     rows = response.json().get("embeddings") or []
                     if len(rows) != len(batch):
                         raise RuntimeError("Ollama returned the wrong number of embeddings")
@@ -408,6 +408,16 @@ async def _gemini_generate(messages: list[dict]) -> str:
 
 
 # ---------------------------------------------------------------- Ollama (backup, through the Cloudflare tunnel)
+def _ollama_http_error(what: str, response) -> RuntimeError:
+    """A readable error for a failed Ollama call. Through the tunnel, "Cloudflare is up but Ollama isn't answering" comes
+    back as a whole HTML error page (502/530...), which must not end up on the teacher's screen."""
+    body = response.text.strip()
+    if response.status_code in (502, 503, 504, 520, 521, 522, 523, 524, 530) or body.startswith("<"):
+        return RuntimeError(f"{what} failed ({response.status_code}): the tunnel answered but Ollama behind it did not. "
+                            "Check that Ollama is running on your PC and the tunnel window is still open.")
+    return RuntimeError(f"{what} failed ({response.status_code}): {body[:200]}")
+
+
 def _ollama_request(messages: list[dict], stream: bool, image_index: int | None = None) -> tuple[str, dict]:
     msgs, _ = _to_openai_messages(messages, image_index)
     body = {"model": config.OLLAMA_CHAT_MODEL, "messages": msgs, "stream": stream}
@@ -421,7 +431,7 @@ async def _ollama_stream(messages: list[dict], image_index: int | None = None):
             async with client.stream("POST", url, json=body) as response:
                 if response.status_code >= 400:
                     await response.aread()
-                    raise RuntimeError(f"Ollama error {response.status_code}: {response.text[:300]}")
+                    raise _ollama_http_error("Ollama chat", response)
                 async for line in response.aiter_lines():
                     if not line.startswith("data:"):
                         continue
@@ -444,7 +454,7 @@ async def _ollama_generate(messages: list[dict]) -> str:
     except httpx.HTTPError as error:
         raise RuntimeError(f"Ollama is unreachable ({type(error).__name__}: {error})")
     if response.status_code >= 400:
-        raise RuntimeError(f"Ollama error {response.status_code}: {response.text[:300]}")
+        raise _ollama_http_error("Ollama chat", response)
     return response.json()["choices"][0]["message"]["content"].strip()
 
 
