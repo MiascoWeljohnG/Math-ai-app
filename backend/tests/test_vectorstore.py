@@ -130,3 +130,75 @@ def test_delete_clear_and_page_lookup(store):
 def test_nul_bytes_from_pdf_text_do_not_break_saving(store):
     store.upsert(["nul"], ["bad\x00text"], [{"source": "z", "page": 1, "branch": "A"}], [_unit(np.ones(DIM))])
     assert store.chunks_for_source("z")[0][1] == "badtext"
+
+
+# ---------------------------------------------------------------- two embedding models (Gemini + the Ollama backup)
+class Embedder:
+    """Stands in for an embedding model: a fixed vector per question, or an error when it is 'down'."""
+    def __init__(self, fail=None):
+        self.queries, self.fail, self.calls = {}, fail, 0
+
+    def embed_query(self, text):
+        self.calls += 1
+        if self.fail:
+            raise self.fail
+        return self.queries[text]
+
+
+def _two_models(pg, gemini_fail=None, nomic_fail=None):
+    gemini, nomic = Embedder(gemini_fail), Embedder(nomic_fail)
+    store = vectorstore.PgVectorStore(pg, gemini, backup=nomic)
+    store.ensure_schema()
+    store.clear()
+    rng = np.random.default_rng(7)
+    g_vectors = [_unit(rng.normal(size=64)) for _ in range(6)]     # Gemini-sized vectors
+    n_vectors = [_unit(rng.normal(size=16)) for _ in range(6)]     # nomic-sized vectors: a different length
+    metas = lambda source: [{"source": source, "page": i, "branch": "A", "type": "uploaded_material"} for i in range(6)]
+    store.upsert([f"g{i}" for i in range(6)], [f"gem {i}" for i in range(6)], metas("gem.pdf"), g_vectors)
+    store.upsert([f"n{i}" for i in range(6)], [f"nom {i}" for i in range(6)], metas("nom.pdf"), n_vectors, embed_model="nomic")
+    gemini.queries["q"], nomic.queries["q"] = g_vectors[2], n_vectors[4]
+    return store, gemini, nomic
+
+
+def test_chunks_from_two_models_are_searched_together_without_mixing_their_vectors(pg):
+    store, gemini, nomic = _two_models(pg)
+    hits = store.search("q", 4)
+    assert {doc.metadata["embed_model"] for doc, _ in hits} == {"gemini", "nomic"}
+    assert {"gem 2", "nom 4"} <= {doc.page_content for doc, _ in hits}          # each model finds its own exact match
+    assert {doc.page_content for doc, _ in store.search("q", 3, {"source": "nom.pdf"})} <= {f"nom {i}" for i in range(6)}
+    assert gemini.calls == 1 and nomic.calls == 2   # the filtered search only needs the model whose file it is about
+
+
+def test_when_gemini_is_down_questions_still_reach_the_chunks_the_backup_made(pg):
+    store, gemini, nomic = _two_models(pg, gemini_fail=RuntimeError("quota"))
+    hits = store.search("q", 3)
+    assert hits and all(doc.metadata["embed_model"] == "nomic" for doc, _ in hits)
+
+
+def test_if_no_model_can_embed_the_question_the_error_is_raised(pg):
+    store, _, _ = _two_models(pg, gemini_fail=RuntimeError("quota"), nomic_fail=RuntimeError("pc off"))
+    with pytest.raises(RuntimeError, match="quota"):
+        store.search("q", 3)
+
+
+def test_a_model_with_no_chunks_is_never_asked_to_embed_the_question(pg):
+    store, gemini, nomic = _two_models(pg)
+    store.delete_source("nom.pdf")
+    store.search("q", 3)
+    assert gemini.calls == 1 and nomic.calls == 0   # an unreachable PC must not slow down questions about Gemini files
+
+
+def test_an_old_table_without_the_model_column_is_upgraded_and_its_chunks_count_as_gemini(pg):
+    from sqlalchemy import text
+    with pg.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS material_chunks"))
+        conn.execute(text("""CREATE TABLE material_chunks (id TEXT PRIMARY KEY, source TEXT NOT NULL, page INTEGER, branch TEXT,
+                             type TEXT NOT NULL DEFAULT 'uploaded_material', content TEXT NOT NULL, embedding vector NOT NULL)"""))
+        conn.execute(text("INSERT INTO material_chunks (id, source, page, branch, content, embedding) "
+                          "VALUES ('old', 'old.pdf', 1, 'A', 'old chunk', '[1,0,0]')"))
+    gemini = Embedder()
+    gemini.queries["q"] = [1, 0, 0]
+    store = vectorstore.PgVectorStore(pg, gemini, backup=Embedder())
+    store.ensure_schema()
+    hits = store.search("q", 1)
+    assert hits[0][0].page_content == "old chunk" and hits[0][0].metadata["embed_model"] == "gemini"

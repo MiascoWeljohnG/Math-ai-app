@@ -33,9 +33,23 @@ class PgVectorStore:
     name = "pgvector"
     persistent = True   # survives restarts, so files already embedded never need embedding again
 
-    def __init__(self, engine, embeddings):
+    def __init__(self, engine, embeddings, backup=None, primary_tag="gemini", backup_tag="nomic"):
+        """`embeddings` is the normal embedder. `backup` (optional) is a second one, used only when the normal one
+        is out of quota. Every chunk is tagged with the model that embedded it (`embed_model`), because vectors
+        from different models have different sizes and can't be compared with each other: a question is
+        embedded once per model that has chunks, and each model's chunks are searched with its own vector."""
         self.engine = engine
         self.embeddings = embeddings
+        self.backup = backup
+        self.primary_tag = primary_tag
+        self.backup_tag = backup_tag
+        self.embedders = {primary_tag: embeddings}
+        if backup is not None:
+            self.embedders[backup_tag] = backup
+        # Distances from different models aren't on the same scale, so each has its own "close enough" limit
+        # (rag.py applies it) and results are merged by distance divided by that limit.
+        self.cutoffs = {primary_tag: config.MAX_CONTEXT_DISTANCE,
+                        backup_tag: getattr(config, "OLLAMA_MAX_CONTEXT_DISTANCE", 1.0)}
 
     def ensure_schema(self) -> None:
         """Create the extension and the table if they aren't there yet. Raises if the database can't do it."""
@@ -55,14 +69,19 @@ class PgVectorStore:
                     content   TEXT NOT NULL,
                     embedding vector NOT NULL
                 )"""))
+            # Which embedding model made each vector. Chunks that existed before this column came from Gemini.
+            conn.execute(text("ALTER TABLE material_chunks ADD COLUMN IF NOT EXISTS embed_model TEXT NOT NULL DEFAULT 'gemini'"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS material_chunks_source_idx ON material_chunks (source)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS material_chunks_model_idx ON material_chunks (embed_model)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS material_chunks_branch_idx ON material_chunks (branch)"))
             # No vector index on purpose: a school's worth of chunks is a few thousand rows, which an exact
             # scan searches in milliseconds, and it keeps results identical to the old index.
 
     # ---- writing
-    def upsert(self, ids, documents, metadatas, embeddings) -> None:
+    def upsert(self, ids, documents, metadatas, embeddings, embed_model=None) -> None:
+        tag = embed_model or self.primary_tag
         rows = [{
+            "embed_model": tag,
             "id": chunk_id,
             "source": meta.get("source", ""),
             "page": meta.get("page"),
@@ -72,11 +91,11 @@ class PgVectorStore:
             "embedding": _vector_literal(vector),
         } for chunk_id, document, meta, vector in zip(ids, documents, metadatas, embeddings)]
         statement = text("""
-            INSERT INTO material_chunks (id, source, page, branch, type, content, embedding)
-            VALUES (:id, :source, :page, :branch, :type, :content, CAST(:embedding AS vector))
+            INSERT INTO material_chunks (id, source, page, branch, type, content, embedding, embed_model)
+            VALUES (:id, :source, :page, :branch, :type, :content, CAST(:embedding AS vector), :embed_model)
             ON CONFLICT (id) DO UPDATE SET source = EXCLUDED.source, page = EXCLUDED.page,
                 branch = EXCLUDED.branch, type = EXCLUDED.type, content = EXCLUDED.content,
-                embedding = EXCLUDED.embedding""")
+                embedding = EXCLUDED.embedding, embed_model = EXCLUDED.embed_model""")
         with self.engine.begin() as conn:   # one transaction: a file's chunks arrive together or not at all
             for start in range(0, len(rows), _BATCH):
                 conn.execute(statement, rows[start:start + _BATCH])
@@ -120,16 +139,26 @@ class PgVectorStore:
             return conn.execute(text("DELETE FROM material_chunks WHERE type = 'uploaded_material'")).rowcount
 
     # ---- searching
-    def search(self, question: str, k: int, where: dict | None = None) -> list[tuple[Document, float]]:
-        """The k chunks closest to the question, as (Document, distance). The distance is the SQUARED L2
-        distance, the same measure the old index used, so MAX_CONTEXT_DISTANCE keeps its meaning."""
-        query = _vector_literal(self.embeddings.embed_query(question))   # before borrowing a connection
-        filters, params = [], {"q": query, "k": k}
+    def _filters(self, where):
+        filters, params = [], {}
         for column in ("source", "branch"):
             if where and column in where:
                 filters.append(f"{column} = :{column}")
                 params[column] = where[column]
-        clause = ("WHERE " + " AND ".join(filters)) if filters else ""
+        return filters, params
+
+    def _has_model(self, model: str, where) -> bool:
+        filters, params = self._filters(where)
+        clause = " AND ".join(["embed_model = :model", *filters])
+        with self.engine.connect() as conn:
+            return conn.execute(text(f"SELECT 1 FROM material_chunks WHERE {clause} LIMIT 1"),
+                                {**params, "model": model}).first() is not None
+
+    def _search_model(self, model: str, vector, k: int, where) -> list[tuple[Document, float]]:
+        filters, params = self._filters(where)
+        # embed_model = ... must be in the WHERE: only vectors of the same size can be compared.
+        clause = "WHERE " + " AND ".join(["embed_model = :model", *filters])
+        params.update({"q": _vector_literal(vector), "k": k, "model": model})
         statement = text(f"""
             SELECT content, source, page, branch, type, embedding <-> CAST(:q AS vector) AS distance
             FROM material_chunks {clause}
@@ -137,8 +166,32 @@ class PgVectorStore:
             LIMIT :k""")
         with self.engine.connect() as conn:
             rows = conn.execute(statement, params).all()
-        return [(Document(page_content=row[0], metadata={"source": row[1], "page": row[2], "branch": row[3], "type": row[4]}),
+        return [(Document(page_content=row[0], metadata={"source": row[1], "page": row[2], "branch": row[3],
+                                                         "type": row[4], "embed_model": model}),
                  float(row[5]) ** 2) for row in rows]
+
+    def search(self, question: str, k: int, where: dict | None = None) -> list[tuple[Document, float]]:
+        """The k chunks closest to the question, as (Document, distance). The distance is the SQUARED L2
+        distance, the same measure the old index used, so MAX_CONTEXT_DISTANCE keeps its meaning.
+
+        The question is embedded once for each model that has chunks (usually just Gemini). A model that can't
+        embed right now (quota, PC off) is skipped, as long as another one answered; if none could, the
+        error is raised like before. Hits carry metadata["embed_model"] so the caller can apply the right limit."""
+        models = [m for m in self.embedders if self._has_model(m, where)]
+        hits, errors, answered = [], [], 0
+        for model in models:
+            try:
+                vector = self.embeddings.embed_query(question) if model == self.primary_tag else self.backup.embed_query(question)
+            except Exception as exc:   # one model being unavailable must not stop the other
+                log.warning("Couldn't embed the question with %s (%s); skipping its chunks", model, exc)
+                errors.append(exc)
+                continue
+            answered += 1
+            hits += self._search_model(model, vector, k, where)
+        if models and not answered:
+            raise errors[0]
+        hits.sort(key=lambda hit: hit[1] / self.cutoffs.get(hit[0].metadata["embed_model"], 1.0))
+        return hits[:k]
 
 
 class ChromaStore:
@@ -153,7 +206,7 @@ class ChromaStore:
     def _collection(self):
         return self.client.get_or_create_collection(name=self.collection_name)
 
-    def upsert(self, ids, documents, metadatas, embeddings) -> None:
+    def upsert(self, ids, documents, metadatas, embeddings, embed_model=None) -> None:   # one model only: embed_model is ignored
         self._collection().upsert(documents=documents, metadatas=metadatas, ids=ids, embeddings=embeddings)
 
     def has_source(self, source: str) -> bool:
@@ -203,14 +256,14 @@ class ChromaStore:
         return store.similarity_search_with_score(question, k=k, **kwargs)
 
 
-def make_store(embeddings, chroma_client):
+def make_store(embeddings, chroma_client, backup=None, primary_tag="gemini"):
     """Pick the store: pgvector when the app runs on Postgres and the extension works, else the old Chroma index.
     A Postgres that can't do pgvector must never take the app down, so that case falls back (loudly)."""
     backend = getattr(config, "VECTOR_BACKEND", "auto").lower()
     if backend != "chroma":
         from database import engine
         if engine.dialect.name == "postgresql":
-            store = PgVectorStore(engine, embeddings)
+            store = PgVectorStore(engine, embeddings, backup=backup, primary_tag=primary_tag)
             try:
                 store.ensure_schema()
                 log.info("Search index: pgvector in the Postgres database (survives restarts)")

@@ -106,6 +106,11 @@ OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text:latest")
 OLLAMA_BACKUP = os.getenv("OLLAMA_BACKUP", "").lower() in ("1", "true", "yes", "on")
 OLLAMA_AVAILABLE = OLLAMA_ENABLED or OLLAMA_BACKUP
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "300"))   # seconds; a home PC without a GPU answers slowly
+# The embedding backup (used only when Gemini's embedding quota runs out). Chunks made by it are tagged "nomic" in the
+# database and searched with their own vectors. nomic vectors are unit length, so this is a squared distance like
+# MAX_CONTEXT_DISTANCE: 1.0 means "cosine similarity of at least 0.5". Raise it to let in more (looser) matches.
+OLLAMA_MAX_CONTEXT_DISTANCE = float(os.getenv("OLLAMA_MAX_CONTEXT_DISTANCE", "1.0"))
+OLLAMA_EMBED_BATCH_SIZE = int(os.getenv("OLLAMA_EMBED_BATCH_SIZE", "8"))
 
 # Gemini Config
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
