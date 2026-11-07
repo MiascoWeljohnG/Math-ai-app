@@ -20,11 +20,45 @@ function protectMath(text) {
 let currentFilename = null;
 let readingConversationId = null;
 
-const BRANCH_FILTERS = ["All", "Algebra", "Geometry", "Statistics", "Calculus", "General"];
 const branchFilterEl = document.getElementById("branchFilter");
 let allFiles = [];
+let subjectNames = [];   // the school's subjects: what the topic dropdown offers
 let activeBranch = "All";
 let searchQuery = "";
+
+const sameBranch = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+
+// Every subject of the school (the teacher's own subjects are not for students, so personal ones are left out), then any
+// other topic a file is still filed under, such as "General" or a subject that was deleted, so no file becomes unreachable.
+function branchChoices() {
+    const choices = [];
+    const add = name => {
+        name = String(name || "").trim();
+        if (name && !choices.some(existing => sameBranch(existing, name))) choices.push(name);
+    };
+    subjectNames.forEach(add);
+    allFiles.map(file => file.branch).sort((a, b) => String(a).localeCompare(String(b))).forEach(add);
+    return choices;
+}
+
+// Fills the dropdown once the subjects and files are known. Only the options change, so the search box keeps its text and focus.
+function fillBranchOptions() {
+    const select = document.getElementById("branchSelect");
+    if (!select) return;
+    const choices = branchChoices();
+    const current = choices.find(name => sameBranch(name, activeBranch));
+    activeBranch = current || "All";   // a topic that no longer exists falls back to All
+    select.replaceChildren(new Option("All topics", "All"), ...choices.map(name => new Option(name, name)));
+    select.value = activeBranch;
+}
+
+async function loadSubjects() {
+    try {
+        const res = await fetch(`${API}/subjects`, { headers: authHeaders() });
+        if (!res.ok) return;
+        subjectNames = (await res.json()).filter(subject => !subject.is_personal).map(subject => subject.name);
+    } catch (_) { /* the files still load; the dropdown just lists the topics they carry */ }
+}
 
 // Built once (not on every change) so the search box keeps focus while the user types.
 function renderFilters() {
@@ -59,7 +93,7 @@ function renderFilters() {
     select.id = "branchSelect";
     select.className = "branch-select";
     select.setAttribute("aria-label", "Filter by topic");
-    for (const b of BRANCH_FILTERS) select.add(new Option(b === "All" ? "All topics" : b, b));
+    select.add(new Option("All topics", "All"));   // the subjects are added by fillBranchOptions() once they have loaded
     select.value = activeBranch;
     select.addEventListener("change", () => { activeBranch = select.value; renderFiles(); });
     selectWrap.appendChild(select);
@@ -70,7 +104,7 @@ function renderFilters() {
 function renderFiles() {
     const query = searchQuery.trim().toLowerCase();
     const files = allFiles.filter(f =>
-        (activeBranch === "All" || f.branch === activeBranch) &&
+        (activeBranch === "All" || sameBranch(f.branch, activeBranch)) &&
         (!query || (f.display_name || "").toLowerCase().includes(query))
     );
     if (files.length === 0) {
@@ -92,7 +126,7 @@ function renderFiles() {
         const name = document.createElement("div");
         name.textContent = f.display_name;
         const badge = document.createElement("span");
-        badge.className = `branch-badge badge-${f.branch}`;
+        badge.className = `branch-badge badge-${String(f.branch).replace(/[^A-Za-z0-9_-]+/g, "-")}`;
         badge.textContent = f.branch;
         btn.appendChild(name);
         btn.appendChild(badge);
@@ -104,9 +138,10 @@ function renderFiles() {
 async function loadFiles() {
     renderFilters();
     try {
-        const res = await fetch(`${API}/materials`, { headers: authHeaders() });
+        const [res] = await Promise.all([fetch(`${API}/materials`, { headers: authHeaders() }), loadSubjects()]);
         if (!res.ok) throw new Error();
         allFiles = await res.json();
+        fillBranchOptions();
         renderFiles();
     } catch (_) {
         fileList.innerHTML = `<div class="file-empty">Couldn't load materials.</div>`;
