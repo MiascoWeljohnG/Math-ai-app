@@ -102,6 +102,17 @@ def test_restart_requeues_files_that_were_being_read(db, jobs, no_background_ind
     assert no_background_indexing == [lost.id]   # only the interrupted one is picked up again
 
 
+def test_a_file_that_kills_the_server_twice_is_not_resumed_a_third_time(db, jobs, no_background_indexing):
+    lost = add_material(db, index_status="indexing", uploaded_at=datetime(2000, 1, 1))
+    indexing.resume_stale_jobs()            # first restart: picked up again, and marked as resumed
+    assert no_background_indexing == [lost.id]
+    no_background_indexing.clear()
+    indexing.resume_stale_jobs()            # the server died again while reading it: give up
+    db.refresh(lost)
+    assert no_background_indexing == []
+    assert lost.index_status == "failed" and "smaller parts" in lost.index_error
+
+
 def test_a_job_that_runs_out_of_time_fails_with_a_clear_message(db, jobs):
     row = add_material(db, index_status="indexing")
 

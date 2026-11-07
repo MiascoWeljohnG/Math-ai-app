@@ -7,7 +7,6 @@ import json
 import io
 import re
 import uuid
-import chromadb
 import httpx
 from langchain_ollama import ChatOllama
 from pathlib import Path, PurePosixPath
@@ -20,8 +19,18 @@ import vectorstore
 
 log = logging.getLogger(__name__)
 
-chroma_client = chromadb.PersistentClient(path=config.CHROMA_PERSIST_DIR)
-collection = chroma_client.get_or_create_collection(name=config.CHROMA_COLLECTION)
+_chroma_client = None
+
+
+def get_chroma_client():
+    """The on-disk Chroma client, created on first use. Importing and opening Chroma costs about 85 MB of RAM,
+    which a 512 MB Render instance can't spare when the search index lives in Postgres (pgvector) and Chroma
+    is never touched. Only the fallback index (vectorstore.ChromaStore) ever asks for it."""
+    global _chroma_client
+    if _chroma_client is None:
+        import chromadb
+        _chroma_client = chromadb.PersistentClient(path=config.CHROMA_PERSIST_DIR)
+    return _chroma_client
 
 
 
@@ -189,7 +198,7 @@ else:
         max_retries=config.EMBEDDING_MAX_RETRIES, tokens_per_minute=config.EMBEDDING_TOKENS_PER_MINUTE,
     )
 # Where the searchable chunks live: Postgres (pgvector) when available, so they survive restarts; see vectorstore.py
-store = vectorstore.make_store(embeddings, chroma_client)
+store = vectorstore.make_store(embeddings, get_chroma_client)   # a getter: Chroma is only opened if the store needs it
 _chat_semaphore = asyncio.Semaphore(config.MAX_CONCURRENT_CHATS)
 _waiting_count = 0
 _waiting_lock = asyncio.Lock()
@@ -342,9 +351,50 @@ async def _gemini_generate(messages: list[dict]) -> str:
             return response.json()["choices"][0]["message"]["content"].strip()
 
 
+# ---------------------------------------------------------------- Ollama (backup, through the Cloudflare tunnel)
+def _ollama_request(messages: list[dict], stream: bool, image_index: int | None = None) -> tuple[str, dict]:
+    msgs, _ = _to_openai_messages(messages, image_index)
+    body = {"model": config.OLLAMA_CHAT_MODEL, "messages": msgs, "stream": stream}
+    return f"{config.OLLAMA_BASE_URL.rstrip('/')}/v1/chat/completions", body
+
+async def _ollama_stream(messages: list[dict], image_index: int | None = None):
+    url, body = _ollama_request(messages, True, image_index)
+    timeout = httpx.Timeout(config.OLLAMA_TIMEOUT, connect=10)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream("POST", url, json=body) as response:
+                if response.status_code >= 400:
+                    await response.aread()
+                    raise RuntimeError(f"Ollama error {response.status_code}: {response.text[:300]}")
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if payload == "[DONE]":
+                        return
+                    try:
+                        choice = json.loads(payload)["choices"][0]
+                        yield choice["delta"].get("content") or "", choice.get("finish_reason")
+                    except (KeyError, json.JSONDecodeError):
+                        continue
+    except httpx.HTTPError as error:   # tunnel closed, PC off, timeout
+        raise RuntimeError(f"Ollama is unreachable ({type(error).__name__}: {error})")
+
+async def _ollama_generate(messages: list[dict]) -> str:
+    url, body = _ollama_request(messages, False)
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(config.OLLAMA_TIMEOUT, connect=10)) as client:
+            response = await client.post(url, json=body)
+    except httpx.HTTPError as error:
+        raise RuntimeError(f"Ollama is unreachable ({type(error).__name__}: {error})")
+    if response.status_code >= 400:
+        raise RuntimeError(f"Ollama error {response.status_code}: {response.text[:300]}")
+    return response.json()["choices"][0]["message"]["content"].strip()
+
+
 # ---------------------------------------------------------------- Core RAG & Fallback Logic
 async def _answer_source(messages: list[dict], image_index: int | None):
-    """Yields (text, finish_reason). Tries Groq, then Gemini."""
+    """Yields (text, finish_reason). Tries Groq, then Gemini, then Ollama (when OLLAMA_BACKUP or OLLAMA_ENABLED is on)."""
     started = False
 
     if _use_groq(messages, image_index):
@@ -368,10 +418,23 @@ async def _answer_source(messages: list[dict], image_index: int | None):
             if started:
                 raise
             print(f"[gemini] request failed ({error})", flush=True)
+            if not config.OLLAMA_AVAILABLE:
+                raise RuntimeError(f"The AI service could not answer: {error}")
+
+    if config.OLLAMA_AVAILABLE:
+        try:
+            async for delta, reason in _ollama_stream(messages, image_index):
+                started = started or bool(delta)
+                yield delta, reason
+            return
+        except RuntimeError as error:
+            if started:
+                raise
+            print(f"[ollama] request failed ({error})", flush=True)
             raise RuntimeError(f"The AI service could not answer: {error}")
 
     raise RuntimeError(
-        "No AI provider answered. Set OLLAMA_ENABLED=true, GROQ_API_KEY, or GEMINI_API_KEY in backend/.env "
+        "No AI provider answered. Set OLLAMA_BACKUP=true, GROQ_API_KEY, or GEMINI_API_KEY in backend/.env "
         "(and check the backend terminal for the provider's error message)."
     )
 
@@ -469,43 +532,76 @@ def _index_files(vault_files: list[Path], vault_dir: Path, branch: str = "Genera
     return _index_documents(documents)
 
 
+_PAGES_PER_BATCH = 10   # pages read, chunked, embedded and stored together; keeps memory flat on big PDFs
+
+
+def _iter_page_batches(file_name: str, contents: bytes):
+    """Yield lists of (page number, text, tables). A PDF is read a few pages at a time and each page's cache is
+    dropped straight away: a 300-page module compilation used to be held in memory whole, which is what ran
+    the 512 MB Render instance out of memory. Other file types are small and come back in one batch."""
+    if Path(file_name).suffix.lower() != ".pdf":
+        yield extract_text_from_bytes(file_name, contents)
+        return
+    import gc
+    import pdfplumber
+    with pdfplumber.open(io.BytesIO(contents)) as pdf:
+        total = len(pdf.pages)
+        batch = []
+        for i, page in enumerate(pdf.pages, start=1):
+            _check_deadline()
+            try:
+                text = (page.extract_text() or "").strip()
+                tables = [t for t in (_table_to_markdown(t) for t in page.extract_tables()) if t]
+            finally:
+                page.flush_cache()
+            if text or tables:
+                batch.append((i, text, tables))
+            _report(phase="reading", done=i, total=total)
+            if len(batch) >= _PAGES_PER_BATCH:
+                yield batch
+                batch = []
+                gc.collect()
+        if batch:
+            yield batch
+
+
 def _index_documents(documents: list[tuple[str, str, str, bytes]]) -> tuple[int, set[str]]:
     """Chunk, embed and store files given as (source, branch, file name, bytes). `source` is the stable key
     the chunks are filed under (and later searched by); it is the same string whether the original lives
-    on disk or in Google Drive."""
+    on disk or in Google Drive. Each file is stored a few pages at a time, so a failure part-way leaves
+    partial chunks behind; index_document clears them first, so a retry starts clean."""
     _report(phase="reading")
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000, chunk_overlap=100,
         separators=["\n\n", "\n", " ", ""]
     )
 
-    all_chunks = []
-    all_metadatas = []
-    all_ids = []
+    total_chunks = 0
+    all_ids_seen: set[str] = set()
 
     for source, note_branch, file_name, contents in documents:
         path_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
-        note_type = "uploaded_material"
-        pages = extract_text_from_bytes(file_name, contents)
+        for pages in _iter_page_batches(file_name, contents):
+            chunks, metadatas, ids = [], [], []
+            for page_number, page_text, tables in pages:
+                content = "\n\n".join([page_text, *tables]).strip()
+                if not content:
+                    continue
+                for j, chunk in enumerate(splitter.split_text(content)):
+                    chunks.append(chunk)
+                    metadatas.append({
+                        "source": source,
+                        "page": page_number,
+                        "branch": note_branch,
+                        "type": "uploaded_material",
+                    })
+                    ids.append(f"obsidian_{path_hash}_page{page_number}_part{j}")
+            if chunks:
+                store.upsert(ids, chunks, metadatas, embeddings.embed_documents(chunks))
+                total_chunks += len(chunks)
+                all_ids_seen.update(ids)
 
-        for page_number, page_text, tables in pages:
-            content = "\n\n".join([page_text, *tables]).strip()
-            if not content:
-                continue
-            for j, chunk in enumerate(splitter.split_text(content)):
-                all_chunks.append(chunk)
-                all_metadatas.append({
-                    "source": source,
-                    "page": page_number,
-                    "branch": note_branch,
-                    "type": note_type,
-                })
-                all_ids.append(f"obsidian_{path_hash}_page{page_number}_part{j}")
-
-    if all_chunks:
-        store.upsert(all_ids, all_chunks, all_metadatas, embeddings.embed_documents(all_chunks))
-
-    return len(all_chunks), set(all_ids)
+    return total_chunks, all_ids_seen
 
 def _safe_branch(branch: str) -> str:
     return re.sub(r"[^A-Za-z0-9 _-]", "", branch).strip() or "General"
@@ -949,6 +1045,13 @@ async def generate_text(system: str, prompt: str, branch: str, query: str) -> st
                 return await _gemini_generate(messages)
             except RuntimeError as error:
                 print(f"[gemini] generation failed ({error}); falling back...", flush=True)
+
+        # 3b. Ollama as the last resort (when it is not already the first choice above)
+        if config.OLLAMA_BACKUP and not config.OLLAMA_ENABLED:
+            try:
+                return await _ollama_generate(messages)
+            except RuntimeError as error:
+                print(f"[ollama] generation failed ({error}); falling back...", flush=True)
 
         # 4. Try Hermes
         if config.HERMES_API_URL:

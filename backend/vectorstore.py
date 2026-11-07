@@ -221,4 +221,6 @@ def make_store(embeddings, chroma_client):
         elif backend == "pgvector":
             log.warning("VECTOR_BACKEND=pgvector needs a PostgreSQL DATABASE_URL; using the on-disk index instead")
     log.info("Search index: on-disk Chroma (wiped whenever the server restarts)")
+    if callable(chroma_client):   # rag.py passes a getter so Chroma is only imported when it is really used
+        chroma_client = chroma_client()
     return ChromaStore(chroma_client, config.CHROMA_VAULT_COLLECTION, embeddings)

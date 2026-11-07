@@ -8,7 +8,6 @@ row to "ready" or "failed" (with a reason the page shows, and a Retry button).
 Because the row exists from the first second, a file can no longer be saved to storage and then vanish from
 the list when the request dies half-way.
 """
-from langchain_ollama import OllamaEmbeddings
 import logging
 import threading
 from datetime import datetime
@@ -140,14 +139,33 @@ def retry(material: Material, db) -> None:
     start_indexing(material.id)
 
 
+_RESUMED_MARK = "Resumed after a server restart."
+
+
 def resume_stale_jobs() -> None:
     """Run once at startup, BEFORE the search index is rebuilt. A restart (Render sleeping, a redeploy) kills
-    background jobs, leaving rows on "indexing" with nobody working on them. Queue each one again: the file
-    is read back from storage, so nothing needs uploading twice."""
+    background jobs, leaving rows on "indexing" with nobody working on them. Queue each one again ONCE: the
+    file is read back from storage, so nothing needs uploading twice.
+
+    If a file is found stale a second time, the server died while reading it again (usually out of memory on
+    a big PDF). Re-queuing it would crash the server on every start, so it is marked failed instead and the
+    teacher can press Retry (or upload the file in smaller parts)."""
     db = SessionLocal()
     try:
-        ids = [m.id for m in db.query(Material).filter(Material.index_status == INDEXING, Material.uploaded_at < _STARTED).all()]
+        stale = db.query(Material).filter(Material.index_status == INDEXING, Material.uploaded_at < _STARTED).all()
+        ids = []
+        for material in stale:
+            if material.index_error == _RESUMED_MARK:
+                material.index_status = FAILED
+                material.index_error = ("The server stopped twice while reading this file, most likely because it ran out "
+                                        "of memory. Upload it in smaller parts (for example 50 pages each), then Retry.")
+                log.warning("Not resuming material %s again: it already crashed the server once", material.id)
+            else:
+                material.index_error = _RESUMED_MARK
+                ids.append(material.id)
+        db.commit()
     except Exception:
+        db.rollback()
         log.exception("Couldn't look for unfinished indexing jobs")
         return
     finally:

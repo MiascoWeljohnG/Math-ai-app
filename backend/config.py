@@ -101,6 +101,11 @@ OLLAMA_ENABLED = os.getenv("OLLAMA_ENABLED", "").lower() in ("1", "true", "yes",
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
 OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text:latest")
+# OLLAMA_BACKUP=true keeps Ollama as a LAST resort for chat and lessons: it is only asked after Groq and Gemini
+# have failed (e.g. out of tokens). It does not touch embeddings, so the existing search index stays valid.
+OLLAMA_BACKUP = os.getenv("OLLAMA_BACKUP", "").lower() in ("1", "true", "yes", "on")
+OLLAMA_AVAILABLE = OLLAMA_ENABLED or OLLAMA_BACKUP
+OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "300"))   # seconds; a home PC without a GPU answers slowly
 
 # Gemini Config
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

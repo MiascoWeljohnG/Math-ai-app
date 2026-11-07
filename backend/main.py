@@ -37,7 +37,7 @@ if not db.query(Subject).filter(Subject.owner_user_id.is_(None)).first():
 db.commit()
 db.close()
 
-from rag import ingest_uploads, chroma_client
+from rag import ingest_uploads, store, get_chroma_client
 from models import Material
 import drive_storage
 import threading
@@ -83,11 +83,14 @@ else:
     except Exception:
         log.exception("Startup indexing failed; continuing without re-indexing")
 
-# Uploaded documents live and are retrieved from the uploads folder; discard the
-# legacy-only collection after its documents have been migrated successfully.
-chroma_client.get_or_create_collection(name=config.CHROMA_COLLECTION)
-chroma_client.delete_collection(config.CHROMA_COLLECTION)
-chroma_client.get_or_create_collection(name=config.CHROMA_COLLECTION)
+# Uploaded documents live and are retrieved from the uploads folder; discard the legacy-only collection
+# after its documents have been migrated successfully. Only relevant when the on-disk Chroma index is in
+# use: with pgvector, Chroma is never opened (saves about 85 MB of RAM).
+if store.name == "chroma":
+    _chroma = get_chroma_client()
+    _chroma.get_or_create_collection(name=config.CHROMA_COLLECTION)
+    _chroma.delete_collection(config.CHROMA_COLLECTION)
+    _chroma.get_or_create_collection(name=config.CHROMA_COLLECTION)
 
 app = FastAPI(title="Math AI App")
 
