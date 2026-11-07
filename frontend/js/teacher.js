@@ -310,14 +310,92 @@ async function loadLessonList() {
             rows.push(empty);
         }
         lessonListEl.replaceChildren(...rows);
+        await loadDraftList();
     } catch (error) {
         showLessonStatus(error.message, "error");
     }
 }
 
 function markActiveLesson() {
-    lessonListEl.querySelectorAll(".lesson-row").forEach(row => row.classList.toggle("active", Number(row.dataset.id) === editingLessonId));
+    [lessonListEl, draftListEl].forEach(list => list.querySelectorAll(".lesson-row").forEach(row => row.classList.toggle("active", Number(row.dataset.id) === editingLessonId)));
 }
+
+// --- Drafts: lessons the AI wrote stay hidden from students until the teacher approves them ---
+const draftPanel = document.getElementById("draftPanel");
+const draftListEl = document.getElementById("draftListEl");
+let draftLessons = [];
+
+async function loadDraftList() {
+    if (activeLessonSubjectId === null) return;
+    try {
+        const response = await fetch(`${API}/subjects/${activeLessonSubjectId}/lessons/drafts`, { headers: getHeaders() });
+        draftLessons = response.ok ? await response.json() : [];
+    } catch (_) {
+        draftLessons = [];   // the published list still works without it
+    }
+    renderDraftList();
+}
+
+function renderDraftList() {
+    draftPanel.hidden = draftLessons.length === 0;
+    document.getElementById("draftCount").textContent = draftLessons.length ? String(draftLessons.length) : "";
+    draftListEl.replaceChildren(...draftLessons.map(lesson => {
+        const row = document.createElement("div");
+        row.className = "lesson-row" + (lesson.id === editingLessonId ? " active" : "");
+        row.dataset.id = lesson.id;
+        const openButton = document.createElement("button");
+        openButton.type = "button";
+        openButton.className = "lesson-edit";
+        openButton.textContent = lesson.title;
+        openButton.addEventListener("click", () => editLesson(lesson.id));
+        const approveButton = document.createElement("button");
+        approveButton.type = "button";
+        approveButton.className = "lesson-approve";
+        approveButton.textContent = "Approve";
+        approveButton.addEventListener("click", () => approveDraft(lesson.id));
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "lesson-delete";
+        deleteButton.textContent = "Delete";
+        deleteButton.addEventListener("click", () => deleteLesson(lesson.id));
+        row.append(openButton, approveButton, deleteButton);
+        return row;
+    }));
+}
+
+async function postApprove(lessonId) {
+    const response = await fetch(`${API}/subjects/${activeLessonSubjectId}/lessons/${lessonId}/approve`, { method: "POST", headers: getHeaders() });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.detail || "Couldn't approve this lesson.");
+}
+
+async function approveDraft(lessonId) {
+    try {
+        await postApprove(lessonId);
+        showLessonStatus("Approved. Students can open this lesson now.", "success");
+        await loadLessonList();
+    } catch (error) {
+        showLessonStatus(error.message, "error");
+    }
+}
+
+async function approveAllDrafts() {
+    const count = draftLessons.length;
+    if (!count) return;
+    if (!await uiConfirm(`Approve all ${count} draft lesson${count === 1 ? "" : "s"}?\n\nStudents will be able to open ${count === 1 ? "it" : "them"} straight away.`, { title: "Approve drafts", okText: "Approve all" })) return;
+    let approved = 0;
+    try {
+        for (const lesson of [...draftLessons]) {
+            await postApprove(lesson.id);
+            approved += 1;
+        }
+        showLessonStatus(`Approved ${approved} lesson${approved === 1 ? "" : "s"}. Students can open them now.`, "success");
+    } catch (error) {
+        showLessonStatus(`${error.message} ${approved} of ${count} approved.`, "error");
+    }
+    await loadLessonList();
+}
+document.getElementById("approveAllBtn").addEventListener("click", approveAllDrafts);
 
 // "+ New lesson": a blank form in the modal.
 function openNewLessonDialog() {
@@ -656,11 +734,11 @@ async function generateLessons() {
         const quizNote = quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "";
         if (saved.length === 1) {
             await editLesson(saved[0].id);   // open it so the teacher can read what the AI wrote
-            showLessonStatus(`Lesson saved. Read it here and edit anything you like.${quizNote}`, quizFailures ? "error" : "success");
+            showLessonStatus(`Lesson saved as a draft. Read it here and edit anything you like, then press Approve under "Drafts to review" so students can see it.${quizNote}`, quizFailures ? "error" : "success");
         } else {
             startNewLesson();
             lessonDialog.close();   // not closeLessonDialog(): lessonBusy is still set until the finally below
-            showLessonStatus(`Done. ${saved.length} lessons saved.${quizNote} Review them before students see them.`, quizFailures ? "error" : "success");
+            showLessonStatus(`Done. ${saved.length} lessons saved as drafts.${quizNote} Review them under "Drafts to review" and press Approve so students can see them.`, quizFailures ? "error" : "success");
         }
         loadStudents();
     }).catch(error => {
@@ -874,7 +952,7 @@ async function writeLessonsFromFile(subject, file, withQuiz) {
             }
         }
         const quizNote = quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "";
-        showLessonStatus(`Done. ${written} lesson(s) saved to "${subject.name}".${quizNote} Review them before students see them.`, quizFailures ? "error" : "success");
+        showLessonStatus(`Done. ${written} lesson(s) saved to "${subject.name}" as drafts.${quizNote} Review them under "Drafts to review" and press Approve so students can see them.`, quizFailures ? "error" : "success");
         loadStudents();
     } catch (error) {
         showLessonStatus(`${error.message} The subject "${subject.name}" was created; ${written} of ${total} lesson(s) were saved before it stopped.`, "error");

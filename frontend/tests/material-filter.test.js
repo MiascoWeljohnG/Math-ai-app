@@ -5,12 +5,12 @@ const vm = require("node:vm");
 const path = require("node:path");
 
 // Loads teacher.js against a tiny fake page. `materials` is what GET /materials returns.
-function createHarness(materials, teacherFiles = []) {
+function createHarness(materials, teacherFiles = [], drafts = []) {
     const rendered = [], scheduled = [];
     const elements = new Map();
     const element = id => {
         if (!elements.has(id)) elements.set(id, {
-            id, value: "", hidden: false, disabled: false, checked: false, textContent: "", className: "", files: [], style: {},
+            id, dataset: {}, value: "", hidden: false, disabled: false, checked: false, textContent: "", className: "", files: [], style: {},
             listeners: {}, addEventListener(name, callback) { this.listeners[name] = callback; },
             replaceChildren(...children) { this.children = children; },
             append(...children) { this.children = [...(this.children || []), ...children]; },
@@ -26,7 +26,7 @@ function createHarness(materials, teacherFiles = []) {
     const context = {
         document: { getElementById: element, querySelector: selector => element(`q ${selector}`), createElement: () => element(`created-${Math.random()}`), createTextNode: text => ({ textContent: text }) },
         window: { addEventListener() {} }, location: { hostname: "localhost" }, IS_LOCAL_HOST: true, API: "http://api",
-        localStorage: { getItem: () => "token" }, setInterval() {}, setTimeout() {}, clearTimeout() {}, console, confirm: () => true, alert() {},
+        localStorage: { getItem: () => "token" }, setInterval() {}, setTimeout() {}, clearTimeout() {}, console, confirm: () => true, uiConfirm: async () => true, alert() {},
         Option: function Option(text, value) { this.textContent = text; this.value = value; },
         FormData: class { constructor() { this.entries = []; } append(...args) { this.entries.push(args); } },
         getHeaders: () => ({}), withButtonLoading: async (_b, cb) => cb(),
@@ -39,6 +39,8 @@ function createHarness(materials, teacherFiles = []) {
         },
         fetch: async url => {
             calls.push({ url });
+            if (url.endsWith("/lessons/drafts")) return { ok: true, json: async () => drafts };
+            if (url.endsWith("/approve")) return { ok: true, json: async () => ({ status: "published" }) };
             if (url.endsWith("/teacher/files")) return { ok: true, json: async () => teacherFiles };
             if (url.endsWith("/materials")) return { ok: true, json: async () => materials };
             if (url.endsWith("/subjects")) return { ok: true, json: async () => [{ id: 7, name: "Algebra", is_personal: false }] };
@@ -185,4 +187,41 @@ test("with no uploads the filter bar stays hidden", async () => {
     await settle();
     assert.equal(element("fileFilter").hidden, true);
     assert.equal(element("noFiles").textContent, "You haven't uploaded any files yet.");
+});
+
+
+// ---- Drafts to review
+const DRAFTS = [{ id: 11, title: "Linear functions" }, { id: 12, title: "Slopes" }];
+const draftRow = (element, index) => element("draftListEl").children[index];
+
+test("AI-written lessons show up under Drafts to review, with a count", async () => {
+    const { element } = createHarness([], [], DRAFTS);
+    await settle();
+    assert.equal(element("draftPanel").hidden, false);
+    assert.equal(element("draftCount").textContent, "2");
+    assert.deepEqual(element("draftListEl").children.map(row => row.children[0].textContent), ["Linear functions", "Slopes"]);
+    assert.deepEqual(draftRow(element, 0).children.map(button => button.textContent), ["Linear functions", "Approve", "Delete"]);
+});
+
+test("with no drafts the panel stays hidden", async () => {
+    const { element } = createHarness([], [], []);
+    await settle();
+    assert.equal(element("draftPanel").hidden, true);
+});
+
+test("Approve publishes that lesson and then reloads the lists", async () => {
+    const { element, calls } = createHarness([], [], DRAFTS);
+    await settle();
+    const before = calls.filter(c => c.url && c.url.endsWith("/lessons/drafts")).length;
+    await draftRow(element, 1).children[1].listeners.click();
+    assert.ok(calls.some(c => c.url && c.url.endsWith("/subjects/7/lessons/12/approve")));
+    assert.ok(calls.filter(c => c.url && c.url.endsWith("/lessons/drafts")).length > before);   // the drafts were fetched again
+});
+
+test("Approve all publishes every draft", async () => {
+    const { element, calls } = createHarness([], [], DRAFTS);
+    await settle();
+    await element("approveAllBtn").listeners.click();
+    const approved = calls.filter(c => c.url && c.url.endsWith("/approve")).map(c => c.url.split("/lessons/")[1]);
+    assert.deepEqual(approved, ["11/approve", "12/approve"]);
 });

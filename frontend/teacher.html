@@ -72,6 +72,14 @@
             <h3>Lessons</h3>
             <div id="lessonListEl" class="lesson-list"></div>
         </div>
+        <div class="panel lesson-panel" id="draftPanel" hidden>
+            <div class="draft-head">
+                <h3>Drafts to review <span class="tag" id="draftCount"></span></h3>
+                <button class="btn btn-secondary" type="button" id="approveAllBtn">Approve all</button>
+            </div>
+            <p class="hint">Lessons the AI wrote stay hidden from students until you approve them. Click a title to read or edit it first.</p>
+            <div id="draftListEl" class="lesson-list"></div>
+        </div>
         <div class="status" id="lessonListStatus" role="status" aria-live="polite"></div>
     </div>
 

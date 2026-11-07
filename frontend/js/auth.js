@@ -340,6 +340,80 @@ function logout() {
     window.location.replace("login.html");
 }
 
+// --- SESSION EXPIRED POPUP ---
+// A login token only lasts a while (ACCESS_TOKEN_EXPIRE_MINUTES on the server), and the server also answers 401
+// when it no longer accepts the token. Before, the page just stopped loading data with no explanation.
+// Now any signed-in request that comes back 401 opens one popup, and "Log in again" returns to the sign-in page.
+// It is self-contained (no dependency on modal.js) because not every page loads that file.
+let sessionPopupOpen = false;
+function showSessionExpired() {
+    if (sessionPopupOpen || !document.body) return;   // the page fires many requests at once: show it only once
+    sessionPopupOpen = true;
+
+    const style = document.createElement("style");
+    style.textContent = `
+    dialog.session-modal-backdrop { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0;
+        padding: 16px; box-sizing: border-box; background: rgba(0, 0, 0, 0.55); color: inherit; overflow: hidden; }
+    dialog.session-modal-backdrop[open] { display: flex; align-items: center; justify-content: center; }
+    dialog.session-modal-backdrop::backdrop { background: transparent; }
+    .session-modal { width: 100%; max-width: 420px; box-sizing: border-box; padding: 24px; text-align: center;
+        background: var(--bg-elevated, #fff); color: var(--text, #1b2a1d); border: 1px solid var(--border, #cfd8cf);
+        border-radius: 14px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3); font-family: inherit; }
+    .session-modal h2 { margin: 0 0 10px; font-size: 1.2rem; color: var(--heading, var(--text, #0b4a12)); }
+    .session-modal p { margin: 0; line-height: 1.5; }
+    .session-modal .session-note { margin-top: 8px; font-size: 0.9rem; opacity: 0.8; }
+    .session-modal button { margin-top: 20px; padding: 10px 22px; font: inherit; font-weight: 600; cursor: pointer;
+        color: #fff; background: var(--accent, #3446D6); border: 0; border-radius: 8px; }
+    .session-modal button:hover { background: var(--accent-hover, var(--accent, #2a39b3)); }`;
+    document.head.appendChild(style);
+
+    const dialog = document.createElement("dialog");
+    dialog.className = "session-modal-backdrop";
+    const box = document.createElement("div");
+    box.className = "session-modal";
+    box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-labelledby", "sessionModalTitle");
+    const title = document.createElement("h2");
+    title.id = "sessionModalTitle";
+    title.textContent = "Your session has expired";
+    const text = document.createElement("p");
+    text.textContent = "The server no longer accepts your login (401 Unauthorized), so this page can't load your data. Please log in again to continue.";
+    const note = document.createElement("p");
+    note.className = "session-note";
+    note.textContent = "Anything you hadn't saved on this page may be lost.";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Log in again";
+    btn.addEventListener("click", logout);
+    box.append(title, text, note, btn);
+    dialog.appendChild(box);
+    // There is nothing useful to do on this page without a session, so Esc / clicking outside don't dismiss it.
+    dialog.addEventListener("cancel", e => e.preventDefault());
+    document.body.appendChild(dialog);
+    dialog.showModal();
+    btn.focus();
+}
+
+// Watch every request the page makes. Only a 401 on a call to our own API that carried a login token counts,
+// so a wrong password at sign-in (also a 401, but sent without a token) never triggers it.
+(function watchForExpiredSession() {
+    if (window.__sessionWatchInstalled) return;
+    window.__sessionWatchInstalled = true;
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async function (input, init) {
+        const response = await nativeFetch(input, init);
+        if (response.status === 401 && localStorage.getItem("token")) {
+            try {
+                const url = typeof input === "string" ? input : (input && input.url) || String(input);
+                const headers = new Headers((init && init.headers) || (input instanceof Request ? input.headers : undefined));
+                if (url.startsWith(API) && headers.has("Authorization")) showSessionExpired();
+            } catch (_) { /* never let the notice break a request */ }
+        }
+        return response;
+    };
+})();
+
 // --- PROTECT PAGES (works on all pages) ---
 function requireAuth() {
     const token = localStorage.getItem("token");

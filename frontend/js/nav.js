@@ -177,7 +177,7 @@ function openAdminProfileModal() {
     const authHeaders = () => ({ "Authorization": `Bearer ${localStorage.getItem("token")}`, "Content-Type": "application/json" });
     const msg = (id, text, good = false) => { const el = overlay.querySelector(id); el.textContent = text; el.className = `admin-profile-message ${good ? "is-ok" : "is-error"}`; };
     fetch(`${API}/profile`, { headers: authHeaders() }).then(async res => {
-        if (res.status === 401) { if (typeof logout === "function") logout(); throw new Error("Your session expired. Please sign in again."); }
+        if (res.status === 401) { if (typeof showSessionExpired === "function") showSessionExpired(); else if (typeof logout === "function") logout(); throw new Error("Your session expired. Please sign in again."); }
         const data = await res.json(); if (!res.ok) throw new Error(data.detail || "Couldn't load profile.");
         for (const key of ["first_name", "last_name", "middle_name", "email", "username"]) form.elements[key].value = data[key] || "";
         const name = [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(" ") || "—";

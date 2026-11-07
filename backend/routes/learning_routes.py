@@ -40,7 +40,7 @@ def roadmap(
         query = query.filter(Subject.id == subject_id)
     result = []
     for subject in query.order_by(Subject.id.asc()).all():
-        lessons = (db.query(Lesson).filter(Lesson.subject_id == subject.id)
+        lessons = (db.query(Lesson).filter(Lesson.subject_id == subject.id, Lesson.status == "published")   # drafts are hidden from students, so they aren't counted either
                    .order_by(Lesson.order_index.asc(), Lesson.id.asc()).all())
         ids = [lesson.id for lesson in lessons]
         read = {i for (i,) in db.query(LessonCompletion.lesson_id)

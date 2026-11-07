@@ -52,7 +52,7 @@ function showMsg(text, kind) {
 async function load() {
     try {
         const res = await fetch(`${API}/profile`, { headers: authHeaders() });
-        if (res.status === 401) return logout();
+        if (res.status === 401) return typeof showSessionExpired === "function" ? showSessionExpired() : logout();
         if (!res.ok) throw new Error();
         original = await res.json();
         fill(original);

@@ -264,7 +264,7 @@ def get_lesson(
         Lesson.id == lesson_id,
         Lesson.subject_id == subject_id,
     ).first()
-    if lesson is None:
+    if lesson is None or (lesson.status != "published" and user.role not in ("teacher", "school_admin")):   # drafts are for staff only
         raise HTTPException(status_code=404, detail="Lesson not found")
     return _serialize_lesson(lesson, completed=lesson.id in _completed_ids(db, user, [lesson.id]))
 
@@ -542,7 +542,9 @@ def _save_generated_lesson(db: Session, subject: Subject, user: User, topic: str
         content=content,
         order_index=_next_order(db, subject.id),
         created_by=user.username,
-        status="draft",
+        # A teacher's lessons for the whole school wait in Drafts until they approve them. A student's own subject has
+        # nobody to review it (only staff can approve), so its lessons are published at once.
+        status="draft" if subject.owner_user_id is None else "published",
     )
     db.add(lesson)
     db.commit()
