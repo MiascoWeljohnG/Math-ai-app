@@ -365,6 +365,7 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
                 notify_admins(db, "upload", "New file uploaded", f'@{username} uploaded "{original_name}". {how}', exclude=username, about=username)
             uploaded.append({
                 "filename": original_name,
+                "stored_name": material.filename,   # the key the lesson pages use to pick this file later
                 "branch": target,
                 "auto_detected": original_name in detected,
                 "confidence": round(detected[original_name], 2) if original_name in detected else None,

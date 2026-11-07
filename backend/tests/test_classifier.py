@@ -91,6 +91,7 @@ def test_uploader_pick_is_used_without_asking_the_model(rag, db):
     rag.reply = RuntimeError("must not be called")
     out = run_upload(db, [("mixed.docx", b"some text")], picked=json.dumps({"mixed.docx": "Geometry"}))
     assert out["uploaded"][0]["branch"] == "Geometry" and not out["uploaded"][0]["auto_detected"]
+    assert out["uploaded"][0]["stored_name"].endswith(out["uploaded"][0]["filename"])   # the key the lesson page uses to pick the saved file
     assert rag.ingested == [("Geometry", ["mixed.docx"])]
 
 

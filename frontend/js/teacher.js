@@ -232,6 +232,7 @@ async function loadLessonSubjects(selectId) {
 lessonSubjectSelect.addEventListener("change", async () => {
     activeLessonSubjectId = Number(lessonSubjectSelect.value);
     startNewLesson();
+    if (materialsLoaded) renderMaterialOptions();   // the file list follows the subject
     await loadLessonList();
     refreshDeletionState();
 });
@@ -453,6 +454,7 @@ function refreshLessonForm() {
     sourceUploadRow.hidden = sourceMode() !== "upload";
     sourceLibraryRow.hidden = sourceMode() !== "library";
     pageRangeRow.hidden = sourceMode() === "none";   // a page range only makes sense with a file
+    if (materialsLoaded && sourceMode() === "library") renderMaterialOptions();
 }
 
 // Going from 1 lesson to several (or back) carries the typed title over.
@@ -492,6 +494,41 @@ function readSource() {
         return { file: null, filename: materialSelect.value, ...readPageRange() };
     }
     return { file: null, filename: "", pageStart: "", pageEnd: "" };
+}
+
+// A file picked with "Upload a file" is first saved to Your Uploaded Files (under the selected subject) when the box is
+// ticked, and the lessons are then written from that saved copy. It is saved once per form, however many times the
+// teacher presses Suggest/Generate. Without the tick, the file is only read to write the lessons, as before.
+let lessonUpload = null;   // { file, promise }: the save in progress or done for the chosen file (a double click must not upload twice)
+
+async function saveLessonFile(file) {
+    showLessonStatus("Saving the file to Your Uploaded Files…", "info");
+    const hint = ` Untick "Also save this file" to use it without saving.`;
+    let result;
+    try {
+        result = await postUpload(`${API}/teacher/upload`, getHeaders(), [file], activeSubjectName(), null);
+    } catch (error) {
+        throw new Error(`The file couldn't be saved: ${error.message}${hint}`);
+    }
+    const saved = result.uploaded && result.uploaded[0];
+    if (!saved || !saved.stored_name) throw new Error(`The file couldn't be saved. ${result.message || ""}${hint}`.replace("  ", " "));
+    loadMyFiles();
+    loadMaterialOptions();
+    return saved.stored_name;
+}
+
+async function resolveSource() {
+    const source = readSource();
+    if (sourceMode() !== "upload" || !source.file || !document.getElementById("saveLessonFile").checked) return source;
+    if (!lessonUpload || lessonUpload.file !== source.file) lessonUpload = { file: source.file, promise: saveLessonFile(source.file) };
+    let stored;
+    try {
+        stored = await lessonUpload.promise;
+    } catch (error) {
+        lessonUpload = null;   // a failed save is tried again next time
+        throw error;
+    }
+    return { file: null, filename: stored, pageStart: source.pageStart, pageEnd: source.pageEnd };
 }
 
 function lessonRequest(source, fields) {
@@ -540,7 +577,7 @@ async function suggestLessonFromMaterial() {
 async function suggestTitles() {
     if (activeLessonSubjectId === null) return showLessonStatus("Choose a subject first.", "error");
     let source;
-    try { source = readSource(); } catch (error) { return showLessonStatus(error.message, "error"); }
+    try { source = await resolveSource(); } catch (error) { return showLessonStatus(error.message, "error"); }
     await withButtonLoading(suggestTitlesBtn, async () => {
         showLessonStatus("Planning the lessons… this can take a minute.", "info");
         const titles = await completeTitles(selectedCount(), typedTitles(), lessonDescriptionInput.value.trim(), source);
@@ -554,7 +591,7 @@ async function suggestTitles() {
 async function generateLessons() {
     if (activeLessonSubjectId === null) return showLessonStatus("Choose a subject first.", "error");
     let source;
-    try { source = readSource(); } catch (error) { return showLessonStatus(error.message, "error"); }
+    try { source = await resolveSource(); } catch (error) { return showLessonStatus(error.message, "error"); }
 
     const count = selectedCount();
     const description = lessonDescriptionInput.value.trim();
@@ -608,7 +645,7 @@ async function regenerateContent() {
     const title = lessonTitleInput.value.trim();
     if (!title) return showLessonStatus("A lesson title is required.", "error");
     let source;
-    try { source = readSource(); } catch (error) { return showLessonStatus(error.message, "error"); }
+    try { source = await resolveSource(); } catch (error) { return showLessonStatus(error.message, "error"); }
     if (lessonContentInput.value.trim() && !await uiConfirm(
         "Replace the current content with new AI-written content?\n\nNothing is saved until you press Save changes.",
         { title: "Rewrite content", okText: "Rewrite" })) return;
@@ -836,17 +873,54 @@ window.addEventListener("focus", refreshDeletionState);
 setInterval(refreshDeletionState, 30000);
 
 // --- The "Choose an uploaded file" list ---
+let allMaterials = [];
+let materialsLoaded = false;
+const materialSearch = document.getElementById("materialSearch");
+const materialSubjectOnly = document.getElementById("materialSubjectOnly");
+const materialCount = document.getElementById("materialCount");
+const normalized = text => String(text || "").trim().toLowerCase();
+
+// The name of the subject picked at the top of the lessons section: uploaded files are filed under a subject's name.
+function activeSubjectName() {
+    const option = lessonSubjectSelect.selectedOptions && lessonSubjectSelect.selectedOptions[0];
+    return option ? option.textContent.trim() : "";
+}
+
+// Shows the uploaded files that match the search words and, when ticked, belong to the selected subject.
+function renderMaterialOptions() {
+    const chosen = materialSelect.value;
+    const subject = normalized(activeSubjectName());
+    const onlySubject = Boolean(materialSubjectOnly.checked && subject);
+    const words = normalized(materialSearch.value).split(/\s+/).filter(Boolean);
+    const matches = allMaterials.filter(file => {
+        if (onlySubject && normalized(file.branch) !== subject) return false;
+        const text = normalized(`${file.display_name} ${file.branch}`);
+        return words.every(word => text.includes(word));
+    });
+    const placeholder = !allMaterials.length ? "No uploaded files yet"
+        : matches.length ? "Choose an uploaded file…" : "No files match";
+    materialSelect.replaceChildren(
+        new Option(placeholder, ""),
+        ...matches.map(file => new Option(onlySubject ? file.display_name : `${file.display_name} (${file.branch})`, file.filename)),
+    );
+    if (matches.some(file => file.filename === chosen)) materialSelect.value = chosen;
+    document.getElementById("materialSubjectOnlyLabel").textContent = subject
+        ? `Only files in ${activeSubjectName()}` : "Only this subject's files";
+    if (!allMaterials.length) materialCount.textContent = "";
+    else if (matches.length) materialCount.textContent = `Showing ${matches.length} of ${allMaterials.length} file${allMaterials.length === 1 ? "" : "s"}.`;
+    else if (onlySubject && !words.length) materialCount.textContent = `No files are filed under ${activeSubjectName()} yet. Untick the box above to see all ${allMaterials.length}, or upload one.`;
+    else materialCount.textContent = `No files match. ${allMaterials.length} in total.`;
+}
+materialSearch.addEventListener("input", renderMaterialOptions);
+materialSubjectOnly.addEventListener("change", renderMaterialOptions);
+
 async function loadMaterialOptions() {
     try {
         const response = await fetch(`${API}/materials`, { headers: getHeaders() });
         if (!response.ok) return;
-        const files = await response.json();
-        const chosen = materialSelect.value;
-        materialSelect.replaceChildren(
-            new Option(files.length ? "Choose an uploaded file…" : "No uploaded files yet", ""),
-            ...files.map(file => new Option(`${file.display_name} (${file.branch})`, file.filename)),
-        );
-        if (files.some(file => file.filename === chosen)) materialSelect.value = chosen;
+        allMaterials = await response.json();
+        materialsLoaded = true;
+        renderMaterialOptions();
     } catch (_) { /* leave the list as it was */ }
 }
 loadMaterialOptions();

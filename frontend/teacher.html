@@ -146,10 +146,21 @@
                         <p class="placeholder" id="lessonDropPlaceholder">Drag &amp; drop a PDF, Word, or PowerPoint file here, or click to browse</p>
                     </div>
                     <input type="file" id="lessonFileInput" accept=".pdf,.docx,.pptx,.txt,.md" style="display:none" aria-label="File to base the lessons on">
-                    <p class="hint">Only used to write these lessons. It is not added to Your Uploaded Files.</p>
+                    <label class="check-row" for="saveLessonFile">
+                        <input type="checkbox" id="saveLessonFile" checked>
+                        <span>Also save this file to Your Uploaded Files under this subject, so it is kept as a module and the chatbot can use it.</span>
+                    </label>
                 </div>
                 <div id="sourceLibraryRow" hidden>
+                    <div class="material-filter">
+                        <input type="search" id="materialSearch" class="branch-select" placeholder="Search your uploaded files…" aria-label="Search uploaded files" autocomplete="off">
+                        <label class="check-row" for="materialSubjectOnly">
+                            <input type="checkbox" id="materialSubjectOnly" checked>
+                            <span id="materialSubjectOnlyLabel">Only this subject's files</span>
+                        </label>
+                    </div>
                     <select id="materialSelect" class="branch-select" aria-label="Uploaded file to base the lessons on"></select>
+                    <p class="hint" id="materialCount" role="status" aria-live="polite"></p>
                     <button class="btn btn-secondary btn-block" type="button" id="suggestFromMaterialBtn" onclick="suggestLessonFromMaterial()">Suggest lesson from file</button>
                 </div>
                 <div id="pageRangeRow" class="page-range-row" hidden>
