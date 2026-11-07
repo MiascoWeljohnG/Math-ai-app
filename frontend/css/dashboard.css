@@ -86,6 +86,9 @@ textarea { width: 100%; resize: vertical; }
 .file-chip .fremove:hover { background: var(--danger); color: #fff; }
 #sourceLibraryRow:not([hidden]) { display: grid; gap: 0.75rem; margin-top: 0.4rem; }
 #sourceLibraryRow .branch-select { width: 100%; max-width: 100%; text-overflow: ellipsis; }
+.file-filter { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.4rem 0 0.2rem; }
+.file-filter input[type="search"] { flex: 1 1 220px; min-width: 0; }
+.file-filter select { flex: 0 1 240px; min-width: 0; text-overflow: ellipsis; }
 .material-filter { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 0.5rem; }
 .check-row { display: flex; gap: 0.55rem; align-items: flex-start; font-size: 0.9rem; color: var(--text); cursor: pointer; }
 .check-row input { margin-top: 0.2rem; flex: none; }

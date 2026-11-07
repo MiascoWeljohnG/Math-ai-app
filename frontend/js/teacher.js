@@ -89,6 +89,45 @@ async function uploadFiles() {
 }
 
 // --- Files this teacher uploaded (the server only returns their own) ---
+let myFiles = [];
+const fileSearch = document.getElementById("fileSearch");
+const fileSubjectFilter = document.getElementById("fileSubjectFilter");
+
+// Draws the table from the files that match the search words and the chosen subject. The search and subject choice
+// survive the automatic reloads, so a file finishing its indexing doesn't wipe what the teacher typed.
+function renderMyFiles() {
+    const wanted = fileSubjectFilter.value;
+    const labels = new Map();   // one entry per subject whatever its capitals; the first spelling seen is the label
+    for (const file of myFiles) {
+        const key = file.branch.trim().toLowerCase();
+        if (!labels.has(key)) labels.set(key, file.branch);
+    }
+    const subjects = [...labels.values()].sort((a, b) => a.localeCompare(b));
+    fileSubjectFilter.replaceChildren(new Option("All subjects", ""), ...subjects.map(name => new Option(name, name)));
+    fileSubjectFilter.value = subjects.includes(wanted) ? wanted : "";   // a subject that no longer has files falls back to All
+
+    const subject = fileSubjectFilter.value.trim().toLowerCase();
+    const words = fileSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const shown = myFiles.filter(file => {
+        if (subject && file.branch.trim().toLowerCase() !== subject) return false;
+        const text = `${file.display_name} ${file.branch}`.toLowerCase();
+        return words.every(word => text.includes(word));
+    });
+
+    const note = document.getElementById("noFiles");
+    note.textContent = myFiles.length ? "No files match your search." : "You haven't uploaded any files yet.";
+    note.style.display = shown.length ? "none" : "block";
+    document.getElementById("filesTable").style.display = shown.length ? "" : "none";
+    document.getElementById("fileFilter").hidden = myFiles.length === 0;
+    document.getElementById("fileCount").textContent = myFiles.length && shown.length !== myFiles.length
+        ? `Showing ${shown.length} of ${myFiles.length} files.` : "";
+    renderMaterialRows(document.querySelector("#filesTable tbody"), shown, false, undefined, loadMyFiles);
+    // renderMaterialRows only watches the files it was given; keep reloading while ANY file (even a hidden one) is still being read
+    scheduleIndexingRefresh(myFiles, loadMyFiles);
+}
+fileSearch.addEventListener("input", renderMyFiles);
+fileSubjectFilter.addEventListener("change", renderMyFiles);
+
 let lastReadyCount = null;
 let filesRetryTimer = null;
 
@@ -110,11 +149,8 @@ async function loadMyFiles() {
             return;
         }
         const files = await res.json();
-        const note = document.getElementById("noFiles");
-        note.textContent = "You haven't uploaded any files yet.";
-        note.style.display = files.length ? "none" : "block";
-        document.getElementById("filesTable").style.display = files.length ? "" : "none";
-        renderMaterialRows(document.querySelector("#filesTable tbody"), files, false, undefined, loadMyFiles);
+        myFiles = files;
+        renderMyFiles();
         // a file that just finished being read can now be picked for lessons
         const readyCount = files.filter(f => f.index_status === "ready").length;
         if (readyCount !== lastReadyCount) {

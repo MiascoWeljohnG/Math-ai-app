@@ -44,6 +44,11 @@
             <h2>Your Uploaded Files</h2>
             <p class="hint">Only files you uploaded are listed here.</p>
         </div>
+        <div class="file-filter" id="fileFilter" hidden>
+            <input type="search" id="fileSearch" class="branch-select" placeholder="Search your files…" aria-label="Search your uploaded files" autocomplete="off">
+            <select id="fileSubjectFilter" class="branch-select" aria-label="Show files from one subject"></select>
+        </div>
+        <p class="hint" id="fileCount" role="status" aria-live="polite"></p>
         <div class="table-wrap">
             <table id="filesTable">
                 <thead><tr><th>File</th><th>Branch</th><th>Uploaded</th><th></th></tr></thead>

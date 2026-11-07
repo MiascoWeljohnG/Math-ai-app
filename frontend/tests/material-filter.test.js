@@ -5,7 +5,8 @@ const vm = require("node:vm");
 const path = require("node:path");
 
 // Loads teacher.js against a tiny fake page. `materials` is what GET /materials returns.
-function createHarness(materials) {
+function createHarness(materials, teacherFiles = []) {
+    const rendered = [], scheduled = [];
     const elements = new Map();
     const element = id => {
         if (!elements.has(id)) elements.set(id, {
@@ -29,13 +30,16 @@ function createHarness(materials) {
         Option: function Option(text, value) { this.textContent = text; this.value = value; },
         FormData: class { constructor() { this.entries = []; } append(...args) { this.entries.push(args); } },
         getHeaders: () => ({}), withButtonLoading: async (_b, cb) => cb(),
-        loadUploadSubjects: async () => [], populateUploadSubjects() {}, renderMaterialRows() {},
+        loadUploadSubjects: async () => [], populateUploadSubjects() {},
+        renderMaterialRows: (_tbody, files) => rendered.push(files.map(f => f.display_name)),
+        scheduleIndexingRefresh: (files) => scheduled.push(files.length),
         postUpload: async (url, headers, files, branch) => {
             calls.push({ upload: true, url, branch, name: files[0].name });
             return { uploaded: [{ filename: files[0].name, stored_name: `Uploaded Materials/${branch}/abc_${files[0].name}` }], needs_topic: [], message: "" };
         },
         fetch: async url => {
             calls.push({ url });
+            if (url.endsWith("/teacher/files")) return { ok: true, json: async () => teacherFiles };
             if (url.endsWith("/materials")) return { ok: true, json: async () => materials };
             if (url.endsWith("/subjects")) return { ok: true, json: async () => [{ id: 7, name: "Algebra", is_personal: false }] };
             return { ok: true, json: async () => [] };
@@ -43,7 +47,7 @@ function createHarness(materials) {
     };
     context.globalThis = context;
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../js/teacher.js"), "utf8"), context);
-    return { element, calls, context };
+    return { element, calls, context, rendered, scheduled };
 }
 
 const FILES = [
@@ -123,4 +127,62 @@ test("without the tick the file is only read, never uploaded", async () => {
     const source = await context.resolveSource();
     assert.equal(source.file, file);
     assert.equal(calls.filter(c => c.upload).length, 0);
+});
+
+
+// ---- the "Your Uploaded Files" table
+const MINE = [
+    { filename: "a", display_name: "Quadratics.pdf", branch: "Algebra", index_status: "ready" },
+    { filename: "b", display_name: "Factoring notes.docx", branch: "ALGEBRA", index_status: "ready" },
+    { filename: "c", display_name: "Circles.pdf", branch: "Modern Geometry", index_status: "indexing" },
+    { filename: "d", display_name: "Matrices.pptx", branch: "Linear Algebra", index_status: "ready" },
+];
+const last = list => list[list.length - 1];
+const optionNames = select => select.children.map(option => option.textContent);
+
+test("the files table lists every file at first, with one filter entry per subject", async () => {
+    const { element, rendered } = createHarness([], MINE);
+    await settle();
+    assert.deepEqual(last(rendered), ["Quadratics.pdf", "Factoring notes.docx", "Circles.pdf", "Matrices.pptx"]);
+    assert.deepEqual(optionNames(element("fileSubjectFilter")), ["All subjects", "Algebra", "Linear Algebra", "Modern Geometry"]);   // Algebra/ALGEBRA are one
+    assert.equal(element("fileFilter").hidden, false);
+    assert.equal(element("fileCount").textContent, "");
+});
+
+test("choosing a subject narrows the table, whatever the capitals", async () => {
+    const { element, context, rendered } = createHarness([], MINE);
+    await settle();
+    element("fileSubjectFilter").value = "Algebra";
+    context.renderMyFiles();
+    assert.deepEqual(last(rendered), ["Quadratics.pdf", "Factoring notes.docx"]);
+    assert.equal(element("fileCount").textContent, "Showing 2 of 4 files.");
+});
+
+test("search and subject work together, and nothing matching says so", async () => {
+    const { element, context, rendered } = createHarness([], MINE);
+    await settle();
+    element("fileSearch").value = "NOTES";
+    context.renderMyFiles();
+    assert.deepEqual(last(rendered), ["Factoring notes.docx"]);
+    element("fileSubjectFilter").value = "Modern Geometry";
+    context.renderMyFiles();
+    assert.deepEqual(last(rendered), []);
+    assert.equal(element("noFiles").textContent, "No files match your search.");
+    assert.equal(element("noFiles").style.display, "block");
+    assert.equal(element("filesTable").style.display, "none");
+});
+
+test("a file that is still being read keeps the table reloading even when the filter hides it", async () => {
+    const { element, context, scheduled } = createHarness([], MINE);
+    await settle();
+    element("fileSubjectFilter").value = "Algebra";   // hides Circles.pdf, which is indexing
+    context.renderMyFiles();
+    assert.equal(last(scheduled), 4);   // the refresh is judged on all 4 files, not the 2 shown
+});
+
+test("with no uploads the filter bar stays hidden", async () => {
+    const { element } = createHarness([], []);
+    await settle();
+    assert.equal(element("fileFilter").hidden, true);
+    assert.equal(element("noFiles").textContent, "You haven't uploaded any files yet.");
 });
