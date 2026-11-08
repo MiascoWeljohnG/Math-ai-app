@@ -69,6 +69,7 @@ function renderMaterialRows(tbody, files, showUploader, onDelete, onRefresh) {
         const branch = document.createElement("span");
         branch.className = "tag";
         branch.textContent = file.branch;
+        branch.title = file.branch;
         const nameCell = [file.display_name];
         // reading normally takes minutes; after 15 the job was probably lost (e.g. the server restarted)
         const waitedMinutes = file.uploaded_at ? (Date.now() - new Date(file.uploaded_at).getTime()) / 60000 : 0;
@@ -112,7 +113,7 @@ function renderMaterialRows(tbody, files, showUploader, onDelete, onRefresh) {
             const sub = document.createElement("span");
             sub.className = "cell-sub";
             sub.textContent = file.uploaded_by_name ? `@${file.uploaded_by}` : "";
-            add("", file.uploaded_by_name || file.uploaded_by, sub);
+            add("nowrap", file.uploaded_by_name || file.uploaded_by, sub);
         }
         add("nowrap", formatUploadDate(file.uploaded_at));
         const button = document.createElement("button");

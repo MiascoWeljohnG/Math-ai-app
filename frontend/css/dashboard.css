@@ -100,6 +100,17 @@ textarea { width: 100%; resize: vertical; }
 
 /* ---- tables ---- */
 .table-wrap { overflow-x: auto; }
+
+/* Long file lists: compact rows, fixed-height scroll area, header stays visible while scrolling */
+.table-wrap.file-list { max-height: 340px; overflow: auto; border: 1px solid var(--border); border-radius: var(--r-md); scrollbar-width: thin; }
+.file-list table { border-collapse: separate; border-spacing: 0; }
+.file-list thead th { position: sticky; top: 0; z-index: 1; background: var(--bg-elevated); box-shadow: 0 1px 0 var(--border); }
+.file-list th, .file-list td { padding: 0.4rem 0.7rem; font-size: 0.86rem; }
+.file-list tbody tr:last-child td { border-bottom: none; }
+.file-list td.file-name { min-width: 150px; }
+.file-list .tag { padding: 0.1rem 0.6rem; font-size: 0.74rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.file-list .cell-sub { display: inline; margin-left: 0.35rem; }
+.file-list .btn-sm { padding: 0.25rem 0.65rem; font-size: 0.8rem; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 0.8rem 0.85rem; border-bottom: 1px solid var(--border); font-size: 0.93rem; vertical-align: middle; }
 th { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
