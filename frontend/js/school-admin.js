@@ -11,11 +11,16 @@ function esc(v) {
 // --- Teachers & students of this school ---
 let allUsers = [];
 
+// Display only: the database still stores "user", the table just shows "student".
+function roleLabel(role) {
+    return role === "user" ? "student" : String(role ?? "").replace("_", " ");
+}
+
 function renderUsers() {
     const filter = document.getElementById("roleFilter").value;
     const users = filter === "all" ? allUsers : allUsers.filter(u => u.role === filter);
     document.querySelector("#usersTable tbody").innerHTML = users.map(u => {
-        return `<tr><td>${esc(u.username)}</td><td>${esc(u.last_name)}</td><td>${esc(u.first_name)}</td><td>${esc(u.middle_name)}</td><td>${esc(u.email)}</td><td>${esc(u.role.replace("_", " "))}${u.status && u.status !== "active" ? ` <span class="tag warn">${esc(u.status)}</span>` : ""}</td><td>${esc(u.created)}</td></tr>`;
+        return `<tr><td>${esc(u.username)}</td><td>${esc(u.last_name)}</td><td>${esc(u.first_name)}</td><td>${esc(u.middle_name)}</td><td>${esc(u.email)}</td><td>${esc(roleLabel(u.role))}${u.status && u.status !== "active" ? ` <span class="tag warn">${esc(u.status)}</span>` : ""}</td><td>${esc(u.created)}</td></tr>`;
     }).join("");
     document.getElementById("userCount").textContent = `Showing ${users.length} of ${allUsers.length}`;
 }
