@@ -20,7 +20,12 @@
     .ui-modal p { margin: 0; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
     .ui-modal input { width: 100%; box-sizing: border-box; margin-top: 14px; padding: 10px 12px; font: inherit;
         color: var(--text, #1b2a1d); background: var(--bg-input, #fff); border: 1px solid var(--field-border, #2b2b2b); border-radius: 8px; }
+    .ui-modal.wide { max-width: 520px; }
+    .ui-preview { margin-top: 12px; max-height: 180px; overflow-y: auto; padding: 10px 12px; font-size: 0.85rem; line-height: 1.5;
+        white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text, #1b2a1d); background: var(--bg-input, #fff);
+        border: 1px solid var(--border, #cfd8cf); border-radius: 8px; }
     .ui-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .ui-modal-actions.wrap { flex-wrap: wrap; }
     .ui-modal-actions button { padding: 9px 18px; font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px; border: 1px solid transparent; }
     .ui-modal-actions .ui-cancel { background: transparent; color: var(--text, #1b2a1d); border-color: var(--border, #cfd8cf); }
     .ui-modal-actions .ui-cancel:hover { background: var(--hover-bg, #e6f0df); }
@@ -109,7 +114,81 @@
         });
     }
 
+    // A popup with any number of buttons, for decisions that don't fit OK / Cancel.
+    //   const choice = await uiChoice("Publish it?", { title: "Accept lesson?", preview: "first lines…",
+    //       choices: [{ value: "reject", label: "Reject", kind: "danger" },
+    //                 { value: "later", label: "Review first", kind: "neutral" },
+    //                 { value: "accept", label: "Accept", kind: "primary" }] });
+    // Resolves with the clicked choice's value, or null when dismissed (Esc / click outside), so a dismissal never
+    // counts as a destructive choice. kind: "primary" | "danger" | "neutral". opts.preview is shown as plain text.
+    function openChoice(message, opts) {
+        opts = opts || {};
+        const choices = opts.choices && opts.choices.length ? opts.choices : [{ value: true, label: "OK", kind: "primary" }];
+        return new Promise(resolve => {
+            const previouslyFocused = document.activeElement;
+            const backdrop = document.createElement("dialog");
+            backdrop.className = "ui-modal-backdrop";
+            const modal = document.createElement("div");
+            modal.className = "ui-modal wide";
+            modal.setAttribute("role", "dialog");
+            modal.setAttribute("aria-modal", "true");
+
+            const heading = document.createElement("h2");
+            heading.textContent = opts.title || "Choose an option";
+            const text = document.createElement("p");
+            text.textContent = message;
+            modal.append(heading, text);
+            if (opts.preview) {
+                const box = document.createElement("div");
+                box.className = "ui-preview";
+                box.textContent = opts.preview;   // textContent: AI-written text can't inject HTML
+                modal.appendChild(box);
+            }
+
+            const actions = document.createElement("div");
+            actions.className = "ui-modal-actions wrap";
+            const buttons = choices.map(choice => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = choice.kind === "neutral" ? "ui-cancel" : "ui-ok" + (choice.kind === "danger" ? " danger" : "");
+                button.textContent = choice.label;
+                button.addEventListener("click", () => close(choice.value));
+                actions.appendChild(button);
+                return button;
+            });
+            modal.appendChild(actions);
+            backdrop.appendChild(modal);
+            document.body.appendChild(backdrop);
+            backdrop.showModal();
+            backdrop.addEventListener("cancel", e => { e.preventDefault(); dismiss(); });
+
+            function close(value) {
+                document.removeEventListener("keydown", onKey, true);
+                backdrop.remove();
+                if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+                resolve(value);
+            }
+            const dismiss = () => close(null);
+
+            function onKey(e) {
+                if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); dismiss(); }
+                else if (e.key === "Tab") {   // keep keyboard focus inside the popup
+                    const i = buttons.indexOf(document.activeElement);
+                    e.preventDefault();
+                    buttons[(i + (e.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
+                }
+            }
+            document.addEventListener("keydown", onKey, true);
+            backdrop.addEventListener("mousedown", e => { if (e.target === backdrop) dismiss(); });
+
+            // Start on the harmless button so a stray Enter can't publish or delete anything.
+            const safe = choices.findIndex(choice => choice.kind === "neutral");
+            buttons[safe >= 0 ? safe : 0].focus();
+        });
+    }
+
     window.uiAlert = (message, opts) => openModal("alert", message, opts);
+    window.uiChoice = (message, opts) => openChoice(message, opts);
     window.uiConfirm = (message, opts) => openModal("confirm", message, opts);
     window.uiPrompt = (message, defaultValue, opts) => openModal("prompt", message, Object.assign({ defaultValue }, opts));
 

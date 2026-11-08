@@ -397,6 +397,65 @@ async function approveAllDrafts() {
 }
 document.getElementById("approveAllBtn").addEventListener("click", approveAllDrafts);
 
+// --- Right after the AI finishes writing: ask the teacher to accept or reject what it wrote ---
+async function deleteLessonQuietly(lessonId) {   // no second "are you sure": the review popup was the question
+    const response = await fetch(`${API}/subjects/${activeLessonSubjectId}/lessons/${lessonId}`, { method: "DELETE", headers: getHeaders() });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.detail || "Couldn't delete this lesson.");
+}
+
+function lessonPreview(content) {
+    const text = String(content || "").trim();
+    return text.length > 700 ? `${text.slice(0, 700).trimEnd()}…` : text;
+}
+
+// `lessons` are the drafts the AI just saved (the objects the server returned). Accept publishes them to students,
+// Reject deletes them (and their quizzes), and "Review first" / Esc / clicking outside leaves them as drafts.
+async function reviewGeneratedLessons(lessons) {
+    const drafts = lessons.filter(lesson => lesson && lesson.status === "draft");
+    if (!drafts.length) return "none";
+    const many = drafts.length > 1;
+    const choice = await uiChoice(
+        many
+            ? `${drafts.length} lessons are ready:\n\n${drafts.map(lesson => `• ${lesson.title}`).join("\n")}\n\nAccept them to show them to students, or reject them to delete them. "Review one by one" keeps them as drafts.`
+            : `"${drafts[0].title}" is ready.\n\nAccept it to show it to students, or reject it to delete it. "Review first" keeps it as a draft so you can read and edit it.`,
+        {
+            title: many ? "Accept these lessons?" : "Accept this lesson?",
+            preview: many ? "" : lessonPreview(drafts[0].content),
+            choices: [
+                { value: "reject", label: many ? "Reject all" : "Reject", kind: "danger" },
+                { value: "later", label: many ? "Review one by one" : "Review first", kind: "neutral" },
+                { value: "accept", label: many ? "Accept all" : "Accept", kind: "primary" },
+            ],
+        });
+    if (choice !== "accept" && choice !== "reject") return "later";
+
+    const accepting = choice === "accept";
+    let done = 0;
+    let failure = "";
+    for (const lesson of drafts) {
+        try {
+            await (accepting ? postApprove(lesson.id) : deleteLessonQuietly(lesson.id));
+            done += 1;
+        } catch (error) {
+            failure = error.message;
+            break;
+        }
+    }
+    startNewLesson();
+    if (lessonDialog.open) lessonDialog.close();   // the editor that showed the new lesson is no longer needed
+    const noun = `lesson${done === 1 ? "" : "s"}`;
+    if (failure) {
+        showLessonStatus(`${failure} ${done} of ${drafts.length} ${accepting ? "accepted" : "rejected"}. The rest are still under "Drafts to review".`, "error");
+    } else if (accepting) {
+        showLessonStatus(`Accepted ${done} ${noun}. Students can open ${done === 1 ? "it" : "them"} now.`, "success");
+    } else {
+        showLessonStatus(`Rejected ${done} ${noun}. ${done === 1 ? "It was" : "They were"} deleted.`, "success");
+    }
+    await loadLessonList();
+    return choice;
+}
+
 // "+ New lesson": a blank form in the modal.
 function openNewLessonDialog() {
     startNewLesson();
@@ -711,7 +770,7 @@ async function generateLessons() {
     const description = lessonDescriptionInput.value.trim();
     const withQuiz = document.getElementById("withQuizInput").checked;
     const typed = typedTitles();
-    let titles = typed, saved = [], quizFailures = 0;
+    let titles = typed, saved = [], quizFailures = 0, finished = false;
 
     lessonSubjectSelect.disabled = true;
     lessonBusy = true;
@@ -741,6 +800,7 @@ async function generateLessons() {
             showLessonStatus(`Done. ${saved.length} lessons saved as drafts.${quizNote} Review them under "Drafts to review" and press Approve so students can see them.`, quizFailures ? "error" : "success");
         }
         loadStudents();
+        finished = true;
     }).catch(error => {
         const pending = titles.slice(saved.length);
         if (pending.length > 1) { setCount(pending.length); lessonTitlesInput.value = pending.join("\n"); }
@@ -752,6 +812,10 @@ async function generateLessons() {
         lessonBusy = false;
         lessonSubjectSelect.disabled = false;
     });
+
+    // Everything (lessons and quizzes) is written: now the teacher decides. Only after a clean run; if it stopped
+    // halfway, the drafts that were saved wait under "Drafts to review" as before.
+    if (finished) await reviewGeneratedLessons(saved);
 }
 
 // Edit mode: write new content from the title, description and file. Nothing is saved until Save changes.
@@ -929,6 +993,7 @@ async function createSubject() {
 async function writeLessonsFromFile(subject, file, withQuiz) {
     lessonSubjectSelect.disabled = true;
     let written = 0, total = 0, quizFailures = 0;
+    const savedLessons = [];
     try {
         if (activeLessonSubjectId !== subject.id) throw new Error("Couldn't open the new subject.");
         showLessonStatus(`Subject "${subject.name}" created. Planning lessons from ${file.name}… this can take a minute.`, "info");
@@ -945,6 +1010,7 @@ async function writeLessonsFromFile(subject, file, withQuiz) {
             form.append("force", "true");
             const lesson = await postForm(`${API}/subjects/${subject.id}/lessons/generate-from-file`, form);
             written++;
+            savedLessons.push(lesson);
             await loadLessonList();
             if (withQuiz) {
                 showLessonStatus(`Writing the quiz for lesson ${i + 1} of ${total}: ${titles[i]}…`, "info");
@@ -954,6 +1020,7 @@ async function writeLessonsFromFile(subject, file, withQuiz) {
         const quizNote = quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "";
         showLessonStatus(`Done. ${written} lesson(s) saved to "${subject.name}" as drafts.${quizNote} Review them under "Drafts to review" and press Approve so students can see them.`, quizFailures ? "error" : "success");
         loadStudents();
+        await reviewGeneratedLessons(savedLessons);
     } catch (error) {
         showLessonStatus(`${error.message} The subject "${subject.name}" was created; ${written} of ${total} lesson(s) were saved before it stopped.`, "error");
     } finally {
