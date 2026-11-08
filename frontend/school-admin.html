@@ -86,7 +86,7 @@
             <h2>Pending student approvals <span class="tag" id="pendingCount" style="display:none;">0</span></h2>
             <p class="hint">Students who signed up for your school. Open the certificate, then approve or reject. A rejected student sees your reason and can send a new certificate.</p>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap file-list">
             <table id="pendingTable">
                 <thead><tr><th>Student ID</th><th>Name</th><th>Email</th><th>Submitted</th><th>Checks</th><th>Certificate</th><th></th></tr></thead>
                 <tbody></tbody>
@@ -100,7 +100,7 @@
             <h2>Subject deletion requests <span class="tag" id="deletionCount" style="display:none;">0</span></h2>
             <p class="hint">Teachers ask to delete a subject; you decide. Approving permanently deletes the subject, its lessons and quizzes, and students' progress on it.</p>
         </div>
-        <div class="stack" id="deletionList"></div>
+        <div class="stack scroll-list" id="deletionList"></div>
         <p class="empty" id="noDeletions">No pending requests.</p>
     </div>
 
@@ -109,7 +109,7 @@
             <h2>File deletion requests <span class="tag" id="fileDeletionCount" style="display:none;">0</span></h2>
             <p class="hint">Teachers ask to delete a file they uploaded; you decide. Approving permanently deletes the file and what the AI learned from it.</p>
         </div>
-        <div class="stack" id="fileDeletionList"></div>
+        <div class="stack scroll-list" id="fileDeletionList"></div>
         <p class="empty" id="noFileDeletions">No pending requests.</p>
     </div>
 
@@ -125,7 +125,7 @@
             </select>
             <span id="userCount" class="hint"></span>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap file-list">
             <table id="usersTable">
                 <thead><tr><th>Username</th><th>Last Name</th><th>First Name</th><th>Middle Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead>
                 <tbody></tbody>
@@ -140,7 +140,7 @@
         </div>
         <button class="btn btn-secondary" type="button" id="reindexUploadsBtn">Re-index uploaded files</button>
         <p class="status" id="reindexStatus" role="status" aria-live="polite"></p>
-        <div class="table-wrap">
+        <div class="table-wrap file-list">
             <table id="filesTable">
                 <thead><tr><th>File</th><th>Branch</th><th>Uploaded by</th><th>Uploaded</th><th></th></tr></thead>
                 <tbody></tbody>
@@ -152,25 +152,16 @@
     <div class="section">
         <div class="section-head">
             <h2>Audit log</h2>
-            <p class="hint">What happened in your school, newest first: sign-ups, approvals and rejections, certificates opened, accounts created, files and subjects deleted, and who opened the lists of people's details (including teachers viewing student scores and their students). Opening the same list again within 30 minutes is recorded once. Only your school's events are shown.</p>
-            <label for="auditSection" class="label">Show</label>
-            <select id="auditSection" class="branch-select">
-                <option value="">All activity</option>
-                <option value="people">Teachers and students list</option>
-                <option value="approvals">Pending approvals</option>
-                <option value="subject_deletions">Subject deletion requests</option>
-                <option value="file_deletions">File deletion requests</option>
-                <option value="scores_roster">Teachers: student scores and their students</option>
-            </select>
+            <p class="hint">What happened in your school, newest first: sign-ups, approvals and rejections, certificates opened, accounts created, files and subjects deleted. Only your school's events are shown.</p>
             <button class="btn btn-secondary btn-sm" type="button" id="auditRefresh">Refresh</button>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap file-list">
             <table id="auditTable">
                 <thead><tr><th>When</th><th>Who</th><th>What</th><th>About</th><th>Note</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
-        <p id="noAudit" class="empty">Nothing recorded here yet.</p>
+        <p id="noAudit" class="empty">Nothing has happened yet.</p>
     </div>
 
     <div class="modal-overlay" id="teacherModal">

@@ -239,16 +239,10 @@ const AUDIT_LABEL = {
     "subject.delete.reject": "Rejected a subject deletion",
     "file.delete.request": "Asked to delete a file", "file.delete.approve": "Approved a file deletion",
     "file.delete.reject": "Rejected a file deletion",
-    // who opened a list of people's details (the same list again within 30 minutes is one entry)
-    "users.view": "Opened the teachers and students list", "approvals.view": "Opened the pending approvals",
-    "subject.delete.view": "Opened the subject deletion requests", "file.delete.view": "Opened the file deletion requests",
-    "scores.view": "Opened the student scores", "roster.view": "Opened the list of their students",
-    "school_admin.create": "Created a school admin account",
 };
 
 async function loadAuditLog() {
-    const section = document.getElementById("auditSection").value;
-    const res = await fetch(`${API}/school-admin/audit-log?limit=100${section ? `&section=${encodeURIComponent(section)}` : ""}`, { headers: getHeaders() });
+    const res = await fetch(`${API}/school-admin/audit-log?limit=100`, { headers: getHeaders() });
     if (!res.ok) return;
     const rows = await res.json();
     document.getElementById("noAudit").style.display = rows.length ? "none" : "block";
@@ -259,4 +253,3 @@ async function loadAuditLog() {
 }
 loadAuditLog();
 document.getElementById("auditRefresh").addEventListener("click", loadAuditLog);
-document.getElementById("auditSection").addEventListener("change", loadAuditLog);

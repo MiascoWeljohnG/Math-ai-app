@@ -214,6 +214,9 @@ td.nowrap { white-space: nowrap; }
 /* subject deletion requests (admin page) */
 .req-card { border: 1px solid var(--border); border-radius: var(--r-lg); padding: 1rem; display: grid; gap: 0.35rem; }
 .req-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.3rem; }
+/* Request lists: compact cards in a fixed-height scroll area */
+.stack.scroll-list { max-height: 340px; overflow-y: auto; padding-right: 0.25rem; scrollbar-width: thin; }
+.scroll-list .req-card { padding: 0.65rem 0.85rem; gap: 0.2rem; font-size: 0.88rem; }
 .lesson-toolbar .hint { flex-basis: 100%; }
 
 /* A select is as wide as its longest option; long file names must not stretch the side column over the lesson form */

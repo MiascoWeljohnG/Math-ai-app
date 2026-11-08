@@ -6,7 +6,6 @@ from auth import require_teacher
 from database import get_db
 from adaptive import level_counts
 from school import in_school, shared_subjects, visible_subjects
-from audit import log_view
 from models import ACTIVE, Lesson, Material, Subject, User
 import config
 from classifier import AUTO, ingest_with_detection, preview_pages
@@ -90,5 +89,4 @@ def list_students(user: User = Depends(require_teacher), db: Session = Depends(g
             "progress": [by_branch.get(b, {"branch": b, **empty}) for b in branches],
             "levels": levels[s.id],
         })
-    log_view(db, user, "roster.view", detail=f"{len(result)} students")   # names and emails of students
     return result

@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from adaptive import mastery_level, practice_kind
 from auth import get_current_user, require_staff
 from database import get_db
-from audit import log_view
 from models import ACTIVE, Lesson, LessonCompletion, LessonQuiz, QuizAttempt, Reminder, Subject, User
 from school import in_school, shared_subjects, visible_subjects
 from routes.subjects_routes import PASS_PERCENT, QUIZ_LENGTH, SECONDS_PER_QUESTION, _display_name
@@ -160,16 +159,12 @@ def rankings(
     table.sort(key=lambda r: (-r["lessons_passed"], -r["average_percent"], r["seconds"], r["name"].lower()))
     for rank, row in enumerate(table, 1):
         row["rank"] = rank
-    response = {
+    return {
         "branches": [{"id": s.id, "name": s.name} for s in shared],
         "entries": table[:limit],
         "me": next((r for r in table[limit:] if r["you"]), None),
         "total": len(table),   # how many students are ranked
     }
-    if staff:   # a teacher or admin reading every student's username and scores; a student viewing the ranking is not logged
-        branch = next((b["name"] for b in response["branches"] if b["id"] == subject_id), "All branches")
-        log_view(db, user, "scores.view", target=branch, detail=f"{len(table)} students ranked")
-    return response
 
 
 # ---------------------------------------------------------------- overview (landing page)
