@@ -37,7 +37,12 @@ if not db.query(Subject).filter(Subject.owner_user_id.is_(None)).first():
 db.commit()
 db.close()
 
-from rag import ingest_uploads, store, get_chroma_client
+from rag import ingest_uploads, store
+try:
+    from rag import get_chroma_client
+except ImportError:
+    from rag import chroma_client as _eager_chroma_client
+    get_chroma_client = lambda: _eager_chroma_client
 from models import Material
 import drive_storage
 import threading
