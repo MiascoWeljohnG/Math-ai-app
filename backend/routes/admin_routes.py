@@ -65,7 +65,7 @@ def list_files(user=Depends(require_school_admin), db: Session = Depends(get_db)
 
 @router.delete("/files/{filename:path}")
 def delete_file(filename: str, user=Depends(require_school_admin), db: Session = Depends(get_db)):
-    """Delete one uploaded file: its record, the original on disk, and the AI's chunks from it."""
+    """Delete one uploaded file: its record, the original on disk, and the AI's chunks from it. A Drive original is archived."""
     from rag import delete_material_chunks
     material = db.query(Material).filter(Material.filename == filename, Material.school_id == user.school_id).first()
     if material is None:
@@ -73,7 +73,7 @@ def delete_file(filename: str, user=Depends(require_school_admin), db: Session =
 
     if material.drive_file_id:
         try:   # first, so a Drive failure leaves everything as it was and the delete can simply be retried
-            drive_storage.delete_file(material.drive_file_id)
+            drive_storage.archive_file(material.drive_file_id)
         except drive_storage.DriveStorageError as exc:
             raise HTTPException(status_code=502, detail=str(exc))
 
@@ -99,7 +99,7 @@ def clear_knowledge_base(user=Depends(require_school_admin), db: Session = Depen
     # is safe (a file that's already gone from Drive counts as removed).
     for drive_file_id in [row[0] for row in db.query(Material.drive_file_id).filter(Material.drive_file_id.isnot(None)).all()]:
         try:
-            drive_storage.delete_file(drive_file_id)
+            drive_storage.archive_file(drive_file_id)
         except drive_storage.DriveStorageError as exc:
             raise HTTPException(status_code=502, detail=f"Nothing was cleared: {exc}")
 

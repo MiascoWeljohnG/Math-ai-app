@@ -144,7 +144,7 @@ async function loadFileDeletionRequests() {
 }
 
 async function decideFileDeletion(request, approve) {
-    if (approve && !await uiConfirm(`Approve deleting "${request.display_name}"?\n\nThe file and what the AI learned from it will be permanently deleted.`, { title: "Approve deletion", okText: "Approve", danger: true })) return;
+    if (approve && !await uiConfirm(`Approve deleting "${request.display_name}"?\n\nThe file and what the AI learned from it will be removed. The original is moved to the Archived folder in Google Drive.`, { title: "Approve deletion", okText: "Approve", danger: true })) return;
     try {
         const res = await fetch(`${API}/file-deletions/${request.id}/decision`, {
             method: "POST",

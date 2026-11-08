@@ -1,5 +1,5 @@
 """Deleting an uploaded file. A teacher can only ASK to delete a file they uploaded; the admin of their school decides.
-Approving deletes the file for good (its record, the original, and what the AI learned from it); rejecting keeps it.
+Approving removes the file (its record and what the AI learned from it) and archives the original (Drive: Archived folder); rejecting keeps it.
 Everything is limited to the requester's own school, and each request and decision goes into the audit log."""
 from datetime import datetime, timedelta
 from typing import Optional

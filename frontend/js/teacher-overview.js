@@ -1,8 +1,9 @@
 // Teacher overview: the four tiles at the top of teacher.html (styles: css/overview.css, helpers: overview.js).
 // The numbers come from GET /teacher/overview. Files are only this teacher's own; lessons and students are the school's.
-//   1. Files you uploaded - total, with a bar chart of PDF vs DOCX
+//   1. Files you uploaded - total, with a pie chart of PDF vs DOCX
 //   2. Lessons to approve - AI drafts waiting for a teacher to approve them
-//   3. Lessons live       - published lessons (ring = share of all lessons that are published)
+//   3. Lessons live       - published lessons; the ring splits all lessons into green (live), yellow (generated but not
+//                           approved yet) and red (live, but its subject has a pending deletion request)
 //   4. Active students    - students who can sign in (ring = share who were seen in the last 7 days)
 let teacherOverviewShown = false;   // the first paint animates; later refreshes only update the numbers
 let teacherOverviewTimer = null;
@@ -34,18 +35,45 @@ function ovGauge(id, percent, hint) {
     gauge.querySelector(".g-pct").textContent = `${pct}%`;
 }
 
-// Bars are scaled to the taller of the two, so an empty tile shows two short stubs instead of nothing.
-const OV_BAR_MAX_PX = 44;
-function ovBars(pdf, docx) {
-    const tallest = Math.max(pdf, docx, 1);
-    for (const [bar, count, n] of [["ovPdfBar", "ovPdfCount", pdf], ["ovDocxBar", "ovDocxCount", docx]]) {
-        const height = n ? Math.max(8, Math.round(n * OV_BAR_MAX_PX / tallest)) : 4;
-        const fill = document.getElementById(bar);
-        if (!teacherOverviewShown) requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.height = `${height}px`; }));
-        else fill.style.height = `${height}px`;
-        document.getElementById(count).textContent = String(n);
+// Draws consecutive slices of a circle (pathLength is 100, so a length is a percent). `parts` is [[element id, count], ...].
+// The offset is set at once and only the length is animated, so on the first paint each slice grows from nothing.
+function ovSlices(parts) {
+    const total = parts.reduce((sum, [, count]) => sum + count, 0);
+    let start = 0;
+    for (const [id, count] of parts) {
+        const length = total ? count * 100 / total : 0;
+        const slice = document.getElementById(id);
+        slice.style.strokeDashoffset = String(-start);
+        const draw = () => { slice.style.strokeDasharray = `${length} 100`; };
+        if (!teacherOverviewShown) requestAnimationFrame(() => requestAnimationFrame(draw)); else draw();
+        start += length;
     }
-    document.getElementById("ovFilesBars").setAttribute("aria-label", `${ovPlural(pdf, "PDF")}, ${ovPlural(docx, "DOCX file")}`);
+}
+
+function ovPie(pdf, docx) {
+    ovSlices([["ovPdfSlice", pdf], ["ovDocxSlice", docx]]);
+    for (const [id, n] of [["ovPdfCount", pdf], ["ovDocxCount", docx]]) {
+        document.getElementById(id).textContent = String(n);
+        document.getElementById(id).parentElement.classList.toggle("zero", n === 0);
+    }
+    document.getElementById("ovFilesPie").setAttribute("aria-label", `${ovPlural(pdf, "PDF")}, ${ovPlural(docx, "DOCX file")}`);
+}
+
+// Green = live, yellow = generated but not approved yet, red = live but its subject has a pending deletion request.
+function ovLessonRing(live, toApprove, deletionRequested) {
+    ovSlices([["ovSegLive", live], ["ovSegApprove", toApprove], ["ovSegDelete", deletionRequested]]);
+    for (const [id, n] of [["ovKeyLive", live], ["ovKeyApprove", toApprove], ["ovKeyDelete", deletionRequested]]) {
+        document.getElementById(id).textContent = String(n);
+        document.getElementById(id).parentElement.classList.toggle("zero", n === 0);
+    }
+    const published = live + deletionRequested;
+    const pct = ovPercent(published, published + toApprove);
+    const gauge = document.getElementById("ovLiveGauge");
+    gauge.setAttribute("aria-label", `${ovPlural(live, "live lesson")}, ${toApprove} to approve, ${deletionRequested} with a deletion request`);
+    gauge.title = `${published} of ${ovPlural(published + toApprove, "lesson")} are approved and live`
+        + (deletionRequested ? `; ${deletionRequested} of them have a deletion request` : "");
+    const label = gauge.querySelector(".g-pct");
+    if (!teacherOverviewShown) countUp(label, pct, n => `${n}%`); else label.textContent = `${pct}%`;
 }
 
 function paintTeacherOverview(o) {
@@ -53,7 +81,7 @@ function paintTeacherOverview(o) {
     const { files, lessons, students } = o;
 
     ovValue("ovFiles", files.total);
-    ovBars(files.pdf, files.docx);
+    ovPie(files.pdf, files.docx);
     if (!files.total) set("ovFilesSub", "You haven't uploaded any files yet");
     else {
         const parts = [`${files.this_week} added this week`];
@@ -70,10 +98,8 @@ function paintTeacherOverview(o) {
         set("ovDraftsSub", ovJoin(parts));
     }
 
-    const allLessons = lessons.published + lessons.drafts;
     ovValue("ovLive", lessons.published);
-    ovGauge("ovLiveGauge", ovPercent(lessons.published, allLessons),
-        `${lessons.published} of ${ovPlural(allLessons, "lesson")} are published; the rest are drafts`);
+    ovLessonRing(lessons.published - lessons.deletion_requested, lessons.drafts, lessons.deletion_requested);
     set("ovLiveSub", ovJoin([ovPlural(lessons.subjects, "subject"), `${lessons.my_published} written by you`]));
 
     ovValue("ovStudents", students.active);

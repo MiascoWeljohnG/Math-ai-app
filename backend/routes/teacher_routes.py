@@ -10,7 +10,7 @@ from auth import require_teacher
 from database import get_db
 from adaptive import level_counts
 from school import in_school, shared_subjects, visible_subjects
-from models import ACTIVE, Lesson, Material, Subject, User
+from models import ACTIVE, Lesson, Material, Subject, SubjectDeletionRequest, User
 import config
 from classifier import AUTO, ingest_with_detection, preview_pages
 from progress import progress_for_user
@@ -38,7 +38,7 @@ def teacher_overview(user: User = Depends(require_teacher), db: Session = Depend
 
     # 2 + 3. Lessons of the school's shared subjects: drafts wait for approval, published ones are live.
     lesson_rows = (
-        db.query(Lesson.status, Lesson.created_by, Lesson.created_at)
+        db.query(Lesson.status, Lesson.created_by, Lesson.created_at, Lesson.subject_id)
         .join(Subject, Subject.id == Lesson.subject_id)
         .filter(shared_subjects(user))
         .all()
@@ -46,7 +46,12 @@ def teacher_overview(user: User = Depends(require_teacher), db: Session = Depend
     drafts = [row for row in lesson_rows if row.status == "draft"]
     published = [row for row in lesson_rows if row.status == "published"]
     draft_dates = [row.created_at for row in drafts if row.created_at]
-    subjects = db.query(func.count(Subject.id)).filter(shared_subjects(user)).scalar() or 0
+    subject_ids = {sid for (sid,) in db.query(Subject.id).filter(shared_subjects(user)).all()}
+    subjects = len(subject_ids)
+    # Teachers can't delete a subject on their own: an admin has to approve. Until then its lessons are still live,
+    # but at risk. (There is no request for a single lesson; those are deleted directly.)
+    asked = {sid for (sid,) in db.query(SubjectDeletionRequest.subject_id)
+             .filter(SubjectDeletionRequest.status == "pending").all()} & subject_ids
 
     # 4. Students of this school who can sign in.
     in_my_school = in_school(User.school_id, user.school_id)
@@ -66,6 +71,8 @@ def teacher_overview(user: User = Depends(require_teacher), db: Session = Depend
             "oldest_draft_days": (now - min(draft_dates)).days if draft_dates else 0,
             "published": len(published),
             "my_published": sum(1 for row in published if row.created_by == user.username),
+            "deletion_requested": sum(1 for row in published if row.subject_id in asked),   # live lessons in subjects awaiting deletion
+            "deletion_subjects": len(asked),
             "subjects": subjects,
         },
         "students": {

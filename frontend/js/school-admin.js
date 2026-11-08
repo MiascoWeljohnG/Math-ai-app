@@ -45,7 +45,7 @@ async function loadFiles() {
 }
 
 async function deleteFile(file) {
-    if (!await uiConfirm(`Delete "${file.display_name}"?\n\nThe file and what the AI learned from it are removed. This can't be undone.`, { title: "Delete file", okText: "Delete", danger: true })) return;
+    if (!await uiConfirm(`Delete "${file.display_name}"?\n\nThe file and what the AI learned from it are removed. The original is moved to the Archived folder in Google Drive.`, { title: "Delete file", okText: "Delete", danger: true })) return;
     const res = await fetch(`${API}/school-admin/files/${encodeURIComponent(file.filename)}`, { method: "DELETE", headers: getHeaders() });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) await uiAlert(data.detail || "Couldn't delete the file.", { title: "Delete file" });

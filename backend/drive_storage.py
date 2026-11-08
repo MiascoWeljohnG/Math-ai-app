@@ -7,7 +7,12 @@ against your Drive space.
 
 Scope: `drive.file` - the app can only see files and folders it created itself. That is why DRIVE_FOLDER_ID
 must be a folder made by tools/get_drive_token.py (a folder made by hand in the Drive website is invisible
-to this scope).
+to this scope). For the same reason the sub-folders below are created by the app, never by hand.
+
+Layout inside DRIVE_FOLDER_ID:
+    Modules/         course files uploaded by teachers
+    Certificate of Enrollment/  the certificate images students upload when they register
+    Archived/        modules an admin deleted: gone from the app, kept in Drive (see archive_file)
 
 Everything here raises DriveStorageError (message safe to show a teacher/admin) or its subclass
 DriveFileNotFound. The google libraries are imported lazily so the app still starts without them
@@ -30,6 +35,12 @@ _RETRIES = 3                         # the client retries 429/5xx and network bl
 
 _credentials = None
 _credentials_lock = threading.Lock()
+
+MODULES, STUDENT_IMAGES, ARCHIVED = "modules", "student_images", "archived"
+_FOLDER_NAMES = {MODULES: "Modules", STUDENT_IMAGES: "Certificate of Enrollment", ARCHIVED: "Archived"}
+_FOLDER_MIME = "application/vnd.google-apps.folder"
+_folder_ids: dict[str, str] = {}   # remembered after the first lookup, so an upload costs no extra API call
+_folder_lock = threading.Lock()
 
 
 class DriveStorageError(RuntimeError):
@@ -137,24 +148,58 @@ def _fail(exc: Exception, doing: str, **kwargs):
     raise translated from exc
 
 
-def upload_bytes(name: str, data: bytes) -> str:
-    """Store `data` as a new file in the configured folder; returns its Drive file id."""
+def _folder_id(service, kind: str) -> str:
+    """Id of the Modules / Certificate of Enrollment / Archived folder inside DRIVE_FOLDER_ID, created the first time it is
+    needed. Created by the app itself, so the drive.file scope can see it."""
+    with _folder_lock:
+        if kind in _folder_ids:
+            return _folder_ids[kind]
+        name = _FOLDER_NAMES[kind]
+        found = service.files().list(
+            q=f"'{config.DRIVE_FOLDER_ID}' in parents and name = '{name}' and mimeType = '{_FOLDER_MIME}' and trashed = false",
+            fields="files(id)", pageSize=1, supportsAllDrives=True, includeItemsFromAllDrives=True,
+        ).execute(num_retries=_RETRIES).get("files", [])
+        if found:
+            folder_id = found[0]["id"]
+        else:
+            folder_id = service.files().create(
+                body={"name": name, "mimeType": _FOLDER_MIME, "parents": [config.DRIVE_FOLDER_ID]},
+                fields="id", supportsAllDrives=True,
+            ).execute(num_retries=_RETRIES)["id"]
+        _folder_ids[kind] = folder_id
+        return folder_id
+
+
+def _is_not_found(exc: Exception) -> bool:
+    return getattr(getattr(exc, "resp", None), "status", None) == 404
+
+
+def upload_bytes(name: str, data: bytes, folder: str = MODULES) -> str:
+    """Store `data` as a new file in the Modules folder (or `folder`: MODULES / STUDENT_IMAGES); returns its Drive id."""
     doing = f"uploading {name!r}"
     try:
         from googleapiclient.http import MediaIoBaseUpload
 
-        media = MediaIoBaseUpload(
-            io.BytesIO(data),
-            mimetype=mimetypes.guess_type(name)[0] or "application/octet-stream",
-            resumable=len(data) > _RESUMABLE_ABOVE,
-        )
-        created = _service().files().create(
-            body={"name": name, "parents": [config.DRIVE_FOLDER_ID]},
-            media_body=media,
-            fields="id",
-            supportsAllDrives=True,
-        ).execute(num_retries=_RETRIES)
-        return created["id"]
+        service = _service()
+        for attempt in (1, 2):
+            media = MediaIoBaseUpload(
+                io.BytesIO(data),
+                mimetype=mimetypes.guess_type(name)[0] or "application/octet-stream",
+                resumable=len(data) > _RESUMABLE_ABOVE,
+            )
+            try:
+                created = service.files().create(
+                    body={"name": name, "parents": [_folder_id(service, folder)]},
+                    media_body=media,
+                    fields="id",
+                    supportsAllDrives=True,
+                ).execute(num_retries=_RETRIES)
+                return created["id"]
+            except Exception as exc:
+                if attempt == 1 and _is_not_found(exc):   # the remembered folder was deleted in Drive: look it up again
+                    _folder_ids.pop(folder, None)
+                    continue
+                raise
     except Exception as exc:
         _fail(exc, doing, missing_means="folder")
 
@@ -178,6 +223,60 @@ def delete_file(file_id: str) -> None:
         if isinstance(translated, DriveFileNotFound):
             return
         _fail(exc, "deleting a file")
+
+
+def archive_file(file_id: str) -> None:
+    """Move the file into the Archived folder. Used when an admin deletes a module: it disappears from the app but
+    stays in Drive (nothing is erased, and it is not in the 30-day trash). A file that's already gone counts as done."""
+    try:
+        service = _service()
+        current = service.files().get(fileId=file_id, fields="parents", supportsAllDrives=True).execute(num_retries=_RETRIES)
+    except Exception as exc:
+        if isinstance(_translate(exc, "archiving a file"), DriveFileNotFound):
+            return
+        _fail(exc, "archiving a file")
+    try:
+        archive = _folder_id(service, ARCHIVED)
+        parents = current.get("parents", [])
+        if archive in parents:
+            return
+        service.files().update(
+            fileId=file_id, addParents=archive, removeParents=",".join(parents),
+            fields="id", supportsAllDrives=True,
+        ).execute(num_retries=_RETRIES)
+    except Exception as exc:
+        _fail(exc, "archiving a file", missing_means="folder")
+
+
+def organize_existing(dry_run: bool = False) -> dict:
+    """One-off tidy-up for files uploaded before the sub-folders existed: everything loose in the main folder goes
+    to Certificate of Enrollment (names starting with cert_) or Modules. File ids don't change when a file moves, so the database
+    needs no update. Returns how many files went (or, with dry_run, would go) where."""
+    try:
+        service = _service()
+        query = f"'{config.DRIVE_FOLDER_ID}' in parents and trashed = false and mimeType != '{_FOLDER_MIME}'"
+        loose, token = [], None
+        while True:   # list everything first: moving files while paging could make Drive skip some
+            page = service.files().list(
+                q=query, fields="nextPageToken, files(id, name)", pageSize=200, pageToken=token,
+                supportsAllDrives=True, includeItemsFromAllDrives=True,
+            ).execute(num_retries=_RETRIES)
+            loose += page.get("files", [])
+            token = page.get("nextPageToken")
+            if not token:
+                break
+        moved = {MODULES: 0, STUDENT_IMAGES: 0}
+        for item in loose:
+            kind = STUDENT_IMAGES if item["name"].startswith("cert_") else MODULES
+            moved[kind] += 1
+            if not dry_run:
+                service.files().update(
+                    fileId=item["id"], addParents=_folder_id(service, kind), removeParents=config.DRIVE_FOLDER_ID,
+                    fields="id", supportsAllDrives=True,
+                ).execute(num_retries=_RETRIES)
+        return moved
+    except Exception as exc:
+        _fail(exc, "organizing the Drive folder", missing_means="folder")
 
 
 def check() -> str:

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 import config
 from auth import create_access_token, hash_password
 from database import get_db
-from models import ACTIVE, PENDING, Lesson, Material, School, Subject, User
+from models import ACTIVE, PENDING, Lesson, Material, School, Subject, SubjectDeletionRequest, User
 from routes import teacher_routes
 
 
@@ -69,6 +69,7 @@ def test_teacher_overview_counts_own_files_and_school_lessons_and_students(api):
     assert body["lessons"]["oldest_draft_days"] == 3
     assert body["lessons"]["published"] == 1 and body["lessons"]["my_published"] == 1
     assert body["lessons"]["subjects"] == 1
+    assert body["lessons"]["deletion_requested"] == 0 and body["lessons"]["deletion_subjects"] == 0
     assert body["students"] == {"active": 3, "online": 1, "today": 1, "week": 2, "window_minutes": 15}
 
 
@@ -78,3 +79,24 @@ def test_teacher_overview_when_nothing_exists(api):
     assert body["files"]["total"] == 0 and body["files"]["latest"] is None
     assert body["lessons"]["drafts"] == 0 and body["lessons"]["oldest_draft_days"] == 0
     assert body["students"]["active"] == 0
+
+
+def test_live_lessons_of_a_subject_with_a_pending_deletion_request_are_counted_as_deletion_requested(api):
+    client, db, a, b, headers = api
+    risky, safe, other_school = Subject(name="Risky", school_id=a.id), Subject(name="Safe", school_id=a.id), Subject(name="Far", school_id=b.id)
+    db.add_all([risky, safe, other_school])
+    db.flush()
+    db.add_all([
+        Lesson(subject_id=risky.id, title="r1", content="x", created_by="tea1", status="published"),
+        Lesson(subject_id=risky.id, title="r2", content="x", created_by="tea1", status="published"),
+        Lesson(subject_id=risky.id, title="r3", content="x", created_by="tea1", status="draft"),   # a draft is not "live"
+        Lesson(subject_id=safe.id, title="s1", content="x", created_by="tea1", status="published"),
+        Lesson(subject_id=other_school.id, title="o1", content="x", created_by="z", status="published"),
+        SubjectDeletionRequest(subject_id=risky.id, subject_name="Risky", requested_by="tea1", status="pending"),
+        SubjectDeletionRequest(subject_id=safe.id, subject_name="Safe", requested_by="tea1", status="rejected"),   # decided: ignored
+        SubjectDeletionRequest(subject_id=other_school.id, subject_name="Far", requested_by="z", status="pending"),   # not my school
+    ])
+    db.commit()
+    lessons = client.get("/teacher/overview", headers=headers).json()["lessons"]
+    assert lessons["published"] == 3 and lessons["drafts"] == 1
+    assert lessons["deletion_requested"] == 2 and lessons["deletion_subjects"] == 1

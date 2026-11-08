@@ -44,7 +44,7 @@ def save(data: bytes, ext: str) -> str:
     name = uuid.uuid4().hex + ext
     if drive_storage.enabled():
         try:
-            return "drive:" + drive_storage.upload_bytes("cert_" + name, data)
+            return "drive:" + drive_storage.upload_bytes("cert_" + name, data, folder=drive_storage.STUDENT_IMAGES)
         except drive_storage.DriveStorageError as exc:
             raise HTTPException(status_code=502, detail=str(exc))
     folder = Path(config.CERT_DIR)

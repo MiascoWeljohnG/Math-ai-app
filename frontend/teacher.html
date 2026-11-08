@@ -32,10 +32,17 @@
             <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg></span><span class="ov-label">Files you uploaded</span></div>
             <div class="ov-body">
                 <strong class="ov-value" id="ovFiles">&ndash;</strong>
-                <div class="ov-bars" role="img" id="ovFilesBars" aria-label="Files by type">
-                    <div class="ov-bar" data-kind="pdf"><span class="ov-bar-count" id="ovPdfCount">0</span><span class="ov-bar-fill" id="ovPdfBar"></span><span class="ov-bar-name">PDF</span></div>
-                    <div class="ov-bar" data-kind="docx"><span class="ov-bar-count" id="ovDocxCount">0</span><span class="ov-bar-fill" id="ovDocxBar"></span><span class="ov-bar-name">DOCX</span></div>
+                <div class="ov-pie" id="ovFilesPie" role="img" aria-label="Files by type">
+                    <svg viewBox="0 0 100 100" aria-hidden="true">
+                        <circle class="p-track" cx="50" cy="50" r="25" pathLength="100"/>
+                        <circle class="p-slice" data-kind="pdf" id="ovPdfSlice" cx="50" cy="50" r="25" pathLength="100"/>
+                        <circle class="p-slice" data-kind="docx" id="ovDocxSlice" cx="50" cy="50" r="25" pathLength="100"/>
+                    </svg>
                 </div>
+            </div>
+            <div class="ov-legend">
+                <span class="ov-key" data-kind="pdf"><i></i>PDF <b id="ovPdfCount">0</b></span>
+                <span class="ov-key" data-kind="docx"><i></i>DOCX <b id="ovDocxCount">0</b></span>
             </div>
             <span class="ov-sub" id="ovFilesSub">Loading&hellip;</span>
         </a>
@@ -50,10 +57,20 @@
             <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg></span><span class="ov-label">Lessons live</span></div>
             <div class="ov-body">
                 <strong class="ov-value" id="ovLive">&ndash;</strong>
-                <div class="ov-gauge" id="ovLiveGauge" role="img" aria-label="0 percent">
-                    <svg viewBox="0 0 80 80" aria-hidden="true"><circle class="g-track" cx="40" cy="40" r="33"/><circle class="g-fill" cx="40" cy="40" r="33" pathLength="100"/></svg>
+                <div class="ov-gauge ov-ring" id="ovLiveGauge" role="img" aria-label="Lessons by status">
+                    <svg viewBox="0 0 80 80" aria-hidden="true">
+                        <circle class="g-track" cx="40" cy="40" r="33"/>
+                        <circle class="g-seg" data-seg="live" id="ovSegLive" cx="40" cy="40" r="33" pathLength="100"/>
+                        <circle class="g-seg" data-seg="approve" id="ovSegApprove" cx="40" cy="40" r="33" pathLength="100"/>
+                        <circle class="g-seg" data-seg="delete" id="ovSegDelete" cx="40" cy="40" r="33" pathLength="100"/>
+                    </svg>
                     <span class="g-pct">0%</span>
                 </div>
+            </div>
+            <div class="ov-legend">
+                <span class="ov-key" data-seg="live" title="Approved lessons students can open"><i></i><b id="ovKeyLive">0</b> live</span>
+                <span class="ov-key" data-seg="approve" title="Generated, but not approved yet"><i></i><b id="ovKeyApprove">0</b> to approve</span>
+                <span class="ov-key" data-seg="delete" title="Live lessons in a subject with a pending deletion request. They stay live until an admin approves."><i></i><b id="ovKeyDelete">0</b> deletion requested</span>
             </div>
             <span class="ov-sub" id="ovLiveSub">Loading&hellip;</span>
         </a>

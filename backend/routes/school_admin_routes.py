@@ -136,13 +136,14 @@ def school_files(user: User = Depends(require_school_admin), db: Session = Depen
 
 
 def remove_material(db: Session, material: Material) -> str:
-    """Delete everything behind one file: its record, the original on disk or Drive, and the AI's chunks from it.
-    Returns the file's display name. Does not commit. A Drive failure raises 502 before anything else is touched,
-    so the delete can simply be retried. Used by the school admin's Delete and when a teacher's request is approved."""
+    """Remove one file from the app: its record, the original on disk, and the AI's chunks from it. A file stored in Drive
+    is moved to the Drive "Archived" folder, not erased. Returns the file's display name. Does not commit. A Drive failure
+    raises 502 before anything else is touched, so the delete can simply be retried. Used by the school admin's Delete
+    and when a teacher's request is approved."""
     from rag import delete_material_chunks
     if material.drive_file_id:
         try:
-            drive_storage.delete_file(material.drive_file_id)
+            drive_storage.archive_file(material.drive_file_id)
         except drive_storage.DriveStorageError as exc:
             raise HTTPException(status_code=502, detail=str(exc))
 
