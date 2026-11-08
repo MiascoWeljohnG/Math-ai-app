@@ -181,6 +181,7 @@ class Lesson(Base):
     prerequisite_id = Column(Integer, ForeignKey("lessons.id"), nullable=True)
     created_by = Column(String, nullable=False)
     status = Column(String, nullable=False, default="published", index=True)  # draft | published
+    source_name = Column(String, nullable=True)   # the module/file the AI used to write this lesson (with pages), or None
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

@@ -145,6 +145,8 @@ td.nowrap { white-space: nowrap; }
               background: var(--bg-input); border: 1px solid transparent; }
 .lesson-row.active { border-color: var(--accent); background: var(--nav-active-bg); }
 .lesson-row .lesson-edit { flex: 1; overflow-wrap: anywhere; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; font: inherit; font-size: 0.88rem; }
+.lesson-row .lesson-source { display: block; margin-top: 0.15rem; font-size: 0.74rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.lesson-source-note { color: var(--text-muted); font-weight: 600; }
 .lesson-row .lesson-delete { border: 0; background: transparent; color: var(--danger); cursor: pointer; font: inherit; font-size: 0.8rem; }
 .lesson-row .lesson-delete:hover { text-decoration: underline; }
 .lesson-row .lesson-approve { border: 0; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 600; }

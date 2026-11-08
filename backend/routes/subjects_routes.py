@@ -170,6 +170,7 @@ def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: b
         "created_by": lesson.created_by,
         "completed": completed,
         "status": lesson.status,
+        "source_name": lesson.source_name or "",
     }
     if include_content:
         result["content"] = lesson.content
@@ -188,6 +189,8 @@ def update_draft_lesson(subject_id: int, lesson_id: int, req: "LessonRequest", u
     lesson.title, lesson.content = _lesson_values(req)
     if req.description is not None:
         lesson.description = req.description.strip() or None
+    if req.source_name is not None:
+        lesson.source_name = req.source_name.strip() or None
     db.commit()
     db.refresh(lesson)
     return _serialize_lesson(lesson)
@@ -303,6 +306,7 @@ class LessonRequest(BaseModel):
     content: str = Field(min_length=1, max_length=100_000)
     description: Optional[str] = Field(default=None, max_length=5000)
     order_index: Optional[int] = Field(default=None, ge=0)
+    source_name: Optional[str] = Field(default=None, max_length=300)   # module used to write it; "" clears it
 
 
 def _lesson_values(req: LessonRequest) -> tuple[str, str]:
@@ -327,6 +331,7 @@ def create_lesson(
         title=title,
         content=content,
         description=(req.description or "").strip() or None,
+        source_name=(req.source_name or "").strip() or None,
         order_index=req.order_index or 0,
         created_by=user.username,
     )
@@ -356,6 +361,8 @@ def update_lesson(
         lesson.description = req.description.strip() or None
     if req.order_index is not None:
         lesson.order_index = req.order_index
+    if req.source_name is not None:
+        lesson.source_name = req.source_name.strip() or None
     db.commit()
     db.refresh(lesson)
     return _serialize_lesson(lesson)
@@ -534,11 +541,12 @@ async def generate_lesson(
 
 
 def _save_generated_lesson(db: Session, subject: Subject, user: User, topic: str, content: str,
-                           description: Optional[str] = None) -> Lesson:
+                           description: Optional[str] = None, source_name: Optional[str] = None) -> Lesson:
     lesson = Lesson(
         subject_id=subject.id,
         title=topic,
         description=description or None,
+        source_name=source_name or None,
         content=content,
         order_index=_next_order(db, subject.id),
         created_by=user.username,
@@ -721,6 +729,23 @@ async def _optional_source_text(
     return None
 
 
+def _source_label(db: Session, user: User, file: Optional[UploadFile], filename: str,
+                  pages: Optional[tuple[int, int]] = None) -> str:
+    """Name of the module (file) the lessons are based on, e.g. "MODULE 1.pdf (pages 3-8)". Empty = no file."""
+    name = ""
+    if file is not None and file.filename:
+        name = Path(file.filename).name
+    elif filename.strip():
+        material = db.query(Material).filter(
+            Material.filename == filename.strip(), in_school(Material.school_id, user.school_id),
+        ).first()
+        name = (material.display_name if material and material.display_name
+                else re.sub(r"^[a-f0-9]{32}_", "", Path(filename.strip()).name, flags=re.IGNORECASE))
+    if name and pages is not None:
+        name += f" (page {pages[0]})" if pages[0] == pages[1] else f" (pages {pages[0]}-{pages[1]})"
+    return name[:300]
+
+
 def _lines(text: str) -> list[str]:
     return [line.strip() for line in text.splitlines() if line.strip()]
 
@@ -862,6 +887,7 @@ async def compose_lesson(
     description = _clean_description(description)
     pages = parse_page_range(page_start, page_end)
     source = await _optional_source_text(db, user, file, filename, pages)
+    source_name = _source_label(db, user, file, filename, pages) if source is not None else ""
     prompt = _compose_prompt(subject, title, description, _lines(series), source, pages)
     if source is not None:
         branch, query = "", ""
@@ -874,8 +900,8 @@ async def compose_lesson(
     if not content:
         raise HTTPException(status_code=502, detail="The model returned an empty lesson")
     if not save:
-        return {"title": title, "description": description, "content": content}
-    return _serialize_lesson(_save_generated_lesson(db, subject, user, title, content, description))
+        return {"title": title, "description": description, "content": content, "source_name": source_name}
+    return _serialize_lesson(_save_generated_lesson(db, subject, user, title, content, description, source_name))
 
 
 # ---------------------------------------------------------------------------

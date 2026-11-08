@@ -306,6 +306,17 @@ lessonSubjectSelect.addEventListener("change", async () => {
     refreshDeletionState();
 });
 
+// Lesson title, with the module (file) the AI used to write it underneath, when there is one.
+function fillLessonTitle(button, lesson) {
+    button.textContent = lesson.title;
+    if (!lesson.source_name) return;
+    const source = document.createElement("span");
+    source.className = "lesson-source";
+    source.textContent = `Module: ${lesson.source_name}`;
+    source.title = lesson.source_name;
+    button.append(source);
+}
+
 async function loadLessonList() {
     if (activeLessonSubjectId === null) return;
     try {
@@ -326,7 +337,7 @@ async function loadLessonList() {
             const editButton = document.createElement("button");
             editButton.type = "button";
             editButton.className = "lesson-edit";
-            editButton.textContent = lesson.title;
+            fillLessonTitle(editButton, lesson);
             editButton.addEventListener("click", () => editLesson(lesson.id));
             const deleteButton = document.createElement("button");
             deleteButton.type = "button";
@@ -379,7 +390,7 @@ function renderDraftList() {
         const openButton = document.createElement("button");
         openButton.type = "button";
         openButton.className = "lesson-edit";
-        openButton.textContent = lesson.title;
+        fillLessonTitle(openButton, lesson);
         openButton.addEventListener("click", () => editLesson(lesson.id));
         const approveButton = document.createElement("button");
         approveButton.type = "button";
@@ -520,6 +531,15 @@ function typesetMath(...elements) {
 
 const lessonContentPreview = document.getElementById("lessonContentPreview");
 
+// The module the content on screen was written from. Sent back on Save so it stays correct after a rewrite.
+let lessonSourceName = "";
+function setLessonSource(name) {
+    lessonSourceName = name || "";
+    const note = document.getElementById("lessonSourceNote");
+    note.hidden = !lessonSourceName;
+    note.textContent = lessonSourceName ? `Written from module: ${lessonSourceName}` : "";
+}
+
 // The textarea is always the source of truth (Save and Rewrite read it); the preview is just a view of it.
 function setContentView(view) {
     const preview = view !== "edit";
@@ -551,6 +571,7 @@ function startNewLesson() {
     lessonTitlesInput.value = "";
     lessonDescriptionInput.value = "";
     lessonContentInput.value = "";
+    setLessonSource("");
     setContentView("preview");
     lessonStatus.textContent = "";
     lessonStatus.className = "status";
@@ -570,6 +591,7 @@ async function editLesson(lessonId) {
         lessonTitleInput.value = lesson.title;
         lessonDescriptionInput.value = lesson.description || "";
         lessonContentInput.value = lesson.content;
+        setLessonSource(lesson.source_name);
         lessonStatus.textContent = "";
         lessonStatus.className = "status";
         refreshLessonForm();
@@ -1031,6 +1053,7 @@ async function regenerateContent() {
         const result = await postForm(lessonsUrl("/compose"),
             lessonRequest(source, { title, description: lessonDescriptionInput.value.trim(), save: "false" }));
         lessonContentInput.value = result.content;
+        setLessonSource(result.source_name);
         setContentView("preview");
         showLessonStatus("New content is ready. Read it, then press Save changes.", "success");
     }).catch(error => showLessonStatus(error.message, "error"));
@@ -1047,7 +1070,7 @@ async function saveLesson() {
         const response = await fetch(lessonsUrl(`/${editingLessonId}`), {
             method: "PUT",
             headers: { "Content-Type": "application/json", ...getHeaders() },
-            body: JSON.stringify({ title, content, description: lessonDescriptionInput.value.trim() }),
+            body: JSON.stringify({ title, content, description: lessonDescriptionInput.value.trim(), source_name: lessonSourceName }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.detail || "Couldn't save this lesson.");
