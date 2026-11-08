@@ -12,7 +12,7 @@ import drive_storage
 from accounts import CreateTeacherRequest, new_account
 from auth import require_school_admin
 from database import get_db
-from models import ACTIVE, DISABLED, PENDING, AuditLog, Material, Subject, SubjectDeletionRequest, User
+from models import ACTIVE, DISABLED, PENDING, AuditLog, FileDeletionRequest, Material, Subject, SubjectDeletionRequest, User
 from routes.materials_routes import material_summary
 from routes.subject_deletion_routes import OPEN as OPEN_DELETION_STATUSES
 from school import in_school, shared_subjects
@@ -78,6 +78,11 @@ def school_overview(user: User = Depends(require_school_admin), db: Session = De
         .filter(SubjectDeletionRequest.status.in_(OPEN_DELETION_STATUSES), shared_subjects(user))
         .scalar() or 0
     )
+    pending_deletions += (
+        db.query(func.count(FileDeletionRequest.id))
+        .filter(FileDeletionRequest.status == "pending", FileDeletionRequest.school_id == user.school_id)
+        .scalar() or 0
+    )
 
     return {
         "accounts": {
@@ -130,16 +135,13 @@ def school_files(user: User = Depends(require_school_admin), db: Session = Depen
     return [{**material_summary(m), "uploaded_by_name": names.get(m.uploaded_by, "")} for m in rows]
 
 
-@router.delete("/files/{filename:path}")
-def delete_school_file(filename: str, user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
-    """Delete one of this school's files: its record, the original on disk or Drive, and the AI's chunks from it."""
+def remove_material(db: Session, material: Material) -> str:
+    """Delete everything behind one file: its record, the original on disk or Drive, and the AI's chunks from it.
+    Returns the file's display name. Does not commit. A Drive failure raises 502 before anything else is touched,
+    so the delete can simply be retried. Used by the school admin's Delete and when a teacher's request is approved."""
     from rag import delete_material_chunks
-    material = db.query(Material).filter(Material.filename == filename, Material.school_id == user.school_id).first()
-    if material is None:
-        raise HTTPException(status_code=404, detail="File not found")
-
     if material.drive_file_id:
-        try:   # first, so a Drive failure leaves everything as it was and the delete can simply be retried
+        try:
             drive_storage.delete_file(material.drive_file_id)
         except drive_storage.DriveStorageError as exc:
             raise HTTPException(status_code=502, detail=str(exc))
@@ -152,6 +154,17 @@ def delete_school_file(filename: str, user: User = Depends(require_school_admin)
 
     name = material.display_name
     db.delete(material)
+    return name
+
+
+@router.delete("/files/{filename:path}")
+def delete_school_file(filename: str, user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
+    """Delete one of this school's files: its record, the original on disk or Drive, and the AI's chunks from it."""
+    material = db.query(Material).filter(Material.filename == filename, Material.school_id == user.school_id).first()
+    if material is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    name = remove_material(db, material)
     db.add(AuditLog(actor=user.username, school_id=user.school_id, action="file.delete", target=name))
     db.commit()
     return {"message": f'Deleted "{name}".'}

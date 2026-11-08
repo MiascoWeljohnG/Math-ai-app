@@ -121,7 +121,7 @@ function renderMyFiles() {
     document.getElementById("fileFilter").hidden = myFiles.length === 0;
     document.getElementById("fileCount").textContent = myFiles.length && shown.length !== myFiles.length
         ? `Showing ${shown.length} of ${myFiles.length} files.` : "";
-    renderMaterialRows(document.querySelector("#filesTable tbody"), shown, false, undefined, loadMyFiles);
+    renderMaterialRows(document.querySelector("#filesTable tbody"), shown, false, requestFileDeletion, loadMyFiles);
     // renderMaterialRows only watches the files it was given; keep reloading while ANY file (even a hidden one) is still being read
     scheduleIndexingRefresh(myFiles, loadMyFiles);
 }
@@ -141,6 +141,38 @@ function showFilesProblem(message) {
     filesRetryTimer = setTimeout(loadMyFiles, 8000);
 }
 
+// A teacher can't delete a file outright: Delete sends a request and the school admin decides.
+// Marks the files already asked about (waiting for the admin, or recently kept) so the table can say so.
+let deletionRefreshTimer = null;
+async function attachDeletionStatus(files) {
+    try {
+        const res = await fetch(`${API}/file-deletions/mine`, { headers: getHeaders() });
+        const status = new Map((res.ok ? await res.json() : []).map(item => [item.filename, item.status]));
+        files.forEach(file => { file.deletion_status = status.get(file.filename) || null; });
+    } catch (_) { /* the table still works without the notes */ }
+    clearTimeout(deletionRefreshTimer);
+    if (files.some(file => file.deletion_status === "pending")) deletionRefreshTimer = setTimeout(loadMyFiles, 15000);   // notice the answer
+}
+
+async function requestFileDeletion(file) {
+    if (!await uiConfirm(`Ask your school admin to delete "${file.display_name}"?\n\nThe file is NOT deleted yet. It stays until the admin approves. Once deleted, the chatbot can no longer use it.`, { title: "Request file deletion", okText: "Continue", danger: true })) return;
+    const reason = await uiPrompt("Why should it be deleted? (optional)", "", { title: "Reason", okText: "Send request" });
+    if (reason === null) return;
+    try {
+        const response = await fetch(`${API}/file-deletions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getHeaders() },
+            body: JSON.stringify({ filename: file.filename, reason: reason.trim() || null }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || "Couldn't send the request.");
+        await uiAlert(result.message, { title: "Request sent" });
+    } catch (error) {
+        await uiAlert(error.message, { title: "Couldn't send the request" });
+    }
+    loadMyFiles();
+}
+
 async function loadMyFiles() {
     try {
         const res = await fetch(`${API}/teacher/files`, { headers: getHeaders() });
@@ -149,6 +181,7 @@ async function loadMyFiles() {
             return;
         }
         const files = await res.json();
+        await attachDeletionStatus(files);
         myFiles = files;
         renderMyFiles();
         // a file that just finished being read can now be picked for lessons
@@ -667,6 +700,130 @@ function readSource() {
         return { file: null, filename: materialSelect.value, ...readPageRange() };
     }
     return { file: null, filename: "", pageStart: "", pageEnd: "" };
+}
+
+// --- "View file contents": read the source file to see which pages the lessons should use ---
+// A PDF opens in the browser's own PDF viewer (page numbers = the "From page / To page" numbers). Slides, Word
+// and text files are shown as text, slide by slide, with buttons that fill in the page range.
+const filePreviewDialog = document.getElementById("filePreviewDialog");
+const filePreviewTitle = document.getElementById("filePreviewTitle");
+const filePreviewHint = document.getElementById("filePreviewHint");
+const filePreviewBody = document.getElementById("filePreviewBody");
+let filePreviewUrl = null;
+let filePreviewRun = 0;   // a slow file must not paint over a newer one
+
+function closeFilePreview() { if (filePreviewDialog.open) filePreviewDialog.close(); }
+
+filePreviewDialog.addEventListener("close", () => {
+    filePreviewRun++;
+    if (filePreviewUrl) { URL.revokeObjectURL(filePreviewUrl); filePreviewUrl = null; }
+    filePreviewBody.replaceChildren();
+});
+
+function showFilePreviewNote(message) {
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = message;
+    filePreviewBody.replaceChildren(note);
+}
+
+async function fetchJson(url) {
+    const response = await fetch(url, { headers: getHeaders() });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.detail || "Couldn't open this file.");
+    return result;
+}
+
+function renderPdfPreview(blob) {
+    filePreviewUrl = URL.createObjectURL(blob);
+    const frame = document.createElement("iframe");
+    frame.className = "fp-frame";
+    frame.title = filePreviewTitle.textContent;
+    frame.src = filePreviewUrl;
+    filePreviewBody.replaceChildren(frame);
+    filePreviewHint.textContent = "Scroll to find the pages you need, then type their numbers under \"Pages to use\" (page 1 is the first page of the file).";
+}
+
+function renderPagesPreview(data) {
+    const setPage = (input, number) => { input.value = String(number); input.dispatchEvent(new Event("input", { bubbles: true })); };
+    filePreviewHint.textContent = data.paged
+        ? "Each slide shows the text the AI will read. Use the buttons to set the first and last slide for the lessons."
+        : "This file type has no page numbers, so the whole file is used and \"Pages to use\" can't be applied. Use a PDF or PowerPoint file to pick pages.";
+    filePreviewBody.replaceChildren(...data.pages.map(page => {
+        const box = document.createElement("div");
+        box.className = "fp-page";
+        const head = document.createElement("div");
+        head.className = "fp-page-head";
+        const title = document.createElement("h3");
+        title.textContent = page.number ? `Slide ${page.number}` : "Contents";
+        head.appendChild(title);
+        if (data.paged && page.number) {
+            const pick = document.createElement("div");
+            pick.className = "fp-pick";
+            [["From here", pageStartInput], ["To here", pageEndInput]].forEach(([label, input]) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "btn btn-secondary btn-sm";
+                button.textContent = label;
+                button.addEventListener("click", () => {
+                    setPage(input, page.number);
+                    filePreviewHint.textContent = `Pages to use: ${pageStartInput.value || "…"} to ${pageEndInput.value || "…"}. You can keep browsing or press Close.`;
+                });
+                pick.appendChild(button);
+            });
+            head.appendChild(pick);
+        }
+        const body = document.createElement("pre");
+        body.textContent = page.text || "(no readable text on this slide)";   // textContent: file text can't inject HTML
+        box.append(head, body);
+        return box;
+    }));
+}
+
+async function viewSourceFile() {
+    let file = null, filename = "", name = "";
+    if (sourceMode() === "upload") {
+        file = sourceFileInput.files[0];
+        if (!file) return showLessonStatus("Choose a file first, then press View file contents.", "error");
+        name = file.name;
+    } else if (sourceMode() === "library") {
+        filename = materialSelect.value;
+        if (!filename) return showLessonStatus("Choose an uploaded file first, then press View file contents.", "error");
+        name = materialSelect.selectedOptions[0] ? materialSelect.selectedOptions[0].textContent.trim() : filename;
+    } else {
+        return;
+    }
+    const run = ++filePreviewRun;
+    filePreviewTitle.textContent = name;
+    filePreviewHint.textContent = "";
+    showFilePreviewNote("Opening the file…");
+    if (!filePreviewDialog.open) filePreviewDialog.showModal();
+    try {
+        const isPdf = (file ? file.name : filename).toLowerCase().endsWith(".pdf");
+        if (isPdf) {
+            let blob = file;
+            if (!blob) {
+                const response = await fetch(`${API}/materials/${encodeURIComponent(filename)}/file`, { headers: getHeaders() });
+                if (!response.ok) throw new Error("Couldn't open this file.");
+                blob = await response.blob();
+            }
+            if (run !== filePreviewRun) return;
+            renderPdfPreview(new Blob([blob], { type: "application/pdf" }));
+        } else {
+            let data;
+            if (file) {
+                const form = new FormData();
+                form.append("file", file);
+                data = await postForm(`${API}/teacher/preview-file`, form);
+            } else {
+                data = await fetchJson(`${API}/materials/${encodeURIComponent(filename)}/preview`);
+            }
+            if (run !== filePreviewRun) return;
+            renderPagesPreview(data);
+        }
+    } catch (error) {
+        if (run === filePreviewRun) showFilePreviewNote(error.message);
+    }
 }
 
 // A file picked with "Upload a file" is first saved to Your Uploaded Files (under the selected subject) when the box is

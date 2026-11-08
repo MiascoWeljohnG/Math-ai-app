@@ -97,6 +97,15 @@ function renderMaterialRows(tbody, files, showUploader, onDelete, onRefresh) {
             note.textContent = file.index_error || "The AI couldn't read this file.";
             nameCell.push(note);
         }
+        // Set by the teacher page from /file-deletions/mine; the admin tables never have it.
+        if (file.deletion_status === "pending" || file.deletion_status === "rejected") {
+            const note = document.createElement("span");
+            note.className = "cell-sub";
+            note.textContent = file.deletion_status === "pending"
+                ? "Deletion requested. Waiting for your school admin to confirm."
+                : "Your school admin chose to keep this file.";
+            nameCell.push(note);
+        }
         add("file-name", ...nameCell);
         add("", branch);
         if (showUploader) {
@@ -127,6 +136,10 @@ function renderMaterialRows(tbody, files, showUploader, onDelete, onRefresh) {
             del.className = "btn btn-danger btn-sm";
             del.style.marginLeft = "0.4rem";
             del.textContent = "Delete";
+            if (file.deletion_status === "pending") {   // already asked: nothing more to press until the admin answers
+                del.disabled = true;
+                del.textContent = "Delete requested";
+            }
             del.addEventListener("click", () => onDelete(file));
             actions.push(del);
         }

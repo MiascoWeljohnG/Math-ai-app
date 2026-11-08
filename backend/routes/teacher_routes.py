@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from auth import require_teacher
@@ -6,7 +7,8 @@ from database import get_db
 from adaptive import level_counts
 from school import in_school, shared_subjects, visible_subjects
 from models import ACTIVE, Lesson, Material, Subject, User
-from classifier import AUTO, ingest_with_detection
+import config
+from classifier import AUTO, ingest_with_detection, preview_pages
 from progress import progress_for_user
 from routes.materials_routes import material_summary
 
@@ -31,6 +33,22 @@ async def teacher_upload(
     # endpoint so the two roles stay clearly separate in the API.
     # branch=Auto: the AI picks each file's branch and only asks when it isn't sure (classifier.py)
     return await ingest_with_detection(files, branch, branches, user.username, db, school_id=user.school_id, user=user)
+
+
+@router.post("/preview-file")
+async def preview_file(file: UploadFile = File(...), user: User = Depends(require_teacher)):
+    """Reads a file the teacher just picked (nothing is saved) so the "View file" popup can show its pages."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="The file must have a filename")
+    contents = await file.read()
+    if len(contents) > config.MAX_ANALYZE_BYTES:
+        raise HTTPException(status_code=413, detail=f"File is too large (limit {config.MAX_ANALYZE_BYTES // 1024 // 1024} MB)")
+    try:
+        return {"filename": file.filename, **await run_in_threadpool(preview_pages, file.filename, contents)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Couldn't read this file: {exc}")
 
 
 @router.get("/files")

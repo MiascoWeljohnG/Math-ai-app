@@ -54,7 +54,7 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_REFRESH_TOKEN", "")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "")
 
-# Embeddings use Gemini directly; Gemini's API key and embedding endpoint are configured below.
+# Embeddings (used to index uploads and search them). Hosted through Gemini, so GEMINI_API_KEY is required.
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
 EMBEDDING_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "25"))
 # Gemini rejects embedding calls over its per-minute token limit (the free tier's is about 30,000), so the
@@ -94,23 +94,6 @@ GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "")
 GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", "4096"))
 GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", "low")
 GROQ_MAX_RETRIES = int(os.getenv("GROQ_MAX_RETRIES", "3"))
-
-# Ollama / Cloudflare Tunnel
-# Set OLLAMA_ENABLED=true to use local/Cloudflare-hosted Ollama for embeddings and chat.
-OLLAMA_ENABLED = os.getenv("OLLAMA_ENABLED", "").lower() in ("1", "true", "yes", "on")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
-OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text:latest")
-# OLLAMA_BACKUP=true keeps Ollama as a LAST resort for chat and lessons: it is only asked after Groq and Gemini
-# have failed (e.g. out of tokens). It does not touch embeddings, so the existing search index stays valid.
-OLLAMA_BACKUP = os.getenv("OLLAMA_BACKUP", "").lower() in ("1", "true", "yes", "on")
-OLLAMA_AVAILABLE = OLLAMA_ENABLED or OLLAMA_BACKUP
-OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "300"))   # seconds; a home PC without a GPU answers slowly
-# The embedding backup (used only when Gemini's embedding quota runs out). Chunks made by it are tagged "nomic" in the
-# database and searched with their own vectors. nomic vectors are unit length, so this is a squared distance like
-# MAX_CONTEXT_DISTANCE: 1.0 means "cosine similarity of at least 0.5". Raise it to let in more (looser) matches.
-OLLAMA_MAX_CONTEXT_DISTANCE = float(os.getenv("OLLAMA_MAX_CONTEXT_DISTANCE", "1.0"))
-OLLAMA_EMBED_BATCH_SIZE = int(os.getenv("OLLAMA_EMBED_BATCH_SIZE", "8"))
 
 # Gemini Config
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

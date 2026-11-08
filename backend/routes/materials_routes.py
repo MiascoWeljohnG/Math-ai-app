@@ -15,6 +15,7 @@ from database import get_db
 from school import in_school
 from models import Material
 from rag import ingest_uploads
+from classifier import preview_pages
 import config
 import drive_storage
 
@@ -129,6 +130,27 @@ def get_material_file(
             headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"},
         )
     return FileResponse(_vault_material_path(material.filename), filename=name, media_type=media_type)
+
+
+@router.get("/{filename:path}/preview")
+def get_material_preview(
+    filename: str,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """The file's readable text, page by page (slide by slide), for the teacher's "View file" popup."""
+    material = db.query(Material).filter(Material.filename == filename).first()
+    if material is None or material.school_id != user.school_id:
+        raise HTTPException(status_code=404, detail="File not found")
+    name = material.display_name or _display_name(material.filename)
+    try:
+        return {"filename": name, **preview_pages(material.filename, material_bytes(material))}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Couldn't read this file: {exc}")
 
 
 @router.get("/{filename:path}/slides")

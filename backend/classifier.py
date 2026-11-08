@@ -102,6 +102,30 @@ def document_text(filename: str, contents: bytes, pages: tuple[int, int] | None 
     return text
 
 
+PREVIEW_PAGE_CHARS = 6000   # one page/slide of the "View file" popup is cut here; the lesson itself still reads all of it
+
+
+def preview_pages(filename: str, contents: bytes) -> dict:
+    """What the teacher sees under "View file" for a file that isn't shown in the browser's own PDF viewer
+    (pptx, docx, txt, md): {"paged": bool, "pages": [{"number": int | None, "text": str}]}. The numbers are the same
+    ones the page-range boxes use. docx / txt / md have no pages, so they come back as one block with number None.
+    Raises ValueError when the file can't be read."""
+    from rag import extract_text_from_bytes
+    suffix = Path(filename).suffix.lower()
+    if suffix == ".pdf":
+        raise ValueError("PDFs are shown in the PDF viewer")
+    extracted = extract_text_from_bytes(filename, contents)
+    pages = []
+    for number, text, tables in extracted:
+        body = "\n\n".join(part for part in [text.strip(), *tables] if part)
+        if len(body) > PREVIEW_PAGE_CHARS:
+            body = body[:PREVIEW_PAGE_CHARS].rstrip() + "…"
+        pages.append({"number": number or None, "text": body})
+    if not any(page["text"] for page in pages):
+        raise ValueError(f"No readable text found in {Path(filename).name}")
+    return {"paged": suffix == ".pptx", "pages": pages}
+
+
 async def read_upload(file: UploadFile, pages: tuple[int, int] | None = None) -> tuple[str, str]:
     """(filename, text) for one uploaded file, or an HTTP 400/413 explaining why not."""
     if not file.filename:

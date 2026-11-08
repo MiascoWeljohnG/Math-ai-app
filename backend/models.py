@@ -234,6 +234,24 @@ class SubjectDeletionVote(Base):
     decided_at = Column(DateTime, default=datetime.utcnow)
 
 
+class FileDeletionRequest(Base):
+    """A teacher asked to delete a file they uploaded; the admin of their school decides.
+    status: pending -> approved (file deleted) | rejected (file kept). display_name is copied so the history
+    still reads correctly after the file is gone."""
+    __tablename__ = "file_deletion_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String, index=True, nullable=False)   # Material.filename (the name on disk)
+    display_name = Column(String, nullable=False)
+    requested_by = Column(String, index=True, nullable=False)
+    school_id = Column(Integer, index=True, nullable=True)
+    reason = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="pending", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+    decided_by = Column(String, nullable=True)
+
+
 class Notification(Base):
     """One entry in an admin's bell. notify_admins() (notifications.py) writes them; routes/notification_routes.py reads them."""
     __tablename__ = "notifications"

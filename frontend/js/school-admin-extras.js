@@ -91,13 +91,87 @@ async function decideDeletion(request, approve) {
 loadDeletionRequests();
 setInterval(loadDeletionRequests, 30000);
 
+// --- File deletion requests: a teacher asked to delete a file they uploaded; the school admin decides ---
+const fileDeletionList = document.getElementById("fileDeletionList");
+
+function fileDeletionCard(request) {
+    const card = document.createElement("div");
+    card.className = "req-card";
+
+    const title = document.createElement("strong");
+    title.textContent = `Delete "${request.display_name}"?`;
+
+    const meta = document.createElement("span");
+    meta.className = "hint";
+    const who = request.requested_by_name ? `${request.requested_by_name} (@${request.requested_by})` : `@${request.requested_by}`;
+    meta.textContent = `Requested by ${who} on ${formatUploadDate(request.created_at)}. Subject: ${request.branch}.`;
+    card.append(title, meta);
+
+    if (request.reason) {
+        const reason = document.createElement("span");
+        reason.textContent = `Reason: ${request.reason}`;
+        card.append(reason);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "req-actions";
+    const approve = document.createElement("button");
+    approve.type = "button";
+    approve.className = "btn btn-danger btn-sm";
+    approve.textContent = "Approve deletion";
+    approve.addEventListener("click", () => decideFileDeletion(request, true));
+    const reject = document.createElement("button");
+    reject.type = "button";
+    reject.className = "btn btn-secondary btn-sm";
+    reject.textContent = "Reject (keep file)";
+    reject.addEventListener("click", () => decideFileDeletion(request, false));
+    actions.append(approve, reject);
+    card.append(actions);
+    return card;
+}
+
+async function loadFileDeletionRequests() {
+    try {
+        const res = await fetch(`${API}/file-deletions`, { headers: getHeaders() });
+        if (!res.ok) return;
+        const requests = await res.json();
+        fileDeletionList.replaceChildren(...requests.map(fileDeletionCard));
+        document.getElementById("noFileDeletions").style.display = requests.length ? "none" : "block";
+        const count = document.getElementById("fileDeletionCount");
+        count.textContent = requests.length;
+        count.style.display = requests.length ? "" : "none";
+    } catch (_) { /* leave the list as it was */ }
+}
+
+async function decideFileDeletion(request, approve) {
+    if (approve && !await uiConfirm(`Approve deleting "${request.display_name}"?\n\nThe file and what the AI learned from it will be permanently deleted.`, { title: "Approve deletion", okText: "Approve", danger: true })) return;
+    try {
+        const res = await fetch(`${API}/file-deletions/${request.id}/decision`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getHeaders() },
+            body: JSON.stringify({ approve }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Couldn't save your decision.");
+        showNotification(approve ? "Approved" : "Rejected", data.message);
+    } catch (err) {
+        showNotification("Error", err.message, true);
+    }
+    loadFileDeletionRequests();
+    if (typeof loadFiles === "function") loadFiles();
+    if (typeof loadAdminOverview === "function") loadAdminOverview();
+}
+
+loadFileDeletionRequests();
+setInterval(loadFileDeletionRequests, 30000);
+
 
 // --- Notification bell: AI-unsure uploads, teacher uploads, deleted files, deletion requests ---
 const bellBtn = document.getElementById("bellBtn");
 const bellPanel = document.getElementById("bellPanel");
 const bellBadge = document.getElementById("bellBadge");
 const bellList = document.getElementById("bellList");
-const WARN_KINDS = new Set(["needs_topic", "deletion_request"]);
+const WARN_KINDS = new Set(["needs_topic", "deletion_request", "file_deletion_request"]);
 
 function timeAgo(iso) {
     const seconds = Math.max(0, (Date.now() - new Date(iso)) / 1000);
@@ -163,6 +237,8 @@ const AUDIT_LABEL = {
     "teacher.create": "Created a teacher account", "file.delete": "Deleted a file",
     "subject.delete.request": "Asked to delete a subject", "subject.delete.approve": "Approved a subject deletion",
     "subject.delete.reject": "Rejected a subject deletion",
+    "file.delete.request": "Asked to delete a file", "file.delete.approve": "Approved a file deletion",
+    "file.delete.reject": "Rejected a file deletion",
 };
 
 async function loadAuditLog() {
