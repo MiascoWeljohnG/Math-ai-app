@@ -140,7 +140,7 @@
         </div>
         <button class="btn btn-secondary" type="button" id="reindexUploadsBtn">Re-index uploaded files</button>
         <p class="status" id="reindexStatus" role="status" aria-live="polite"></p>
-        <div class="table-wrap file-list">
+        <div class="table-wrap">
             <table id="filesTable">
                 <thead><tr><th>File</th><th>Branch</th><th>Uploaded by</th><th>Uploaded</th><th></th></tr></thead>
                 <tbody></tbody>
@@ -152,7 +152,16 @@
     <div class="section">
         <div class="section-head">
             <h2>Audit log</h2>
-            <p class="hint">What happened in your school, newest first: sign-ups, approvals and rejections, certificates opened, accounts created, files and subjects deleted. Only your school's events are shown.</p>
+            <p class="hint">What happened in your school, newest first: sign-ups, approvals and rejections, certificates opened, accounts created, files and subjects deleted, and who opened the lists of people's details (including teachers viewing student scores and their students). Opening the same list again within 30 minutes is recorded once. Only your school's events are shown.</p>
+            <label for="auditSection" class="label">Show</label>
+            <select id="auditSection" class="branch-select">
+                <option value="">All activity</option>
+                <option value="people">Teachers and students list</option>
+                <option value="approvals">Pending approvals</option>
+                <option value="subject_deletions">Subject deletion requests</option>
+                <option value="file_deletions">File deletion requests</option>
+                <option value="scores_roster">Teachers: student scores and their students</option>
+            </select>
             <button class="btn btn-secondary btn-sm" type="button" id="auditRefresh">Refresh</button>
         </div>
         <div class="table-wrap">
@@ -161,7 +170,7 @@
                 <tbody></tbody>
             </table>
         </div>
-        <p id="noAudit" class="empty">Nothing has happened yet.</p>
+        <p id="noAudit" class="empty">Nothing recorded here yet.</p>
     </div>
 
     <div class="modal-overlay" id="teacherModal">

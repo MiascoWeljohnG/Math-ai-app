@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from audit import log_view
 from auth import require_school_admin, require_teacher
 from database import get_db
 from models import AuditLog, FileDeletionRequest, Material, User
@@ -97,6 +98,7 @@ def list_requests(user: User = Depends(require_school_admin), db: Session = Depe
         })
     if changed:
         db.commit()
+    log_view(db, user, "file.delete.view", detail=f"{len(result)} waiting")
     return result
 
 

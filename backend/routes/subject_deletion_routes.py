@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from auth import require_school_admin, require_staff
 from database import get_db
+from audit import log_view
 from models import AuditLog, Lesson, Subject, SubjectDeletionRequest, SubjectDeletionVote, User
 from routes.subjects_routes import delete_subject_cascade
 from school import shared_subjects
@@ -131,7 +132,10 @@ def list_pending_requests(user: User = Depends(require_staff), db: Session = Dep
         .all()
     )
     mine = {i for (i,) in db.query(Subject.id).filter(shared_subjects(user))}   # own school's subjects only
-    return [_serialize(db, row, user) for row in rows if row.subject_id in mine]
+    result = [_serialize(db, row, user) for row in rows if row.subject_id in mine]
+    if user.role == "school_admin":
+        log_view(db, user, "subject.delete.view", detail=f"{len(result)} waiting")
+    return result
 
 
 class Decision(BaseModel):

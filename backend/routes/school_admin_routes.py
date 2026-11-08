@@ -2,9 +2,10 @@
 from their account (never from the request), so it cannot be switched by editing the page."""
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import config
@@ -12,6 +13,7 @@ import drive_storage
 from accounts import CreateTeacherRequest, new_account
 from auth import require_school_admin
 from database import get_db
+from audit import SECTIONS, log_view
 from models import ACTIVE, DISABLED, PENDING, AuditLog, FileDeletionRequest, Material, Subject, SubjectDeletionRequest, User
 from routes.materials_routes import material_summary
 from routes.subject_deletion_routes import OPEN as OPEN_DELETION_STATUSES
@@ -23,7 +25,7 @@ router = APIRouter(prefix="/school-admin", tags=["school-admin"])
 @router.get("/users")
 def school_users(user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
     rows = db.query(User).filter(User.school_id == user.school_id).order_by(User.role, User.username).all()
-    return [
+    result = [
         {
             "username": u.username,
             "first_name": u.first_name,
@@ -37,6 +39,8 @@ def school_users(user: User = Depends(require_school_admin), db: Session = Depen
         }
         for u in rows
     ]
+    log_view(db, user, "users.view", detail=f"{len(result)} accounts")   # emails and birthdays: record who looked
+    return result
 
 
 # An account counts as "online now" if it made a request in this long (see auth._touch_last_seen).
@@ -171,11 +175,15 @@ def delete_school_file(filename: str, user: User = Depends(require_school_admin)
 
 
 @router.get("/audit-log")
-def school_audit_log(limit: int = 200, user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
+def school_audit_log(limit: int = 200, section: Optional[str] = None, user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
     """What happened in this school: sign-ups, approvals and rejections, certificate views, accounts created,
-    files and subjects deleted. The school comes from the signed-in account, so another school's events are unreachable."""
-    rows = (
-        db.query(AuditLog).filter(AuditLog.school_id == user.school_id)
-        .order_by(AuditLog.id.desc()).limit(max(1, min(limit, 500))).all()
-    )
+    files and subjects deleted, and who opened the lists of people's details (including teachers looking at student
+    scores and their students). `section` narrows it to one part of the page (see audit.SECTIONS).
+    The school comes from the signed-in account, so another school's events are unreachable."""
+    query = db.query(AuditLog).filter(AuditLog.school_id == user.school_id)
+    if section:
+        if section not in SECTIONS:
+            raise HTTPException(status_code=400, detail="Unknown section")
+        query = query.filter(or_(*[AuditLog.action.startswith(prefix) for prefix in SECTIONS[section]]))
+    rows = query.order_by(AuditLog.id.desc()).limit(max(1, min(limit, 500))).all()
     return [{"at": r.created_at.isoformat() + "Z", "actor": r.actor, "action": r.action, "target": r.target, "detail": r.detail} for r in rows]

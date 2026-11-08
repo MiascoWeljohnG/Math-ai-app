@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 import certificates
 from auth import require_school_admin
 from database import get_db
+from audit import log_view
 from models import ACTIVE, PENDING, REJECTED, AuditLog, School, StudentCertificate, User
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
@@ -50,6 +51,7 @@ def list_pending(reviewer: User = Depends(require_school_admin), db: Session = D
             "certificate": {"type": cert.content_type, "size": cert.size_bytes} if cert else None,
             "certificate_reused": reused,     # the same file was uploaded by another account
         })
+    log_view(db, reviewer, "approvals.view", detail=f"{len(items)} waiting")
     return items
 
 
