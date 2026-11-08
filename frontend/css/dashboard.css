@@ -269,7 +269,7 @@ td.nowrap { white-space: nowrap; }
 
 /* ---- Manage Lessons: the create/edit form is a modal built on .subject-dialog (same look as "New subject") ---- */
 .lesson-panel .lesson-list { max-height: 420px; }
-.lesson-dialog { width: 520px; }
+.lesson-dialog { width: 760px; max-width: 94vw; }
 /* "View file contents": a big reader on top of the lesson form, so the teacher can find the pages to use */
 .file-preview-dialog { width: 900px; max-width: 96vw; height: 88vh; max-height: 92vh; padding: 1rem 1.2rem; }
 .file-preview-dialog[open] { display: flex; flex-direction: column; }
@@ -287,3 +287,27 @@ td.nowrap { white-space: nowrap; }
 .lesson-dialog .seg-opt { display: block; margin-top: 0; font-size: inherit; color: inherit; }
 .lesson-dialog legend.label { margin-top: 0.8rem; font-size: 0.85rem; }
 .lesson-dialog .seg { margin-top: 0.3rem; }
+
+/* Lesson content review: rendered like the student lessons page, with an Edit text tab for the raw Markdown */
+.content-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+.content-tabs { display: inline-flex; gap: 0.25rem; padding: 0.2rem; border-radius: 999px; background: var(--bg-input); border: 1px solid var(--border); }
+.content-tab { border: 0; background: transparent; color: var(--text-muted); font: 600 0.82rem var(--font-body); padding: 0.3rem 0.85rem; border-radius: 999px; cursor: pointer; }
+.content-tab.active { background: var(--accent); color: var(--on-accent); }
+.lesson-preview { max-height: 55vh; overflow: auto; padding: 1.1rem 1.4rem; border: 1px solid var(--field-border); border-radius: var(--r-md); background: var(--bg-elevated); line-height: 1.6; overflow-wrap: anywhere; scrollbar-width: thin; }
+.lesson-preview > :first-child { margin-top: 0; }
+.lesson-preview h1, .lesson-preview h2, .lesson-preview h3, .lesson-preview h4 { color: var(--heading); font-family: var(--font-display); line-height: 1.25; margin: 1.3rem 0 0.5rem; }
+.lesson-preview h1 { font-size: 1.5rem; } .lesson-preview h2 { font-size: 1.25rem; } .lesson-preview h3 { font-size: 1.08rem; }
+.lesson-preview p { margin: 0.6rem 0; }
+.lesson-preview ul, .lesson-preview ol { margin: 0.6rem 0; padding-left: 1.6rem; }
+.lesson-preview li { margin: 0.25rem 0; }
+.lesson-preview li > p { margin: 0.2rem 0; }
+.lesson-preview strong { color: var(--heading); }
+.lesson-preview table { width: auto; max-width: 100%; margin: 0.8rem 0; display: block; overflow-x: auto; }
+.lesson-preview th, .lesson-preview td { border: 1px solid var(--border); padding: 0.4rem 0.7rem; font-size: 0.9rem; }
+.lesson-preview blockquote { margin: 0.8rem 0; padding: 0.2rem 1rem; border-left: 3px solid var(--accent); color: var(--text-muted); }
+.lesson-preview code { padding: 0.1rem 0.35rem; border-radius: 6px; background: var(--bg-input); font-size: 0.88em; }
+.lesson-preview pre { margin: 0.8rem 0; padding: 0.8rem 1rem; border-radius: var(--r-sm); background: var(--bg-input); overflow-x: auto; }
+.lesson-preview pre code { padding: 0; background: transparent; }
+.lesson-preview hr { border: 0; border-top: 1px solid var(--border); margin: 1.2rem 0; }
+.lesson-preview img { max-width: 100%; }
+.lesson-preview mjx-container { max-width: 100%; overflow-x: auto !important; overflow-y: hidden; }

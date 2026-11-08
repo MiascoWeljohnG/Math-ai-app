@@ -505,6 +505,45 @@ function closeLessonDialog() {
 lessonDialog.addEventListener("cancel", event => { if (lessonBusy) event.preventDefault(); });   // Esc is ignored while the AI is writing
 lessonDialog.addEventListener("close", () => startNewLesson());   // however it was closed, the next open starts clean
 
+// --- Lesson content: rendered preview (what students see) / raw text editor ---
+// Keeps markdown from eating the \( \) and \[ \] math brackets, same as the student lessons page.
+function protectMath(text) {
+    if (!text) return "";
+    return text
+        .replace(/\\\[/g, '\\\\[')         .replace(/\\\]/g, '\\\\]')
+        .replace(/\\\(/g, '\\\\(')         .replace(/\\\)/g, '\\\\)');
+}
+
+function typesetMath(...elements) {
+    if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise(elements).catch(err => console.log(err));
+}
+
+const lessonContentPreview = document.getElementById("lessonContentPreview");
+
+// The textarea is always the source of truth (Save and Rewrite read it); the preview is just a view of it.
+function setContentView(view) {
+    const preview = view !== "edit";
+    lessonContentPreview.hidden = !preview;
+    lessonContentInput.hidden = preview;
+    for (const [id, on] of [["contentTabPreview", preview], ["contentTabEdit", !preview]]) {
+        const tab = document.getElementById(id);
+        tab.classList.toggle("active", on);
+        tab.setAttribute("aria-selected", String(on));
+    }
+    document.getElementById("contentViewHint").textContent = preview
+        ? "This is how students will see the lesson. Press Edit text to change the Markdown and LaTeX."
+        : "Markdown and LaTeX are supported. Press Preview to see how it will look.";
+    if (preview) {
+        if (lessonContentInput.value.trim()) {
+            renderFinalMessage(lessonContentPreview, protectMath(lessonContentInput.value));
+            typesetMath(lessonContentPreview);
+        } else {
+            lessonContentPreview.textContent = "The lesson content appears here.";
+        }
+        lessonContentPreview.scrollTop = 0;
+    }
+}
+
 function startNewLesson() {
     editingLessonId = null;
     markActiveLesson();
@@ -512,6 +551,7 @@ function startNewLesson() {
     lessonTitlesInput.value = "";
     lessonDescriptionInput.value = "";
     lessonContentInput.value = "";
+    setContentView("preview");
     lessonStatus.textContent = "";
     lessonStatus.className = "status";
     refreshLessonForm();
@@ -536,6 +576,7 @@ async function editLesson(lessonId) {
         lessonListStatus.textContent = "";
         lessonListStatus.className = "status";
         if (!lessonDialog.open) lessonDialog.showModal();
+        setContentView("preview");
     } catch (error) {
         showLessonStatus(error.message, "error");
     }
@@ -900,6 +941,7 @@ async function suggestLessonFromMaterial() {
         lessonContentInput.value = suggestion.content;
         refreshLessonForm();
         document.getElementById("lessonContentField").hidden = false;
+        setContentView("preview");
         showLessonStatus("Suggested from the uploaded file. Edit the fields; nothing has been saved.", "success");
     }).catch(error => showLessonStatus(error.message, "error"));
 }
@@ -989,6 +1031,7 @@ async function regenerateContent() {
         const result = await postForm(lessonsUrl("/compose"),
             lessonRequest(source, { title, description: lessonDescriptionInput.value.trim(), save: "false" }));
         lessonContentInput.value = result.content;
+        setContentView("preview");
         showLessonStatus("New content is ready. Read it, then press Save changes.", "success");
     }).catch(error => showLessonStatus(error.message, "error"));
 }
