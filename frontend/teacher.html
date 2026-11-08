@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/nav-drawer.css">
     <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/overview.css">
     <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
     <link rel="stylesheet" href="css/admin-profile.css?v=1">
@@ -24,6 +25,50 @@
         <div class="header-actions">
         </div>
     </div>
+
+    <h2 class="ov-title"><span class="ov-title-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span>Overview</h2>
+    <section class="ov-grid" id="overviewGrid" aria-label="Teacher overview">
+        <a class="ov-card" data-tone="files" href="#filesSection">
+            <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg></span><span class="ov-label">Files you uploaded</span></div>
+            <div class="ov-body">
+                <strong class="ov-value" id="ovFiles">&ndash;</strong>
+                <div class="ov-bars" role="img" id="ovFilesBars" aria-label="Files by type">
+                    <div class="ov-bar" data-kind="pdf"><span class="ov-bar-count" id="ovPdfCount">0</span><span class="ov-bar-fill" id="ovPdfBar"></span><span class="ov-bar-name">PDF</span></div>
+                    <div class="ov-bar" data-kind="docx"><span class="ov-bar-count" id="ovDocxCount">0</span><span class="ov-bar-fill" id="ovDocxBar"></span><span class="ov-bar-name">DOCX</span></div>
+                </div>
+            </div>
+            <span class="ov-sub" id="ovFilesSub">Loading&hellip;</span>
+        </a>
+        <a class="ov-card" data-tone="attention" id="ovDraftsCard" href="#lessonsSection">
+            <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="ov-label">Lessons to approve</span></div>
+            <div class="ov-body">
+                <strong class="ov-value" id="ovDrafts">&ndash;</strong>
+            </div>
+            <span class="ov-sub" id="ovDraftsSub">Loading&hellip;</span>
+        </a>
+        <a class="ov-card" data-tone="quizzes" href="#lessonsSection">
+            <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg></span><span class="ov-label">Lessons live</span></div>
+            <div class="ov-body">
+                <strong class="ov-value" id="ovLive">&ndash;</strong>
+                <div class="ov-gauge" id="ovLiveGauge" role="img" aria-label="0 percent">
+                    <svg viewBox="0 0 80 80" aria-hidden="true"><circle class="g-track" cx="40" cy="40" r="33"/><circle class="g-fill" cx="40" cy="40" r="33" pathLength="100"/></svg>
+                    <span class="g-pct">0%</span>
+                </div>
+            </div>
+            <span class="ov-sub" id="ovLiveSub">Loading&hellip;</span>
+        </a>
+        <a class="ov-card" data-tone="accounts" href="#studentsSection">
+            <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="ov-label">Active students</span></div>
+            <div class="ov-body">
+                <strong class="ov-value" id="ovStudents">&ndash;</strong>
+                <div class="ov-gauge" id="ovStudentsGauge" role="img" aria-label="0 percent">
+                    <svg viewBox="0 0 80 80" aria-hidden="true"><circle class="g-track" cx="40" cy="40" r="33"/><circle class="g-fill" cx="40" cy="40" r="33" pathLength="100"/></svg>
+                    <span class="g-pct">0%</span>
+                </div>
+            </div>
+            <span class="ov-sub" id="ovStudentsSub">Loading&hellip;</span>
+        </a>
+    </section>
 
     <div class="section">
         <h2>Upload Course Material</h2>
@@ -41,7 +86,7 @@
         <div class="status" id="uploadStatus"></div>
     </div>
 
-    <div class="section">
+    <div class="section" id="filesSection">
         <div class="section-head">
             <h2>Your Uploaded Files</h2>
             <p class="hint">Only files you uploaded are listed here.</p>
@@ -60,7 +105,7 @@
         <p class="empty" id="noFiles">You haven't uploaded any files yet.</p>
     </div>
 
-    <div class="section">
+    <div class="section" id="lessonsSection">
         <h2>Manage Lessons</h2>
         <div class="lesson-toolbar">
             <label for="lessonSubjectSelect" class="label">Subject</label>
@@ -128,7 +173,7 @@
         <p class="empty" id="noReminders" style="display:none;">You haven't sent any reminders yet.</p>
     </div>
 
-    <div class="section">
+    <div class="section" id="studentsSection">
         <div class="section-head">
             <h2>Your Students</h2>
             <p class="hint">Share of lessons each student has completed, per branch.</p>
@@ -283,7 +328,9 @@
     <script src="js/utils.js"></script>
     <script src="js/topic-picker.js"></script>
     <script src="js/material-table.js"></script>
+    <script src="js/overview.js"></script>
     <script src="js/teacher.js"></script>
+    <script src="js/teacher-overview.js"></script>
     <script src="js/reminders.js"></script>
     <script src="js/rankings.js"></script>
     <script>

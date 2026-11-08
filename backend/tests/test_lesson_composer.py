@@ -131,7 +131,7 @@ def test_draft_review_edit_and_approve_workflow(api, rag, db):
 def test_compose_without_save_returns_content_and_stores_nothing(api, rag):
     rag.reply = "New text"
     res = api.post(f"{api.url}/compose", data={"title": "T", "save": "false"})
-    assert res.json() == {"title": "T", "description": "", "content": "New text"}
+    assert res.json() == {"title": "T", "description": "", "content": "New text", "source_name": ""}
     assert api.get(api.url).json() == []
 
 

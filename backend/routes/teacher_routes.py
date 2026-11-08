@@ -1,4 +1,8 @@
+from datetime import datetime, timedelta
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from sqlalchemy import func
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
@@ -13,6 +17,65 @@ from progress import progress_for_user
 from routes.materials_routes import material_summary
 
 router = APIRouter(prefix="/teacher", tags=["teacher"])
+
+
+ONLINE_WINDOW = timedelta(minutes=15)   # same meaning as "active now" on the school admin overview
+
+
+@router.get("/overview")
+def teacher_overview(user: User = Depends(require_teacher), db: Session = Depends(get_db)):
+    """The four tiles at the top of the teacher page. Files are only this teacher's own uploads; lessons and
+    students are those of the teacher's own school (the school comes from the account, never the request)."""
+    now = datetime.utcnow()
+
+    # 1. Files this teacher uploaded, split by type (.doc counts with .docx; pptx/txt go to "other").
+    uploads = db.query(Material.display_name, Material.uploaded_at).filter(Material.uploaded_by == user.username).all()
+    kinds = {"pdf": 0, "docx": 0, "other": 0}
+    for name, _ in uploads:
+        ext = Path(name or "").suffix.lower().lstrip(".")
+        kinds["docx" if ext in ("docx", "doc") else "pdf" if ext == "pdf" else "other"] += 1
+    stamps = [uploaded_at for _, uploaded_at in uploads if uploaded_at]
+
+    # 2 + 3. Lessons of the school's shared subjects: drafts wait for approval, published ones are live.
+    lesson_rows = (
+        db.query(Lesson.status, Lesson.created_by, Lesson.created_at)
+        .join(Subject, Subject.id == Lesson.subject_id)
+        .filter(shared_subjects(user))
+        .all()
+    )
+    drafts = [row for row in lesson_rows if row.status == "draft"]
+    published = [row for row in lesson_rows if row.status == "published"]
+    draft_dates = [row.created_at for row in drafts if row.created_at]
+    subjects = db.query(func.count(Subject.id)).filter(shared_subjects(user)).scalar() or 0
+
+    # 4. Students of this school who can sign in.
+    in_my_school = in_school(User.school_id, user.school_id)
+    students = db.query(User.last_seen_at).filter(User.role == "user", User.status == ACTIVE, in_my_school).all()
+    seen = [row.last_seen_at for row in students if row.last_seen_at]
+
+    return {
+        "files": {
+            "total": len(uploads),
+            **kinds,
+            "this_week": sum(1 for stamp in stamps if stamp >= now - timedelta(days=7)),
+            "latest": (max(stamps).isoformat() + "Z") if stamps else None,
+        },
+        "lessons": {
+            "drafts": len(drafts),
+            "my_drafts": sum(1 for row in drafts if row.created_by == user.username),
+            "oldest_draft_days": (now - min(draft_dates)).days if draft_dates else 0,
+            "published": len(published),
+            "my_published": sum(1 for row in published if row.created_by == user.username),
+            "subjects": subjects,
+        },
+        "students": {
+            "active": len(students),
+            "online": sum(1 for stamp in seen if stamp >= now - ONLINE_WINDOW),
+            "today": sum(1 for stamp in seen if stamp >= now - timedelta(hours=24)),
+            "week": sum(1 for stamp in seen if stamp >= now - timedelta(days=7)),
+            "window_minutes": int(ONLINE_WINDOW.total_seconds() // 60),
+        },
+    }
 
 
 @router.get("/subjects")

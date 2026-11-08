@@ -184,6 +184,7 @@ async function loadMyFiles() {
         await attachDeletionStatus(files);
         myFiles = files;
         renderMyFiles();
+        if (typeof loadTeacherOverview === "function") loadTeacherOverview();
         // a file that just finished being read can now be picked for lessons
         const readyCount = files.filter(f => f.index_status === "ready").length;
         if (readyCount !== lastReadyCount) {
@@ -378,6 +379,7 @@ async function loadDraftList() {
         draftLessons = [];   // the published list still works without it
     }
     renderDraftList();
+    if (typeof loadTeacherOverview === "function") loadTeacherOverview();
 }
 
 function renderDraftList() {
