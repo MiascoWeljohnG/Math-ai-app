@@ -18,6 +18,10 @@ if os.getenv("RENDER") and SECRET_KEY == _DEFAULT_SECRET:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
+# One device at a time: logging in on a new device ends the session on the old one. Set SINGLE_DEVICE_LOGIN=0 to allow
+# the same account on several devices again (useful while testing with two browsers).
+SINGLE_DEVICE_LOGIN = os.getenv("SINGLE_DEVICE_LOGIN", "1").strip().lower() not in ("0", "false", "no", "off")
+
 # ---- Accounts, schools and approval ----
 # The platform serves exactly two schools. They are created at startup (bootstrap.ensure_schools) and no
 # route can add another. Override the display names with SCHOOL_NAMES="Name one,Name two".

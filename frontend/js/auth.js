@@ -346,7 +346,9 @@ function logout() {
 // Now any signed-in request that comes back 401 opens one popup, and "Log in again" returns to the sign-in page.
 // It is self-contained (no dependency on modal.js) because not every page loads that file.
 let sessionPopupOpen = false;
-function showSessionExpired() {
+// replaced=true: the server ended this session because the account was logged in on another device
+// (only one device can be signed in at a time), so say that instead of the generic "expired" text.
+function showSessionExpired(replaced = false) {
     if (sessionPopupOpen || !document.body) return;   // the page fires many requests at once: show it only once
     sessionPopupOpen = true;
 
@@ -376,9 +378,11 @@ function showSessionExpired() {
     box.setAttribute("aria-labelledby", "sessionModalTitle");
     const title = document.createElement("h2");
     title.id = "sessionModalTitle";
-    title.textContent = "Your session has expired";
+    title.textContent = replaced === true ? "Signed in on another device" : "Your session has expired";
     const text = document.createElement("p");
-    text.textContent = "The server no longer accepts your login (401 Unauthorized), so this page can't load your data. Please log in again to continue.";
+    text.textContent = replaced === true
+        ? "This account was logged in on another device, and only one device can be signed in at a time. Log in again here to continue (that will sign the other device out)."
+        : "The server no longer accepts your login (401 Unauthorized), so this page can't load your data. Please log in again to continue.";
     const note = document.createElement("p");
     note.className = "session-note";
     note.textContent = "Anything you hadn't saved on this page may be lost.";
@@ -407,7 +411,14 @@ function showSessionExpired() {
             try {
                 const url = typeof input === "string" ? input : (input && input.url) || String(input);
                 const headers = new Headers((init && init.headers) || (input instanceof Request ? input.headers : undefined));
-                if (url.startsWith(API) && headers.has("Authorization")) showSessionExpired();
+                if (url.startsWith(API) && headers.has("Authorization")) {
+                    // The server says why when a newer login took the account over; the body is read from a copy so the page still gets its own.
+                    let replaced = false;
+                    if (typeof response.clone === "function") {
+                        try { replaced = /another device/i.test(String((await response.clone().json()).detail || "")); } catch (_) { /* no body: it's just an expired session */ }
+                    }
+                    showSessionExpired(replaced);
+                }
             } catch (_) { /* never let the notice break a request */ }
         }
         return response;

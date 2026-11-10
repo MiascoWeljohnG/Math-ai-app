@@ -348,3 +348,15 @@ td.nowrap { white-space: nowrap; }
 .lesson-preview hr { border: 0; border-top: 1px solid var(--border); margin: 1.2rem 0; }
 .lesson-preview img { max-width: 100%; }
 .lesson-preview mjx-container { max-width: 100%; overflow-x: auto !important; overflow-y: hidden; }
+
+/* ---- Student Scores: the "View" popup listing one student's quiz attempts ---- */
+.attempts-dialog { width: 860px; max-width: 96vw; max-height: 90vh; }
+.attempts-dialog .fp-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
+.attempts-dialog .fp-head h2 { margin: 0; overflow-wrap: anywhere; }
+.attempts-summary { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.8rem 0; }
+.attempts-chip { display: flex; flex-direction: column; min-width: 96px; padding: 0.5rem 0.8rem; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-input); }
+.attempts-chip strong { font-size: 1.1rem; }
+.attempts-chip span { font-size: 0.75rem; color: var(--text-muted); }
+.attempts-table { max-height: 50vh; overflow: auto; border: 1px solid var(--border); border-radius: var(--r-md); scrollbar-width: thin; }
+.attempts-table td, .attempts-table th { white-space: nowrap; }
+.attempts-table td:nth-child(3) { white-space: normal; min-width: 160px; overflow-wrap: anywhere; }

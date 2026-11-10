@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -27,6 +28,24 @@ DUMMY_HASH = pwd_context.hash("not-a-real-password")
 def check_password_strength(password: str, minimum: int = config.MIN_PASSWORD_LENGTH) -> None:
     if len(password or "") < minimum:
         raise HTTPException(status_code=400, detail=f"Password must be at least {minimum} characters")
+
+# Sent with the 401 when a newer login has taken over the account. The pages look for "another device" in it to
+# say so instead of the generic "session expired" message (frontend/js/auth.js).
+SESSION_REPLACED = "You were signed out because this account was logged in on another device."
+
+
+def new_session_id() -> str:
+    return secrets.token_urlsafe(16)
+
+
+def start_session(db: Session, user: User) -> str:
+    """Make a fresh login the only valid one for this account and return its id (it goes into the token as `sid`).
+    Every token issued before this stops working at its next request."""
+    sid = new_session_id()
+    user.active_session = sid
+    db.commit()
+    return sid
+
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
@@ -69,6 +88,12 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user.status != ACTIVE:
         detail = {PENDING: "Your account is waiting for approval.", REJECTED: "Your registration was not approved."}
         raise HTTPException(status_code=403, detail=detail.get(user.status, "This account is not active."))
+    # One device at a time: only the newest login's token carries the account's current session id. A NULL
+    # active_session is an account nobody has logged into since this rule existed, so its old tokens still work
+    # until its next login.
+    if config.SINGLE_DEVICE_LOGIN and user.active_session is not None and payload.get("sid") != user.active_session:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=SESSION_REPLACED,
+                            headers={"WWW-Authenticate": "Bearer"})
     _touch_last_seen(db, user)
     return user
 

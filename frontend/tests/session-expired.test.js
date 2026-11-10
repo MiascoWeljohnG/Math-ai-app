@@ -9,7 +9,7 @@ const API = "https://isipnayan.onrender.com";
 // Loads auth.js on a tiny fake page. `answer.status` is what the fake server replies to every request.
 function load({ token = "t" } = {}) {
     const created = [], replaced = [], store = new Map(token ? [["token", token], ["role", "teacher"], ["username", "teach"]] : []);
-    const answer = { status: 200 };
+    const answer = { status: 200, body: undefined };   // body: what the fake server's JSON reply holds
     const element = tag => ({
         tag, children: [], attrs: {}, listeners: {}, className: "", textContent: "", id: "", dataset: {},
         append(...c) { this.children.push(...c); }, appendChild(c) { this.children.push(c); return c; },
@@ -23,7 +23,7 @@ function load({ token = "t" } = {}) {
         },
         location: { hostname: "isipnayan.vercel.app", search: "", replace: url => replaced.push(url), href: "" },
         localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
-        fetch: async () => ({ status: answer.status }),
+        fetch: async () => ({ status: answer.status, clone: () => ({ json: async () => answer.body }) }),
         Headers, Request, URLSearchParams, console,
     };
     context.window = context;   // like a browser: window.fetch IS the global fetch
@@ -100,4 +100,33 @@ test("Esc can't dismiss the popup", async () => {
     let prevented = false;
     dialogs()[0].listeners.cancel({ preventDefault() { prevented = true; } });
     assert.equal(prevented, true);
+});
+
+test("a 401 that says the account was logged in on another device gets its own message", async () => {
+    const { context, answer, dialogs } = load();
+    answer.status = 401;
+    answer.body = { detail: "You were signed out because this account was logged in on another device." };
+    await context.fetch(`${API}/teacher/files`, signedIn);
+    assert.equal(dialogs().length, 1);
+    const text = JSON.stringify(dialogs()[0]);
+    assert.match(text, /Signed in on another device/);
+    assert.match(text, /only one device can be signed in at a time/);
+    assert.doesNotMatch(text, /Your session has expired/);
+});
+
+test("any other 401 reason keeps the generic expired message", async () => {
+    const { context, answer, dialogs } = load();
+    answer.status = 401;
+    answer.body = { detail: "Could not validate credentials" };
+    await context.fetch(`${API}/teacher/files`, signedIn);
+    assert.match(JSON.stringify(dialogs()[0]), /Your session has expired/);
+});
+
+test("a 401 whose body can't be read still shows the generic message and the page still gets its response", async () => {
+    const { context, answer, dialogs } = load();
+    answer.status = 401;
+    answer.body = null;   // json() resolves to null: reading .detail fails
+    const response = await context.fetch(`${API}/teacher/files`, signedIn);
+    assert.equal(response.status, 401);
+    assert.match(JSON.stringify(dialogs()[0]), /Your session has expired/);
 });

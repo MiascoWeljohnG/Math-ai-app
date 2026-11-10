@@ -345,7 +345,7 @@ async function loadLessonList() {
             deleteButton.className = "lesson-delete";
             setIconButton(deleteButton, "trash", "Delete this lesson");
             deleteButton.addEventListener("click", () => deleteLesson(lesson.id));
-            row.append(editButton, deleteButton, makePdfButton(lesson.id));
+            row.append(editButton, makePdfButton(lesson.id), deleteButton);
             return row;
         });
         if (rows.length === 0) {
@@ -404,7 +404,7 @@ function renderDraftList() {
         deleteButton.className = "lesson-delete";
         setIconButton(deleteButton, "trash", "Delete this lesson");
         deleteButton.addEventListener("click", () => deleteLesson(lesson.id));
-        row.append(openButton, approveButton, deleteButton, makePdfButton(lesson.id));
+        row.append(openButton, approveButton, makePdfButton(lesson.id), deleteButton);
         return row;
     }));
 }

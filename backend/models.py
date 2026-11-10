@@ -55,6 +55,7 @@ class User(Base):
     rejection_reason = Column(String, nullable=True)
     submissions = Column(Integer, nullable=True, default=1)                 # how many certificates this student has sent
     last_seen_at = Column(DateTime, nullable=True)                          # last time this account made an authenticated request (UTC); drives the admin's "active now" count
+    active_session = Column(String, nullable=True)                         # id of the one login (device) allowed to use this account right now; see auth.py. NULL = nobody has logged in since this existed
 
     @property
     def person_name(self) -> str:

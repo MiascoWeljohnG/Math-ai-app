@@ -40,6 +40,7 @@ let elapsed = 0;          // seconds the student took, set when they submit
 let timerId = 0;
 let warnPending = false;  // a tab switch happened; show the warning when they come back
 let pendingKind = "tab";   // what caused the pending violation: "tab" (left/minimized) or "resize"
+let away = false;         // the student is currently away from the quiz (one absence counts once)
 let smallWindow = false;  // true while the window is too small, so one shrink counts only once
 let retryAction = null;
 
@@ -106,7 +107,7 @@ function showStart() {
     $("factTime").textContent = describeTime(quiz.time_limit);
     $("factPass").textContent = `${quiz.pass_percent}% or higher to move on to the next lesson`;
     $("factViolations").textContent =
-        `Switching tabs, minimizing the browser or shrinking the window counts as a violation. At ${quiz.max_violations}, the quiz is terminated and submitted.`;
+        `Switching tabs or windows, minimizing the browser or shrinking the window counts as a violation. At ${quiz.max_violations}, the quiz is terminated and submitted.`;
     $("prepMaxViolations").textContent = quiz.max_violations;
     $("bannerMaxViolations").textContent = quiz.max_violations;
     $("regenBtn").hidden = !meta.can_regenerate;
@@ -124,6 +125,7 @@ function startQuiz() {
         return;
     }
     smallWindow = false;
+    away = false;
     phase = "quiz";
     index = 0;
     answers = {};
@@ -233,6 +235,7 @@ document.querySelectorAll(".js-next").forEach(button => button.addEventListener(
 // Three things count: leaving the tab, minimizing the browser, or shrinking the window.
 const WARN_TEXT = {
     tab: "Leaving this tab or minimizing the browser during the quiz is not allowed.",
+    window: "Switching to another window or app during the quiz is not allowed.",
     resize: "Shrinking or resizing the browser window during the quiz is not allowed. Please maximize it again.",
 };
 
@@ -243,20 +246,34 @@ function showWarning(kind) {
     if (!$("warnModal").open) $("warnModal").showModal();
 }
 
-// Tab switch / minimize: the page is hidden, so the popup waits until they come back.
+// Leaving the quiz: another tab, minimizing, or another window/app taking focus (even one that only
+// covers part of the quiz, which the browser does not report as "hidden"). One absence counts once.
+function leave(kind) {
+    if (phase !== "quiz" || away) return;
+    away = true;
+    violations++;
+    pendingKind = kind;
+    warnPending = true;        // the popup can only be seen once they are back
+    renderViolations();
+    if (violations >= quiz.max_violations) submit("violations");   // no need to wait for them to return
+}
+function comeBack() {
+    if (!away) return;
+    away = false;
+    if (phase !== "quiz" || !warnPending) return;
+    warnPending = false;
+    showWarning(pendingKind);
+}
+
 document.addEventListener("visibilitychange", () => {
-    if (phase !== "quiz") return;
-    if (document.hidden) {
-        violations++;
-        warnPending = true;
-        pendingKind = "tab";
-        renderViolations();
-    } else if (warnPending) {
-        warnPending = false;
-        if (violations >= quiz.max_violations) return submit("violations");
-        showWarning(pendingKind);
-    }
+    if (document.hidden) leave("tab");
+    else if (document.hasFocus()) comeBack();
 });
+// Short delay so a quick focus flicker (or a tab switch, already reported above) is not double counted.
+window.addEventListener("blur", () => {
+    setTimeout(() => { if (!document.hasFocus()) leave(document.hidden ? "tab" : "window"); }, 250);
+});
+window.addEventListener("focus", comeBack);
 
 // Small window: compared with the screen, so a half-screen, split-screen or restored (un-maximized) window is caught.
 // On phones/tablets only the width is checked, because the on-screen keyboard changes the height.

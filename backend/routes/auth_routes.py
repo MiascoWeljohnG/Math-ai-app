@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 import certificates
 import config
 import ratelimit
-from auth import DUMMY_HASH, check_password_strength, create_access_token, hash_password, verify_password
+from auth import DUMMY_HASH, check_password_strength, create_access_token, hash_password, new_session_id, start_session, verify_password
 from database import get_db
 from school import school_name
 from models import ACTIVE, PENDING, REJECTED, AuditLog, PasswordResetToken, School, StudentCertificate, User
@@ -196,6 +196,7 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired reset link")
     user.password_hash = hash_password(payload.password)
+    user.active_session = new_session_id()   # a reset signs the account out everywhere, including whoever knew the old password
     record.used_at = now
     db.commit()
     return {"message": "Password updated. You can now sign in."}
@@ -219,7 +220,8 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     if user.status != ACTIVE:
         raise HTTPException(403, "This account is not active.")
 
-    token = create_access_token({"sub": user.username})
+    # This login becomes the account's only valid one: a device that was already signed in is refused at its next request.
+    token = create_access_token({"sub": user.username, "sid": start_session(db, user)})
     school = db.query(School).filter(School.id == user.school_id).first() if user.school_id else None
     return {
         "access_token": token,
