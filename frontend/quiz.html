@@ -69,6 +69,15 @@
         .answer-wrap small { display: block; margin-top: 0.4rem; color: var(--text-muted); }
         .q-nav { display: none; gap: 0.8rem; margin-top: auto; padding-top: 1.5rem; }
 
+        /* ---- before-you-start checklist + in-quiz rules banner ---- */
+        .prep { margin: 1.2rem 0 0; padding: 1rem 1.2rem; border: 1px solid var(--q-green); border-radius: 12px; background: var(--q-mint); color: var(--q-ink); }
+        .prep h2 { margin: 0 0 0.5rem; font-size: 1.05rem; color: var(--q-ink); }
+        .prep ul { margin: 0; padding-left: 1.3rem; line-height: 1.6; }
+        .prep li { margin: 0.2rem 0; }
+        .prep .prep-warn { margin: 0.8rem 0 0; font-weight: 700; color: var(--danger); }
+        .rules-banner { grid-column: 1 / -1; display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.75rem 1rem; border: 1px solid var(--danger); border-radius: 10px; background: var(--bg-elevated); color: var(--danger); font-weight: 700; line-height: 1.45; }
+        .rules-banner svg { flex: none; width: 1.3rem; height: 1.3rem; margin-top: 0.1rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
         .panel { background: var(--q-panel); border: 1px solid var(--field-border); border-radius: 14px; box-shadow: 1px 2px 8px rgba(0,0,0,0.12); padding: 1.2rem 1.2rem 1rem; display: flex; flex-direction: column; }
         .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
         .panel h2 { margin: 0; font-size: 1.6rem; font-weight: 900; color: var(--q-ink); }
@@ -154,6 +163,19 @@
                 <li><strong>Passing score</strong><span id="factPass"></span></li>
                 <li><strong>Violations</strong><span id="factViolations"></span></li>
             </ul>
+            <div class="prep" role="note" aria-labelledby="prepTitle">
+                <h2 id="prepTitle">Before you begin</h2>
+                <ul>
+                    <li>Go to a place with a <strong>strong, stable internet connection</strong>. A dropped connection can stop your answers from being submitted.</li>
+                    <li>Find a <strong>quiet place</strong> where you can focus without interruptions.</li>
+                    <li>Make sure your device is <strong>charged or plugged in</strong>.</li>
+                    <li><strong>Close other tabs, apps and chats</strong> you do not need, and turn on Do Not Disturb so notifications do not pull you away.</li>
+                    <li>Keep this window <strong>maximized</strong>. Do not resize it or open another window beside it.</li>
+                    <li>Have your scratch paper, pen and calculator (if allowed) ready, and take a restroom break first.</li>
+                    <li>Once you press Start, the <strong>timer cannot be paused</strong>. Do not refresh or leave the page.</li>
+                </ul>
+                <p class="prep-warn">Do not minimize the browser, switch tabs or shrink the window during the quiz. Doing so counts as a violation, and at <span id="prepMaxViolations">3</span> violations your quiz will be terminated and submitted automatically.</p>
+            </div>
             <div class="actions">
                 <button class="btn primary" id="startBtn" type="button">Start quiz</button>
                 <a class="btn" id="startSkip" href="lessons.html">Not now</a>
@@ -163,6 +185,10 @@
 
         <!-- 3. The quiz -->
         <section id="screenQuiz" class="layout" hidden>
+            <div class="rules-banner" role="alert">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                <span>You are not allowed to minimize the browser, switch tabs or shrink the window while taking this quiz. Doing so counts as a violation, and your quiz will be terminated and submitted automatically after <span id="bannerMaxViolations">3</span> violations.</span>
+            </div>
             <div class="card q-card">
                 <div class="q-box">
                     <p class="q-label" id="qLabel"></p>

@@ -39,6 +39,8 @@ let startedAt = 0;        // when the timer started, to report how long the stud
 let elapsed = 0;          // seconds the student took, set when they submit
 let timerId = 0;
 let warnPending = false;  // a tab switch happened; show the warning when they come back
+let pendingKind = "tab";   // what caused the pending violation: "tab" (left/minimized) or "resize"
+let smallWindow = false;  // true while the window is too small, so one shrink counts only once
 let retryAction = null;
 
 async function api(path, options = {}) {
@@ -104,7 +106,9 @@ function showStart() {
     $("factTime").textContent = describeTime(quiz.time_limit);
     $("factPass").textContent = `${quiz.pass_percent}% or higher to move on to the next lesson`;
     $("factViolations").textContent =
-        `Switching to another tab counts as a violation. At ${quiz.max_violations}, the quiz ends and is submitted.`;
+        `Switching tabs, minimizing the browser or shrinking the window counts as a violation. At ${quiz.max_violations}, the quiz is terminated and submitted.`;
+    $("prepMaxViolations").textContent = quiz.max_violations;
+    $("bannerMaxViolations").textContent = quiz.max_violations;
     $("regenBtn").hidden = !meta.can_regenerate;
     show("screenStart");
 }
@@ -115,6 +119,11 @@ $("regenBtn").addEventListener("click", async () => {
 
 // ---------------------------------------------------------------- the quiz
 function startQuiz() {
+    if (isWindowTooSmall()) {
+        uiAlert("Your browser window is too small. Please maximize it (use the full screen) and press Start again.", { title: "Maximize your window" });
+        return;
+    }
+    smallWindow = false;
     phase = "quiz";
     index = 0;
     answers = {};
@@ -220,21 +229,59 @@ function go(step) {
 document.querySelectorAll(".js-back").forEach(button => button.addEventListener("click", () => go(-1)));
 document.querySelectorAll(".js-next").forEach(button => button.addEventListener("click", () => go(1)));
 
-// ---------------------------------------------------------------- violations (tab switching)
+// ---------------------------------------------------------------- violations
+// Three things count: leaving the tab, minimizing the browser, or shrinking the window.
+const WARN_TEXT = {
+    tab: "Leaving this tab or minimizing the browser during the quiz is not allowed.",
+    resize: "Shrinking or resizing the browser window during the quiz is not allowed. Please maximize it again.",
+};
+
+function showWarning(kind) {
+    const left = quiz.max_violations - violations;
+    $("warnCount").textContent = `${violations} / ${quiz.max_violations}`;
+    $("warnText").textContent = `${WARN_TEXT[kind]} ${left} more and the quiz will be terminated and submitted automatically.`;
+    if (!$("warnModal").open) $("warnModal").showModal();
+}
+
+// Tab switch / minimize: the page is hidden, so the popup waits until they come back.
 document.addEventListener("visibilitychange", () => {
     if (phase !== "quiz") return;
     if (document.hidden) {
         violations++;
-        warnPending = true;        // the popup can only be seen once they are back on this tab
+        warnPending = true;
+        pendingKind = "tab";
         renderViolations();
     } else if (warnPending) {
         warnPending = false;
         if (violations >= quiz.max_violations) return submit("violations");
-        $("warnCount").textContent = `${violations} / ${quiz.max_violations}`;
-        $("warnText").textContent = `Leaving this tab during the quiz is not allowed. ` +
-            `${quiz.max_violations - violations} more and the quiz will end and be submitted automatically.`;
-        if (!$("warnModal").open) $("warnModal").showModal();
+        showWarning(pendingKind);
     }
+});
+
+// Small window: compared with the screen, so a half-screen, split-screen or restored (un-maximized) window is caught.
+// On phones/tablets only the width is checked, because the on-screen keyboard changes the height.
+function isWindowTooSmall() {
+    const touch = window.matchMedia("(pointer: coarse)").matches;
+    const availW = screen.availWidth || screen.width, availH = screen.availHeight || screen.height;
+    const w = window.outerWidth || window.innerWidth, h = window.outerHeight || window.innerHeight;
+    if (w < availW * 0.8) return true;
+    return !touch && h < availH * 0.8;
+}
+
+let resizeTimer = 0;
+window.addEventListener("resize", () => {
+    if (phase !== "quiz") return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+        if (phase !== "quiz" || document.hidden) return;   // minimizing is already counted above
+        if (!isWindowTooSmall()) { smallWindow = false; return; }
+        if (smallWindow) return;                           // still the same shrink, do not count it twice
+        smallWindow = true;
+        violations++;
+        renderViolations();
+        if (violations >= quiz.max_violations) return submit("violations");
+        showWarning("resize");
+    }, 400);
 });
 $("warnOk").addEventListener("click", () => $("warnModal").close());
 

@@ -32,6 +32,11 @@ body { font-family: var(--font-body); font-size: 1rem; background: var(--bg); co
 .btn-secondary { background: var(--pri2); color: var(--accent); }
 .btn-secondary:hover:not(:disabled) { background: var(--nav-active-bg); filter: brightness(0.97); }
 .btn-sm { padding: 0.4rem 0.9rem; font-size: 0.85rem; border-radius: var(--r-sm); }
+/* Icon-only buttons (download / delete): a square target with the SVG centred */
+.btn-icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0; vertical-align: middle; }
+.file-list .btn-icon { width: 30px; height: 30px; padding: 0; }
+.action-icon { display: block; flex: none; pointer-events: none; }
+.btn:has(.action-icon + span) { display: inline-flex; align-items: center; gap: 0.45rem; }
 .btn-block { width: 100%; }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn:focus-visible, .branch-select:focus-visible, textarea:focus-visible, .lesson-form input[type="text"]:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
@@ -147,11 +152,15 @@ td.nowrap { white-space: nowrap; }
 .lesson-row .lesson-edit { flex: 1; overflow-wrap: anywhere; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; font: inherit; font-size: 0.88rem; }
 .lesson-row .lesson-source { display: block; margin-top: 0.15rem; font-size: 0.74rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 .lesson-source-note { color: var(--text-muted); font-weight: 600; }
-.lesson-row .lesson-delete { border: 0; background: transparent; color: var(--danger); cursor: pointer; font: inherit; font-size: 0.8rem; }
-.lesson-row .lesson-delete:hover { text-decoration: underline; }
-.lesson-row .lesson-pdf { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 600; }
-.lesson-row .lesson-pdf:hover { color: var(--accent); text-decoration: underline; }
-.lesson-row .lesson-pdf:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
+.lesson-row .lesson-delete, .lesson-row .lesson-pdf { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.lesson-row .lesson-delete { color: var(--danger); }
+.lesson-row .lesson-delete:hover { background: rgba(214, 69, 69, 0.12); }
+.lesson-row .lesson-pdf { color: var(--text-muted); }
+.lesson-row .lesson-pdf:hover { color: var(--accent); background: var(--hover-bg); }
+.lesson-row .lesson-pdf:disabled { opacity: 0.5; cursor: default; background: transparent; }
+.lesson-row .lesson-pdf[aria-busy="true"] .action-icon { animation: icon-pulse 0.9s ease-in-out infinite; }
+.lesson-row .lesson-delete:focus-visible, .lesson-row .lesson-pdf:focus-visible { outline: 3px solid var(--sun); outline-offset: 1px; }
+@keyframes icon-pulse { 50% { opacity: 0.35; } }
 /* Hidden white page the lesson is drawn on before it becomes a PDF (fixed light colors, whatever theme is on) */
 .pdf-stage { position: fixed; left: -10000px; top: 0; pointer-events: none; }
 .pdf-sheet { width: 720px; padding: 0; background: #fff; color: #1a1f2e; font: 400 15px/1.6 "Figtree", "Segoe UI", Arial, sans-serif; overflow-wrap: anywhere; }

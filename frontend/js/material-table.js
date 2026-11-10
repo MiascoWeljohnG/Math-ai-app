@@ -118,8 +118,8 @@ function renderMaterialRows(tbody, files, showUploader, onDelete, onRefresh) {
         add("nowrap", formatUploadDate(file.uploaded_at));
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "btn btn-secondary btn-sm";
-        button.textContent = "Download";
+        button.className = "btn btn-secondary btn-sm btn-icon";
+        setIconButton(button, "download", `Download ${file.display_name}`);
         button.addEventListener("click", () => downloadMaterial(file));
         const actions = [button];
         if (file.index_status === "failed" || stuck) {
@@ -134,12 +134,12 @@ function renderMaterialRows(tbody, files, showUploader, onDelete, onRefresh) {
         if (onDelete) {
             const del = document.createElement("button");
             del.type = "button";
-            del.className = "btn btn-danger btn-sm";
+            del.className = "btn btn-danger btn-sm btn-icon";
             del.style.marginLeft = "0.4rem";
-            del.textContent = "Delete";
+            setIconButton(del, "trash", `Delete ${file.display_name}`);
             if (file.deletion_status === "pending") {   // already asked: nothing more to press until the admin answers
                 del.disabled = true;
-                del.textContent = "Delete requested";
+                setIconButton(del, "clock", "Delete requested. Waiting for your school admin.");
             }
             del.addEventListener("click", () => onDelete(file));
             actions.push(del);

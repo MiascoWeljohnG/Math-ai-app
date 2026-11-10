@@ -39,7 +39,9 @@ button, a, summary, label.opt, .tile, .file-item, .convo-item { touch-action: ma
     .dots button.active::after { background: #1f2a20; }
     [data-theme="dark"] .dots button::after { background: rgba(255,255,255,.3); }
     [data-theme="dark"] .dots button.active::after { background: #fff; }
-    .lesson-row .lesson-edit, .lesson-row .lesson-delete { min-height: 40px; }
+    .lesson-row .lesson-edit { min-height: 40px; }
+    .lesson-row .lesson-delete, .lesson-row .lesson-pdf { width: 40px; height: 40px; }
+    .btn-icon, .file-list .btn-icon { width: 44px; min-width: 44px; }
 
     /* 16px+ inputs: iOS Safari zooms the whole page when a smaller field is focused */
     input[type="text"], input[type="password"], input[type="email"], input[type="number"], input[type="date"],

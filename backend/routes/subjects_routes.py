@@ -912,7 +912,7 @@ async def compose_lesson(
 # ---------------------------------------------------------------------------
 
 QUIZ_LENGTH = 10
-MAX_VIOLATIONS = 5   # tab switches allowed before the page ends the quiz
+MAX_VIOLATIONS = 3   # violations (leaving the tab, minimizing, shrinking the window) allowed before the page ends the quiz
 PASS_PERCENT = 80    # score needed to move on to the next lesson
 SECONDS_PER_QUESTION = {1: 30, 2: 45, 3: 60, 4: 75, 5: 90}   # by difficulty; edit to taste
 QUIZ_TYPES = {"MCQ": "mcq", "TF": "tf", "ID": "id", "NUM": "num"}

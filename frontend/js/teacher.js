@@ -343,7 +343,7 @@ async function loadLessonList() {
             const deleteButton = document.createElement("button");
             deleteButton.type = "button";
             deleteButton.className = "lesson-delete";
-            deleteButton.textContent = "Delete";
+            setIconButton(deleteButton, "trash", "Delete this lesson");
             deleteButton.addEventListener("click", () => deleteLesson(lesson.id));
             row.append(editButton, deleteButton, makePdfButton(lesson.id));
             return row;
@@ -402,7 +402,7 @@ function renderDraftList() {
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
         deleteButton.className = "lesson-delete";
-        deleteButton.textContent = "Delete";
+        setIconButton(deleteButton, "trash", "Delete this lesson");
         deleteButton.addEventListener("click", () => deleteLesson(lesson.id));
         row.append(openButton, approveButton, deleteButton, makePdfButton(lesson.id));
         return row;
@@ -633,8 +633,7 @@ function makePdfButton(lessonId) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "lesson-pdf";
-    button.textContent = "PDF";
-    button.title = "Download this lesson as a PDF";
+    setIconButton(button, "filePdf", "Download this lesson as a PDF");
     button.addEventListener("click", () => downloadLessonPdfById(lessonId, button));
     return button;
 }
@@ -681,9 +680,8 @@ async function buildLessonPdf(title, content) {
 }
 
 async function runPdfDownload(button, work) {
-    const label = button.textContent;
-    button.disabled = true;
-    button.textContent = "…";
+    button.disabled = true;   // icon buttons keep their icon; the dimmed look + status line show it is working
+    button.setAttribute("aria-busy", "true");
     showLessonStatus("Preparing the PDF…", "");
     try {
         await work();
@@ -692,7 +690,7 @@ async function runPdfDownload(button, work) {
         showLessonStatus(error.message || "Couldn't make the PDF.", "error");
     } finally {
         button.disabled = false;
-        button.textContent = label;
+        button.removeAttribute("aria-busy");
     }
 }
 
