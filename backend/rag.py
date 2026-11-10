@@ -438,7 +438,42 @@ def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[in
 
     raise ValueError(f"Unsupported material file type: {suffix or '(no extension)'}")
 
-def _index_files(vault_files: list[Path], vault_dir: Path, branch: str = "General") -> tuple[int, set[str]]:
+_UNSET = object()   # "the caller didn't say": for indexing the school is looked up; for a search that is an error
+
+
+def _require_school(school_id) -> None:
+    """A search for course material must be for one school. Forgetting it would show one school's files to another,
+    so it fails loudly instead of defaulting to "everything"."""
+    if school_id is _UNSET:
+        raise ValueError("Searching the course material needs school_id (the asker's school, or None for the main pool)")
+
+
+def _school_of_source(source: str):
+    """school_id of the Material row filed under `source`; None when it has none (or no row exists yet)."""
+    from database import SessionLocal
+    from models import Material
+    db = SessionLocal()
+    try:
+        row = db.query(Material.school_id).filter(Material.filename == source).first()
+        return row[0] if row else None
+    finally:
+        db.close()
+
+
+def _school_folder(school_id):
+    """The school's name, used for its folder in Drive (None = the main pool)."""
+    if school_id is None:
+        return None
+    from database import SessionLocal
+    from school import school_name
+    db = SessionLocal()
+    try:
+        return school_name(db, school_id)
+    finally:
+        db.close()
+
+
+def _index_files(vault_files: list[Path], vault_dir: Path, branch: str = "General", school_id=_UNSET) -> tuple[int, set[str]]:
     """Index files that sit in the local uploads folder."""
     documents = []
     for vault_file in vault_files:
@@ -447,13 +482,14 @@ def _index_files(vault_files: list[Path], vault_dir: Path, branch: str = "Genera
             continue   # already embedded and kept across restarts: don't spend quota on it again
         note_branch = rel_path.parts[1] if len(rel_path.parts) > 2 else branch
         documents.append((rel_path.as_posix(), note_branch, vault_file.name, vault_file.read_bytes()))
-    return _index_documents(documents)
+    return _index_documents(documents, school_id)
 
 
-def _index_documents(documents: list[tuple[str, str, str, bytes]]) -> tuple[int, set[str]]:
+def _index_documents(documents: list[tuple[str, str, str, bytes]], school_id=_UNSET) -> tuple[int, set[str]]:
     """Chunk, embed and store files given as (source, branch, file name, bytes). `source` is the stable key
     the chunks are filed under (and later searched by); it is the same string whether the original lives
-    on disk or in Google Drive."""
+    on disk or in Google Drive. Every chunk is tagged with the school of its file so searches can stay inside one
+    school: `school_id` says which (None = the main pool); left out, it is looked up from the file's database row."""
     _report(phase="reading")
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000, chunk_overlap=100,
@@ -467,6 +503,7 @@ def _index_documents(documents: list[tuple[str, str, str, bytes]]) -> tuple[int,
     for source, note_branch, file_name, contents in documents:
         path_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
         note_type = "uploaded_material"
+        file_school = _school_of_source(source) if school_id is _UNSET else school_id
         pages = extract_text_from_bytes(file_name, contents)
 
         for page_number, page_text, tables in pages:
@@ -480,6 +517,7 @@ def _index_documents(documents: list[tuple[str, str, str, bytes]]) -> tuple[int,
                     "page": page_number,
                     "branch": note_branch,
                     "type": note_type,
+                    "school_id": file_school,
                 })
                 all_ids.append(f"obsidian_{path_hash}_page{page_number}_part{j}")
 
@@ -549,20 +587,21 @@ class StoredPath(str):
         return obj
 
 
-def _ingest_to_drive(files: list[tuple[str, bytes]], branch: str, storage_ids: Optional[list[str]]) -> list[StoredPath]:
+def _ingest_to_drive(files: list[tuple[str, bytes]], branch: str, storage_ids: Optional[list[str]], school_id=None) -> list[StoredPath]:
     """Validate, put the originals in Google Drive, then index them. Either everything lands or nothing does:
     if indexing (or a later upload) fails, the Drive files already uploaded are trashed again."""
     import drive_storage
 
     prepared = _prepare_uploads(files, storage_ids)
     safe_branch = _safe_branch(branch)
+    school_folder = _school_folder(school_id)
     uploaded: list[tuple[StoredPath, str, bytes]] = []
     try:
         for safe_name, contents, storage_id in prepared:
             drive_name = f"{storage_id}_{safe_name}"
-            file_id = drive_storage.upload_bytes(drive_name, contents)
+            file_id = drive_storage.upload_bytes(drive_name, contents, school=school_folder)
             uploaded.append((StoredPath(f"Uploaded Materials/{safe_branch}/{drive_name}", file_id), safe_name, contents))
-        _index_documents([(str(stored), safe_branch, safe_name, contents) for stored, safe_name, contents in uploaded])
+        _index_documents([(str(stored), safe_branch, safe_name, contents) for stored, safe_name, contents in uploaded], school_id)
     except Exception:
         for stored, _, _ in uploaded:
             try:
@@ -573,12 +612,15 @@ def _ingest_to_drive(files: list[tuple[str, bytes]], branch: str, storage_ids: O
     return [stored for stored, _, _ in uploaded]
 
 
-def sync_drive_index(materials: list[tuple[str, str, str]], force: bool = False, skip: frozenset = frozenset()) -> dict:
+def sync_drive_index(materials: list[tuple[str, str, str]], force: bool = False, skip: frozenset = frozenset(),
+                     schools: Optional[dict] = None) -> dict:
     """Make the vector store match the files in Drive. `materials` is (filename, branch, drive file id) for
     every Material row stored in Drive. Files with no chunks yet are downloaded and indexed (all of them
     after a Render restart, which wipes the index); with `force`, every file is re-indexed. Chunks of files
     that no longer have a row are dropped. A file that can't be fetched is skipped and reported, not fatal.
-    Files named in `skip` are left alone (the background indexing queue is handling them) but their chunks are kept."""
+    Files named in `skip` are left alone (the background indexing queue is handling them) but their chunks are kept.
+    `schools` maps a file name to its school id, so its chunks are tagged with the right school (when a file isn't in
+    it, the school is looked up from the database)."""
     import drive_storage
     import indexing
 
@@ -597,7 +639,8 @@ def sync_drive_index(materials: list[tuple[str, str, str]], force: bool = False,
         try:
             contents = drive_storage.download_bytes(file_id)
             with indexing._one_at_a_time:   # one file at a time, shared with the upload queue
-                count, _ = _index_documents([(source, branch, PurePosixPath(source).name, contents)])
+                count, _ = _index_documents([(source, branch, PurePosixPath(source).name, contents)],
+                                            (schools or {}).get(filename, _UNSET))
             chunks += count
             indexed_files += 1
         except EmbeddingQuotaError as exc:
@@ -619,6 +662,7 @@ def save_originals(
     files: list[tuple[str, bytes]],
     branch: str = "General",
     storage_ids: Optional[list[str]] = None,
+    school_id=None,
 ) -> list[StoredPath]:
     """Step 1 of an upload (fast): put the original files in storage (Google Drive, or the local uploads
     folder) WITHOUT indexing them. Only the name and type are checked here. Indexing is slow, so it
@@ -629,11 +673,12 @@ def save_originals(
         return [StoredPath(path) for path in store_uploaded_materials(files, branch, storage_ids, check_text=False)]
     prepared = _prepare_uploads(files, storage_ids, check_text=False)
     safe_branch = _safe_branch(branch)
+    school_folder = _school_folder(school_id)   # the originals go to <school>/Modules in Drive
     stored: list[StoredPath] = []
     try:
         for safe_name, contents, storage_id in prepared:
             drive_name = f"{storage_id}_{safe_name}"
-            file_id = drive_storage.upload_bytes(drive_name, contents)
+            file_id = drive_storage.upload_bytes(drive_name, contents, school=school_folder)
             stored.append(StoredPath(f"Uploaded Materials/{safe_branch}/{drive_name}", file_id))
     except Exception:
         for item in stored:   # all or nothing: don't leave half a batch in Drive
@@ -645,14 +690,14 @@ def save_originals(
     return stored
 
 
-def index_document(source: str, branch: str, contents: bytes) -> int:
+def index_document(source: str, branch: str, contents: bytes, school_id=_UNSET) -> int:
     """Step 2 of an upload (slow): chunk, embed and store one saved file. `source` is the name it was
     saved under (Material.filename). Safe to run again for the same file (a retry replaces its chunks).
     Raises ValueError when the file has no readable text."""
     source = _material_index_source(source)
     delete_material_chunks(source)
     file_name = PurePosixPath(source).name
-    count, _ = _index_documents([(source, _safe_branch(branch), file_name, contents)])
+    count, _ = _index_documents([(source, _safe_branch(branch), file_name, contents)], school_id)
     if count == 0:
         shown = re.sub(r"^[a-f0-9]{32}_", "", file_name, flags=re.IGNORECASE)
         raise ValueError(f"No readable text found in {shown}. If it is a scanned document, it needs to be a text PDF.")
@@ -663,10 +708,11 @@ def ingest_uploaded_materials(
     files: list[tuple[str, bytes]],
     branch: str = "General",
     storage_ids: Optional[list[str]] = None,
+    school_id=None,
 ) -> list[str]:
     import drive_storage
     if drive_storage.enabled():
-        return _ingest_to_drive(files, branch, storage_ids)
+        return _ingest_to_drive(files, branch, storage_ids, school_id)
     stored_paths = store_uploaded_materials(files, branch, storage_ids)
     vault_dir = Path(config.CHROMA_VAULT_DIR).expanduser()
     material_paths = [vault_dir / PurePosixPath(path) for path in stored_paths]
@@ -675,6 +721,7 @@ def ingest_uploaded_materials(
             material_paths,
             vault_dir,
             branch,
+            school_id,
         )
     except Exception:
         for path in material_paths:   # no half-saved uploads: a file with no index and no DB record is an orphan
@@ -743,7 +790,9 @@ async def ask_stream(
     chat_history: list[dict] = None,
     material_filename: str = None,
     images: list[str] = None,
+    school_id=_UNSET,
 ):
+    _require_school(school_id)   # before anything else: an answer must only draw on the asker's own school's files
     context = ""
     if material_filename:
         material_source = _material_index_source(material_filename)
@@ -752,12 +801,12 @@ async def ask_stream(
             page_chunks = await asyncio.to_thread(_chunks_for_pages, material_source, *page_range)
             context = "\n\n".join(f"[Page {p}] {t}" for p, t in page_chunks)
         else:
-            results = await asyncio.to_thread(_similarity_search, question, material_source)
+            results = await asyncio.to_thread(_similarity_search, question, material_source, school_id=school_id)
             context = "\n\n".join(
                 f"[Page {d.metadata.get('page', '?')}] {d.page_content}" for d in results
             )
     else:
-        results = await asyncio.to_thread(_similarity_search, question)
+        results = await asyncio.to_thread(_similarity_search, question, school_id=school_id)
         context = "\n\n".join(d.page_content for d in results)
 
     system_prompt = (
@@ -884,18 +933,27 @@ async def ask_stream(
 def queue_status() -> dict:
     return {"waiting": _waiting_count, "max_concurrent": config.MAX_CONCURRENT_CHATS}
 
-def _similarity_search(question: str, source_filter: str = None):
+def _similarity_search(question: str, source_filter: str = None, *, school_id=_UNSET):
+    _require_school(school_id)
     k = 5 if source_filter else 3
-    results = store.search(question, k, {"source": source_filter} if source_filter else None)
+    where = {"school": school_id}
+    if source_filter:
+        where["source"] = source_filter
+    results = store.search(question, k, where)
     docs = [doc for doc, distance in results if distance <= config.MAX_CONTEXT_DISTANCE]
     return docs
 
-def _material_context(query: str, branch: str, k: int = 6) -> str:
-    hits = store.search(query, k, {"branch": branch})
+def _material_context(query: str, branch: str, k: int = 6, *, school_id=_UNSET) -> str:
+    _require_school(school_id)
+    hits = store.search(query, k, {"branch": branch, "school": school_id})
     return "\n\n".join(d.page_content for d, distance in hits if distance <= config.MAX_CONTEXT_DISTANCE)
 
-async def generate_text(system: str, prompt: str, branch: str, query: str) -> str:
-    context = await asyncio.to_thread(_material_context, query, branch) if branch else ""
+async def generate_text(system: str, prompt: str, branch: str, query: str, school_id=_UNSET) -> str:
+    """One model call. With a `branch` it first looks up that subject's course material, which must be for one school:
+    pass school_id (the asker's school, or None for the main pool); a call without a branch searches nothing."""
+    if branch:
+        _require_school(school_id)
+    context = await asyncio.to_thread(_material_context, query, branch, school_id=school_id) if branch else ""
     if context:
         system += f"\n\nCourse material to base your answer on (ignore parts that don't fit):\n{context}"
     messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]

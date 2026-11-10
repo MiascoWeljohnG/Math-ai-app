@@ -200,7 +200,15 @@ test("AI-written lessons show up under Drafts to review, with a count", async ()
     assert.equal(element("draftPanel").hidden, false);
     assert.equal(element("draftCount").textContent, "2");
     assert.deepEqual(element("draftListEl").children.map(row => row.children[0].textContent), ["Linear functions", "Slopes"]);
-    assert.deepEqual(draftRow(element, 0).children.map(button => button.textContent), ["Linear functions", "Approve", "Delete"]);
+    assert.deepEqual(draftRow(element, 0).children.map(button => button.textContent), ["Linear functions", "Approve", "Delete", "PDF"]);
+});
+
+test("every lesson row has a PDF button that fetches the lesson first (the list only has titles)", async () => {
+    const { element, calls } = createHarness([], [], DRAFTS);
+    await settle();
+    const pdfButton = draftRow(element, 0).children[3];
+    assert.equal(pdfButton.textContent, "PDF");
+    assert.equal(typeof pdfButton.listeners.click, "function");
 });
 
 test("with no drafts the panel stays hidden", async () => {

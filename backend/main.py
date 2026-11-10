@@ -50,6 +50,21 @@ import threading
 log = logging.getLogger(__name__)
 
 
+def _tag_chunks_with_schools():
+    """Give the search chunks saved before schools were tracked the school of their file, so a search can stay inside
+    one school. One UPDATE, safe at every start (it only touches chunks whose school differs). If it fails the chunks stay
+    untagged, which hides them (it can never show one school's files to another): the log says how to fix it."""
+    backfill = getattr(store, "backfill_schools", None)
+    if backfill is None:   # the on-disk index is rebuilt from the files at every start, with the school already on it
+        return
+    try:
+        changed = backfill()
+        if changed:
+            log.info("Tagged %d search chunk(s) with their school", changed)
+    except Exception:
+        log.exception("Couldn't tag the search chunks with their schools: material questions may find nothing until this works")
+
+
 def _sync_drive_index_at_startup():
     """Rebuild the AI's search index from the files in Google Drive. Render wipes its disk (and with it the
     index) on every restart, so this is what brings the knowledge base back. It runs in the background so the
@@ -60,16 +75,19 @@ def _sync_drive_index_at_startup():
         folder = drive_storage.check()
         rows = session.query(Material).filter(Material.drive_file_id.isnot(None)).all()
         files = [(m.filename, m.branch or "General", m.drive_file_id) for m in rows]
+        schools = {m.filename: m.school_id for m in rows}   # so each file's chunks are tagged with its school
         log.info("Drive storage OK (folder %r). Indexing %d file(s)...", folder, len(files))
         # files still being read (or failed) belong to the background queue: don't embed them a second time here
         busy = frozenset(m.filename for m in rows if (m.index_status or "ready") != "ready")
-        result = sync_drive_index(files, skip=busy)
+        result = sync_drive_index(files, skip=busy, schools=schools)
         log.info("Drive index ready: %s", result)
     except Exception:
         log.exception("Couldn't sync the Drive files into the search index")
     finally:
         session.close()
 
+
+_tag_chunks_with_schools()
 
 # Files that were being read when the server last stopped carry on first, so a restart never leaves them stuck.
 import indexing

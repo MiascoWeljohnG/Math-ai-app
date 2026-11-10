@@ -345,7 +345,7 @@ async function loadLessonList() {
             deleteButton.className = "lesson-delete";
             deleteButton.textContent = "Delete";
             deleteButton.addEventListener("click", () => deleteLesson(lesson.id));
-            row.append(editButton, deleteButton);
+            row.append(editButton, deleteButton, makePdfButton(lesson.id));
             return row;
         });
         if (rows.length === 0) {
@@ -404,7 +404,7 @@ function renderDraftList() {
         deleteButton.className = "lesson-delete";
         deleteButton.textContent = "Delete";
         deleteButton.addEventListener("click", () => deleteLesson(lesson.id));
-        row.append(openButton, approveButton, deleteButton);
+        row.append(openButton, approveButton, deleteButton, makePdfButton(lesson.id));
         return row;
     }));
 }
@@ -623,6 +623,98 @@ async function deleteLesson(lessonId) {
     }
 }
 
+// --- Download a lesson as a PDF: same Markdown + math rendering as the preview, saved with the formatting kept ---
+function pdfFileName(title) {
+    const clean = String(title || "lesson").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+    return `${clean || "lesson"}.pdf`;
+}
+
+function makePdfButton(lessonId) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "lesson-pdf";
+    button.textContent = "PDF";
+    button.title = "Download this lesson as a PDF";
+    button.addEventListener("click", () => downloadLessonPdfById(lessonId, button));
+    return button;
+}
+
+async function buildLessonPdf(title, content) {
+    if (typeof html2pdf === "undefined") {
+        throw new Error("The PDF tool didn't load. Check your internet connection and refresh the page.");
+    }
+    if (!String(content || "").trim()) throw new Error("This lesson has no content to download yet.");
+
+    // Draw the lesson in a hidden white "paper" (never the dark theme) so the PDF looks the same for everyone.
+    const sheet = document.createElement("div");
+    sheet.className = "pdf-sheet";
+    const body = document.createElement("div");
+    renderFinalMessage(body, protectMath(content));
+    const firstLine = String(content).trim().split("\n")[0].replace(/^#+\s*/, "").trim().toLowerCase();
+    if (firstLine !== String(title).trim().toLowerCase()) {   // don't print the title twice
+        const heading = document.createElement("h1");
+        heading.className = "pdf-title";
+        heading.textContent = title;
+        sheet.append(heading);
+    }
+    sheet.append(body);
+    const stage = document.createElement("div");   // keeps the sheet out of sight while it is drawn
+    stage.className = "pdf-stage";
+    stage.append(sheet);
+    document.body.append(stage);
+    try {
+        if (window.MathJax && MathJax.startup && MathJax.startup.promise) await MathJax.startup.promise;
+        if (window.MathJax && MathJax.typesetPromise) await MathJax.typesetPromise([sheet]);
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+        await html2pdf().set({
+            margin: [14, 14, 16, 14],   // mm: top, left, bottom, right
+            filename: pdfFileName(title),
+            image: { type: "jpeg", quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0 },
+            jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+            // Keep headings, formulas, tables and code blocks from being cut in half across two pages.
+            pagebreak: { mode: ["css", "legacy"], avoid: ["h1", "h2", "h3", "h4", "tr", "pre", "blockquote", "img", "mjx-container[display=\"true\"]"] },
+        }).from(sheet).save();
+    } finally {
+        stage.remove();
+    }
+}
+
+async function runPdfDownload(button, work) {
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = "…";
+    showLessonStatus("Preparing the PDF…", "");
+    try {
+        await work();
+        showLessonStatus("PDF downloaded.", "success");
+    } catch (error) {
+        showLessonStatus(error.message || "Couldn't make the PDF.", "error");
+    } finally {
+        button.disabled = false;
+        button.textContent = label;
+    }
+}
+
+// From the lessons list: fetch the lesson (the list only has titles), then build the PDF.
+function downloadLessonPdfById(lessonId, button) {
+    return runPdfDownload(button, async () => {
+        const response = await fetch(
+            `${API}/subjects/${activeLessonSubjectId}/lessons/${lessonId}`,
+            { headers: getHeaders() },
+        );
+        const lesson = await response.json();
+        if (!response.ok) throw new Error(lesson.detail || "Couldn't load this lesson.");
+        await buildLessonPdf(lesson.title, lesson.content);
+    });
+}
+
+// From the edit dialog: uses what is on screen, including edits that aren't saved yet.
+function downloadLessonPdfFromDialog() {
+    const button = document.getElementById("downloadPdfBtn");
+    return runPdfDownload(button, () => buildLessonPdf(lessonTitleInput.value.trim() || "Lesson", lessonContentInput.value));
+}
+
 // --- The create-lessons form: optional file, 1-6 lessons, a description the AI writes the content from ---
 const sourceUploadRow = document.getElementById("sourceUploadRow");
 const sourceLibraryRow = document.getElementById("sourceLibraryRow");
@@ -712,7 +804,8 @@ function refreshLessonForm() {
     document.getElementById("lessonContentField").hidden = !editing;
     document.getElementById("withQuizField").hidden = editing;
     generateBtn.hidden = editing;
-    saveBtn.hidden = regenBtn.hidden = !editing;   // Cancel is always shown: it just closes the modal
+    saveBtn.hidden = regenBtn.hidden = !editing;
+    document.getElementById("downloadPdfBtn").hidden = !editing;   // Cancel is always shown: it just closes the modal
     generateBtn.textContent = count === 1 ? "Generate lesson" : `Generate ${count} lessons`;
     lessonTitlesInput.rows = Math.max(3, count);
     document.getElementById("lessonDescriptionLabel").textContent = multi ? "Description of the lessons" : "Lesson description";

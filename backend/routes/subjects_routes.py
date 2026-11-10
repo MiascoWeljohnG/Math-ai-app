@@ -206,7 +206,7 @@ async def retry_draft_lesson(subject_id: int, lesson_id: int, user: User = Depen
         raise HTTPException(status_code=409, detail="Only drafts can be regenerated")
     prompt = _compose_prompt(subject, lesson.title, lesson.description or "", [], None)
     try:
-        content = await generate_text(LESSON_SYSTEM, prompt, subject.name, f"{subject.name} {lesson.title}")
+        content = await generate_text(LESSON_SYSTEM, prompt, subject.name, f"{subject.name} {lesson.title}", school_id=user.school_id)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Lesson generation failed: {exc}")
     if not content:
@@ -409,7 +409,7 @@ async def draft_lesson(
         "aimed at a student who is new to the topic. Use markdown: a title, 2-4 short "
         "sections with headers, and at least one worked example. Keep it focused, not long."
     )
-    async for event in ask_stream(prompt):
+    async for event in ask_stream(prompt, school_id=user.school_id):
         if event["type"] == "done":
             if not event.get("answer", "").strip():
                 raise HTTPException(status_code=502, detail="The model returned an empty lesson draft")
@@ -467,7 +467,7 @@ async def outline_lessons(
         "Titles are plain text: no LaTeX and no dollar signs."
     )
     try:
-        text = await generate_text(LESSON_SYSTEM, prompt, subject.name, subject.name)
+        text = await generate_text(LESSON_SYSTEM, prompt, subject.name, subject.name, school_id=user.school_id)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Outline generation failed: {exc}")
     return {"titles": _clean_titles(text)[: req.count]}
@@ -532,7 +532,7 @@ async def generate_lesson(
         "Do not repeat the lesson title as a heading; it is shown separately."
     )
     try:
-        content = await generate_text(LESSON_SYSTEM, prompt, subject.name, f"{subject.name} {topic}")
+        content = await generate_text(LESSON_SYSTEM, prompt, subject.name, f"{subject.name} {topic}", school_id=user.school_id)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Lesson generation failed: {exc}")
     if not content:
@@ -817,7 +817,7 @@ async def plan_lessons(
     else:
         branch, query = subject.name, f"{subject.name} {description[:200]}".strip()
     try:
-        reply = await generate_text(LESSON_SYSTEM, prompt, branch, query)
+        reply = await generate_text(LESSON_SYSTEM, prompt, branch, query, school_id=user.school_id)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Planning the lessons failed: {exc}")
 
@@ -894,7 +894,7 @@ async def compose_lesson(
     else:
         branch, query = subject.name, f"{subject.name} {title} {description[:200]}".strip()
     try:
-        content = await generate_text(LESSON_SYSTEM, prompt, branch, query)
+        content = await generate_text(LESSON_SYSTEM, prompt, branch, query, school_id=user.school_id)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Lesson generation failed: {exc}")
     if not content:

@@ -40,11 +40,11 @@ async def read_upload(file: UploadFile) -> bytes:
     return data
 
 
-def save(data: bytes, ext: str) -> str:
+def save(data: bytes, ext: str, school=None) -> str:   # `school`: the school's name, for its Drive folder
     name = uuid.uuid4().hex + ext
     if drive_storage.enabled():
         try:
-            return "drive:" + drive_storage.upload_bytes("cert_" + name, data, folder=drive_storage.STUDENT_IMAGES)
+            return "drive:" + drive_storage.upload_bytes("cert_" + name, data, folder=drive_storage.STUDENT_IMAGES, school=school)
         except drive_storage.DriveStorageError as exc:
             raise HTTPException(status_code=502, detail=str(exc))
     folder = Path(config.CERT_DIR)

@@ -245,6 +245,7 @@ async def ask_question(
             
     db.commit()
     convo_id, convo_title = convo.id, convo.title  # capture before db may close
+    school_id = user.school_id   # the answer may only draw on this school's files
     async def event_stream():
         full_answer = ""
         try:
@@ -253,6 +254,7 @@ async def ask_question(
                 chat_history=history,
                 material_filename=req.material_filename,
                 images=req.images,
+                school_id=school_id,
             ):
                 if event["type"] == "meta":
                     event["conversation_id"] = convo_id

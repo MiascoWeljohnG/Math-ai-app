@@ -15,7 +15,7 @@ from database import get_db
 from models import ACTIVE, DISABLED, PENDING, AuditLog, FileDeletionRequest, Material, Subject, SubjectDeletionRequest, User
 from routes.materials_routes import material_summary
 from routes.subject_deletion_routes import OPEN as OPEN_DELETION_STATUSES
-from school import in_school, shared_subjects
+from school import in_school, school_name, shared_subjects
 
 router = APIRouter(prefix="/school-admin", tags=["school-admin"])
 
@@ -137,13 +137,13 @@ def school_files(user: User = Depends(require_school_admin), db: Session = Depen
 
 def remove_material(db: Session, material: Material) -> str:
     """Remove one file from the app: its record, the original on disk, and the AI's chunks from it. A file stored in Drive
-    is moved to the Drive "Archived" folder, not erased. Returns the file's display name. Does not commit. A Drive failure
+    is moved to its school's "Archived" folder in Drive, not erased. Returns the file's display name. Does not commit. A Drive failure
     raises 502 before anything else is touched, so the delete can simply be retried. Used by the school admin's Delete
     and when a teacher's request is approved."""
     from rag import delete_material_chunks
     if material.drive_file_id:
         try:
-            drive_storage.archive_file(material.drive_file_id)
+            drive_storage.archive_file(material.drive_file_id, school=school_name(db, material.school_id))
         except drive_storage.DriveStorageError as exc:
             raise HTTPException(status_code=502, detail=str(exc))
 

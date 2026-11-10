@@ -18,3 +18,12 @@ def shared_subjects(user: User):
 def visible_subjects(user: User):
     """SQL filter: those, plus the user's personal subjects."""
     return or_(shared_subjects(user), Subject.owner_user_id == user.id)
+
+
+def school_name(db, school_id):
+    """The name of a school (used for its Drive folder), or None for the main pool and for an unknown id."""
+    if school_id is None:
+        return None
+    from models import School
+    row = db.query(School.name).filter(School.id == school_id).first()
+    return row[0] if row else None

@@ -302,6 +302,7 @@
             <div class="status" id="lessonStatus" role="status" aria-live="polite"></div>
             <div class="dialog-actions">
                 <button class="btn btn-secondary" type="button" id="cancelBtn" onclick="closeLessonDialog()">Cancel</button>
+                <button class="btn btn-secondary" type="button" id="downloadPdfBtn" onclick="downloadLessonPdfFromDialog()" hidden>Download PDF</button>
                 <button class="btn btn-secondary" type="button" id="regenBtn" onclick="regenerateContent()" hidden>Rewrite content with AI</button>
                 <button class="btn btn-primary" type="button" id="saveBtn" onclick="saveLesson()" hidden>Save changes</button>
                 <button class="btn btn-primary" type="button" id="generateBtn" onclick="generateLessons()">Generate lesson</button>
@@ -338,6 +339,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
     <script src="js/markdown-render.js"></script>
     <script src="js/modal.js"></script>
     <script src="js/auth.js"></script>

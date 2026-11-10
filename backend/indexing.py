@@ -71,6 +71,7 @@ def _index(material_id: int, contents: bytes | None) -> None:
         if material is None:   # deleted before its turn came
             return
         source, branch, drive_file_id = material.filename, material.branch or "General", material.drive_file_id
+        school_id = material.school_id   # the chunks are tagged with it, so only this school's searches find them
     finally:
         db.close()
 
@@ -80,7 +81,7 @@ def _index(material_id: int, contents: bytes | None) -> None:
         rag.set_job_progress(lambda **info: _progress.__setitem__(material_id, info))
         rag.set_job_deadline(config.INDEX_JOB_MAX_MINUTES * 60)
         data = contents if contents is not None else _load_bytes(source, drive_file_id)
-        chunks = rag.index_document(source, branch, data)
+        chunks = rag.index_document(source, branch, data, school_id)
     except Exception as exc:
         log.exception("Indexing %s failed", source)
         _finish(material_id, FAILED, _explain(exc))

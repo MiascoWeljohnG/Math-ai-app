@@ -149,6 +149,32 @@ td.nowrap { white-space: nowrap; }
 .lesson-source-note { color: var(--text-muted); font-weight: 600; }
 .lesson-row .lesson-delete { border: 0; background: transparent; color: var(--danger); cursor: pointer; font: inherit; font-size: 0.8rem; }
 .lesson-row .lesson-delete:hover { text-decoration: underline; }
+.lesson-row .lesson-pdf { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 600; }
+.lesson-row .lesson-pdf:hover { color: var(--accent); text-decoration: underline; }
+.lesson-row .lesson-pdf:disabled { opacity: 0.5; cursor: default; text-decoration: none; }
+/* Hidden white page the lesson is drawn on before it becomes a PDF (fixed light colors, whatever theme is on) */
+.pdf-stage { position: fixed; left: -10000px; top: 0; pointer-events: none; }
+.pdf-sheet { width: 720px; padding: 0; background: #fff; color: #1a1f2e; font: 400 15px/1.6 "Figtree", "Segoe UI", Arial, sans-serif; overflow-wrap: anywhere; }
+.pdf-sheet > :first-child { margin-top: 0; }
+.pdf-sheet .pdf-title { font-size: 26px; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 2px solid #d9def0; color: #111827; }
+.pdf-sheet h1, .pdf-sheet h2, .pdf-sheet h3, .pdf-sheet h4 { color: #111827; line-height: 1.25; margin: 20px 0 8px; }
+.pdf-sheet h1 { font-size: 24px; } .pdf-sheet h2 { font-size: 20px; } .pdf-sheet h3 { font-size: 17px; }
+.pdf-sheet p { margin: 9px 0; }
+.pdf-sheet ul, .pdf-sheet ol { margin: 9px 0; padding-left: 26px; }
+.pdf-sheet li { margin: 4px 0; }
+.pdf-sheet li > p { margin: 3px 0; }
+.pdf-sheet strong { color: #111827; }
+.pdf-sheet table { border-collapse: collapse; margin: 12px 0; width: 100%; table-layout: auto; }
+.pdf-sheet mjx-assistive-mml { display: none !important; }   /* MathJax's hidden screen-reader copy of each formula: it would print twice */
+.pdf-sheet mjx-container { overflow: visible !important; max-width: none; }
+.pdf-sheet th, .pdf-sheet td { border: 1px solid #c9cfdf; padding: 6px 10px; font-size: 14px; }
+.pdf-sheet th { background: #eef1fa; }
+.pdf-sheet blockquote { margin: 12px 0; padding: 3px 16px; border-left: 3px solid #4f5bd5; color: #4b5266; }
+.pdf-sheet code { padding: 1px 5px; border-radius: 5px; background: #eef1fa; font-size: 0.88em; }
+.pdf-sheet pre { margin: 12px 0; padding: 10px 14px; border-radius: 8px; background: #eef1fa; white-space: pre-wrap; }
+.pdf-sheet pre code { padding: 0; background: transparent; }
+.pdf-sheet hr { border: 0; border-top: 1px solid #d9def0; margin: 18px 0; }
+.pdf-sheet img { max-width: 100%; }
 .lesson-row .lesson-approve { border: 0; background: transparent; color: var(--accent); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 600; }
 .lesson-row .lesson-approve:hover { text-decoration: underline; }
 .lesson-row .lesson-approve:disabled { opacity: 0.5; cursor: default; text-decoration: none; }

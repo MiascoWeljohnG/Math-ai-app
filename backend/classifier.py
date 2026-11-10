@@ -357,7 +357,7 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
     jobs = []   # (Material, file bytes) to index once the rows are committed
     for target, group in ready.items():
         try:
-            stored = await run_in_threadpool(save_originals, group, target)
+            stored = await run_in_threadpool(save_originals, group, target, None, school_id)
         except (ValueError, FileNotFoundError) as exc:
             db.commit()   # keep the records of groups that were already saved
             _start_jobs(jobs, indexing)

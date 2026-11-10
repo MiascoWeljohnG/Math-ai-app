@@ -14,6 +14,7 @@ import config
 import ratelimit
 from auth import DUMMY_HASH, check_password_strength, create_access_token, hash_password, verify_password
 from database import get_db
+from school import school_name
 from models import ACTIVE, PENDING, REJECTED, AuditLog, PasswordResetToken, School, StudentCertificate, User
 
 log = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ class ResetPasswordRequest(BaseModel):
 
 def _save_certificate(db: Session, user: User, data: bytes, content_type: str, ext: str, filename: str | None) -> str:
     """Store the file and queue its database row. Returns the storage ref so the caller can remove the file if its commit fails."""
-    ref = certificates.save(data, ext)
+    ref = certificates.save(data, ext, school=school_name(db, user.school_id))
     db.add(StudentCertificate(
         user_id=user.id, storage_ref=ref, original_name=(filename or "")[:120], content_type=content_type,
         size_bytes=len(data), sha256=sha256(data).hexdigest(),

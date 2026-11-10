@@ -10,6 +10,10 @@ Set VECTOR_BACKEND=chroma to switch back to the old index at any time ("auto" is
 Both stores answer the same questions, so rag.py doesn't care which one it has:
     upsert / has_source / delete_source / delete_sources_not_in / managed_ids / delete_ids /
     chunks_for_source / search / clear
+
+Every chunk carries the id of the school whose file it came from (`school_id`, None = the main pool), and every
+search must say which school it is for: search(question, k, {"school": 3}) only ever sees school 3's chunks. A
+search without a "school" key is refused, so no code path can forget the check.
 """
 import logging
 
@@ -22,6 +26,12 @@ log = logging.getLogger(__name__)
 
 MANAGED_TYPES = ("obsidian_note", "uploaded_material")
 _BATCH = 100   # rows per INSERT round trip
+NO_SCHOOL = -1   # Chroma can't store None in metadata, so the main pool is -1 there
+
+
+def _require_school(where) -> None:
+    if not where or "school" not in where:
+        raise ValueError("A search must say which school's files it may use: pass where={'school': <school id, or None>}")
 
 
 def _vector_literal(vector) -> str:
@@ -74,6 +84,9 @@ class PgVectorStore:
             conn.execute(text("CREATE INDEX IF NOT EXISTS material_chunks_source_idx ON material_chunks (source)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS material_chunks_model_idx ON material_chunks (embed_model)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS material_chunks_branch_idx ON material_chunks (branch)"))
+            # Which school's file each chunk came from; searches only look at the asker's school (see backfill_schools).
+            conn.execute(text("ALTER TABLE material_chunks ADD COLUMN IF NOT EXISTS school_id INTEGER"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS material_chunks_school_idx ON material_chunks (school_id)"))
             # No vector index on purpose: a school's worth of chunks is a few thousand rows, which an exact
             # scan searches in milliseconds, and it keeps results identical to the old index.
 
@@ -87,18 +100,30 @@ class PgVectorStore:
             "page": meta.get("page"),
             "branch": meta.get("branch"),
             "type": meta.get("type", "uploaded_material"),
+            "school_id": meta.get("school_id"),
             "content": document.replace("\x00", ""),   # Postgres text can't hold NUL bytes (PDFs sometimes do)
             "embedding": _vector_literal(vector),
         } for chunk_id, document, meta, vector in zip(ids, documents, metadatas, embeddings)]
         statement = text("""
-            INSERT INTO material_chunks (id, source, page, branch, type, content, embedding, embed_model)
-            VALUES (:id, :source, :page, :branch, :type, :content, CAST(:embedding AS vector), :embed_model)
+            INSERT INTO material_chunks (id, source, page, branch, type, school_id, content, embedding, embed_model)
+            VALUES (:id, :source, :page, :branch, :type, :school_id, :content, CAST(:embedding AS vector), :embed_model)
             ON CONFLICT (id) DO UPDATE SET source = EXCLUDED.source, page = EXCLUDED.page,
-                branch = EXCLUDED.branch, type = EXCLUDED.type, content = EXCLUDED.content,
-                embedding = EXCLUDED.embedding, embed_model = EXCLUDED.embed_model""")
+                branch = EXCLUDED.branch, type = EXCLUDED.type, school_id = EXCLUDED.school_id,
+                content = EXCLUDED.content, embedding = EXCLUDED.embedding, embed_model = EXCLUDED.embed_model""")
         with self.engine.begin() as conn:   # one transaction: a file's chunks arrive together or not at all
             for start in range(0, len(rows), _BATCH):
                 conn.execute(statement, rows[start:start + _BATCH])
+
+    def backfill_schools(self) -> int:
+        """Give every chunk the school of the file it came from, by looking the file up in `materials`. This is what
+        tags the chunks that were saved before schools were tracked, so those files need no re-indexing. Safe to run
+        at every start: only chunks whose school differs from their file's are touched. Returns how many changed."""
+        statement = text("""
+            UPDATE material_chunks c SET school_id = m.school_id
+            FROM materials m
+            WHERE c.source = replace(m.filename, chr(92), '/') AND c.school_id IS DISTINCT FROM m.school_id""")
+        with self.engine.begin() as conn:
+            return conn.execute(statement).rowcount
 
     # ---- reading / deleting
     def has_source(self, source: str) -> bool:
@@ -145,6 +170,12 @@ class PgVectorStore:
             if where and column in where:
                 filters.append(f"{column} = :{column}")
                 params[column] = where[column]
+        if where and "school" in where:   # None is the main pool: SQL needs IS NULL, `= NULL` never matches
+            if where["school"] is None:
+                filters.append("school_id IS NULL")
+            else:
+                filters.append("school_id = :school")
+                params["school"] = where["school"]
         return filters, params
 
     def _has_model(self, model: str, where) -> bool:
@@ -177,6 +208,7 @@ class PgVectorStore:
         The question is embedded once for each model that has chunks (usually just Gemini). A model that can't
         embed right now (quota, PC off) is skipped, as long as another one answered; if none could, the
         error is raised like before. Hits carry metadata["embed_model"] so the caller can apply the right limit."""
+        _require_school(where)
         models = [m for m in self.embedders if self._has_model(m, where)]
         hits, errors, answered = [], [], 0
         for model in models:
@@ -207,6 +239,7 @@ class ChromaStore:
         return self.client.get_or_create_collection(name=self.collection_name)
 
     def upsert(self, ids, documents, metadatas, embeddings, embed_model=None) -> None:   # one model only: embed_model is ignored
+        metadatas = [{**meta, "school_id": NO_SCHOOL if meta.get("school_id") is None else meta["school_id"]} for meta in metadatas]
         self._collection().upsert(documents=documents, metadatas=metadatas, ids=ids, embeddings=embeddings)
 
     def has_source(self, source: str) -> bool:
@@ -251,9 +284,12 @@ class ChromaStore:
 
     def search(self, question: str, k: int, where: dict | None = None) -> list[tuple[Document, float]]:
         from langchain_community.vectorstores import Chroma
+        _require_school(where)
+        conditions = [{column: where[column]} for column in ("source", "branch") if column in where]
+        conditions.append({"school_id": NO_SCHOOL if where["school"] is None else where["school"]})
+        flt = conditions[0] if len(conditions) == 1 else {"$and": conditions}
         store = Chroma(collection_name=self.collection_name, embedding_function=self.embeddings, client=self.client)
-        kwargs = {"filter": where} if where else {}
-        return store.similarity_search_with_score(question, k=k, **kwargs)
+        return store.similarity_search_with_score(question, k=k, filter=flt)
 
 
 def make_store(embeddings, chroma_client, backup=None, primary_tag="gemini"):
