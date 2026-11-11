@@ -15,7 +15,7 @@ from starlette.concurrency import run_in_threadpool
 import config
 from auth import get_current_user, require_staff
 from database import get_db
-from models import Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, Subject, User
+from models import AuditLog, Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, Subject, User
 from classifier import (
     check_relevance, choose_subject, document_text, parse_page_range, read_upload, relevant_text, sample_text,
     summarize_document,
@@ -149,6 +149,13 @@ def _delete_lesson_children(db: Session, lesson_ids: list[int]) -> None:
         db.query(LessonCompletion).filter(LessonCompletion.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
         db.query(LessonQuiz).filter(LessonQuiz.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
         db.query(PracticeSet).filter(PracticeSet.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+
+
+def delete_lesson_cascade(db: Session, lesson: Lesson) -> None:
+    """Remove one lesson with its quiz, practice sets and completion records. The caller commits.
+    Also used by lesson_deletion_routes once the school admin has approved a teacher's request."""
+    _delete_lesson_children(db, [lesson.id])
+    db.delete(lesson)
 
 
 def _completed_ids(db: Session, user: User, lesson_ids: list[int]) -> set[int]:
@@ -375,15 +382,22 @@ def delete_lesson(
     user: User = Depends(require_staff),
     db: Session = Depends(get_db),
 ):
-    _shared_subject_or_404(db, subject_id, user)
+    subject = _shared_subject_or_404(db, subject_id, user)
     lesson = db.query(Lesson).filter(
         Lesson.id == lesson_id,
         Lesson.subject_id == subject_id,
     ).first()
     if lesson is None:
         raise HTTPException(status_code=404, detail="Lesson not found")
-    _delete_lesson_children(db, [lesson.id])
-    db.delete(lesson)
+    # A published lesson is live for students, so a teacher can only ASK (POST /lesson-deletions) and the school
+    # admin decides. Drafts (and the school admin) can still delete directly.
+    was_live = lesson.status == "published"
+    if was_live and user.role != "school_admin":
+        raise HTTPException(status_code=403, detail="Ask your school admin to delete a published lesson.")
+    title = lesson.title
+    delete_lesson_cascade(db, lesson)
+    if was_live:
+        db.add(AuditLog(actor=user.username, school_id=user.school_id, action="lesson.delete", target=f"{title} ({subject.name})"))
     db.commit()
     return {"message": "Lesson deleted."}
 
@@ -1253,10 +1267,13 @@ async def quiz_breakdown(
     quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
     stored = json.loads(quiz.questions) if quiz else []
     # ponytail: if a teacher regenerates the quiz after this attempt, the saved indexes point at new questions.
-    missed = [stored[i] for i in json.loads(attempt.missed) if i < len(stored)]
+    # Each block carries the question's own id (Q<id>) so the page can put the steps under the right question.
     blocks = []
-    for n, q in enumerate(missed, 1):
-        text = f"{n}. {q['question']}"
+    for i in json.loads(attempt.missed):
+        if i >= len(stored):
+            continue
+        q = stored[i]
+        text = f"Q{i}. {q['question']}"
         if q.get("type", "mcq") == "mcq":
             text += " Choices: " + "; ".join(q["choices"])
         blocks.append(f"{text}\nCorrect answer: {_display_answer(q)}")
@@ -1264,7 +1281,11 @@ async def quiz_breakdown(
         f'A student failed the quiz on "{lesson.title}". For EACH question below, explain in short numbered steps '
         "how to reach the correct answer, then name the most common mistake in one sentence. "
         "Use simple words and write math in LaTeX ($...$). No emoji. "
-        "Finish with a two-sentence study tip for this lesson.\n\n" + "\n\n".join(blocks)
+        "Do not repeat the question or the answer, the page already shows them. "
+        "Start each question's explanation with a line containing only '### ' followed by its label exactly as given "
+        "(for example '### Q3'). "
+        "Finish with a line containing only '### TIP' and then a two-sentence study tip for this lesson.\n\n"
+        + "\n\n".join(blocks)
     )
     try:
         text = (await generate_text(LESSON_SYSTEM, prompt, "", "")).strip()

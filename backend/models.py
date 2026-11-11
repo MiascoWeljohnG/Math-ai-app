@@ -254,6 +254,26 @@ class FileDeletionRequest(Base):
     decided_by = Column(String, nullable=True)
 
 
+class LessonDeletionRequest(Base):
+    """A teacher asked to delete a published lesson; the admin of their school decides.
+    status: pending -> approved (lesson deleted) | rejected (lesson kept). lesson_title and subject_name are
+    copied so the history still reads correctly after the lesson is gone."""
+    __tablename__ = "lesson_deletion_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lesson_id = Column(Integer, index=True, nullable=False)
+    lesson_title = Column(String, nullable=False)
+    subject_id = Column(Integer, index=True, nullable=False)
+    subject_name = Column(String, nullable=False)
+    requested_by = Column(String, index=True, nullable=False)
+    school_id = Column(Integer, index=True, nullable=True)
+    reason = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="pending", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+    decided_by = Column(String, nullable=True)
+
+
 class Notification(Base):
     """One entry in an admin's bell. notify_admins() (notifications.py) writes them; routes/notification_routes.py reads them."""
     __tablename__ = "notifications"

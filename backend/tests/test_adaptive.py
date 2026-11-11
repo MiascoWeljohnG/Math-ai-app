@@ -202,7 +202,12 @@ def test_deleting_a_lesson_removes_its_practice_sets(api):
     api.rag.reply = QUIZ
     api.client.post(practice_url(api, l1, "/generate"))
     api.current["user"] = api.teacher
-    assert api.client.delete(f"/subjects/{api.subject.id}/lessons/{l1.id}").status_code == 200
+    # A live lesson can only be deleted once the school admin approves a request (see test_lesson_deletion.py).
+    assert api.client.delete(f"/subjects/{api.subject.id}/lessons/{l1.id}").status_code == 403
+    assert api.db.query(PracticeSet).count() == 1
+    from routes.subjects_routes import delete_lesson_cascade   # what an approval runs
+    delete_lesson_cascade(api.db, api.db.query(Lesson).filter(Lesson.id == l1.id).one())
+    api.db.commit()
     assert api.db.query(PracticeSet).count() == 0
 
 

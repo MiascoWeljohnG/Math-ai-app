@@ -40,6 +40,7 @@ let elapsed = 0;          // seconds the student took, set when they submit
 let timerId = 0;
 let warnPending = false;  // a tab switch happened; show the warning when they come back
 let pendingKind = "tab";   // what caused the pending violation: "tab" (left/minimized) or "resize"
+let resultsById = {};      // question id -> { correct, correct_answer, explanation } from the last submit
 let away = false;         // the student is currently away from the quiz (one absence counts once)
 let smallWindow = false;  // true while the window is too small, so one shrink counts only once
 let retryAction = null;
@@ -369,6 +370,7 @@ function showResult(result, reason) {
     $("backToLessonBtn").classList.toggle("primary", !result.passed);
 
     const byId = Object.fromEntries(result.results.map(item => [item.id, item]));
+    resultsById = byId;
     $("review").replaceChildren(...quiz.questions.map((q, i) => {
         const outcome = byId[q.id];
         const item = document.createElement("div");
@@ -390,7 +392,6 @@ function showResult(result, reason) {
     show("screenResult");
     window.scrollTo(0, 0);
     typeset($("review"));
-    loadBoard();
     loadPracticeLink(result.recorded);
     $("breakdown").hidden = true;
     if (result.recorded && !result.passed) loadBreakdown();   // a failed attempt gets the steps re-taught
@@ -413,22 +414,6 @@ async function loadPracticeLink(recorded) {
     } catch (_) { /* no practice link this time */ }
 }
 
-// The leaderboard is a bonus: if it fails, the result still shows.
-async function loadBoard() {
-    try {
-        const { entries } = await api("/leaderboard");
-        $("board").hidden = !entries.length;
-        $("boardList").replaceChildren(...entries.map(entry => {
-            const item = document.createElement("li");
-            if (entry.you) item.className = "you";
-            item.textContent = `${entry.name} — ${entry.score}/${entry.total}` + (entry.seconds == null ? "" : ` · ${clock(entry.seconds)}`);
-            return item;
-        }));
-    } catch {
-        $("board").hidden = true;
-    }
-}
-
 // Below the pass mark the AI explains each missed question step by step (the server saves it, so a retry is cheap).
 async function loadBreakdown() {
     $("breakdown").hidden = false;
@@ -438,7 +423,7 @@ async function loadBreakdown() {
     try {
         const { breakdown } = await api("/breakdown", { method: "POST" });
         $("breakdownStatus").textContent = "";
-        renderFinalMessage($("breakdownBody"), breakdown);
+        renderBreakdown(breakdown);
         typeset($("breakdownBody"));
     } catch (error) {
         $("breakdownStatus").textContent = error.message;
@@ -446,6 +431,68 @@ async function loadBreakdown() {
     }
 }
 $("breakdownRetry").addEventListener("click", loadBreakdown);
+
+// One card per question, in the order the student saw them: a Correct / Wrong mark, the answer they
+// submitted, the right answer when they missed it, and the AI's steps for the missed ones.
+// The AI labels each explanation "### Q<id>" and the study tip "### TIP". A breakdown saved before that
+// (no labels) is shown as one block, as it always was.
+function renderBreakdown(text) {
+    const body = $("breakdownBody");
+    const pieces = String(text).split(/^###\s*(Q\d+|TIP)\s*$/mi);   // [intro, label, text, label, text, ...]
+    const steps = {};
+    let tip = "";
+    for (let i = 1; i < pieces.length; i += 2) {
+        const label = pieces[i].toUpperCase();
+        if (label === "TIP") tip = pieces[i + 1].trim();
+        else steps[label.slice(1)] = pieces[i + 1].trim();
+    }
+    if (!Object.keys(steps).length) return renderFinalMessage(body, text);
+
+    const cards = quiz.questions.map((q, i) => {
+        const outcome = resultsById[q.id] || { correct: false, correct_answer: "" };
+        const card = document.createElement("div");
+        card.className = `step-card ${outcome.correct ? "ok" : "bad"}`;
+
+        const title = document.createElement("h3");
+        richText(title, `${i + 1}. ${q.question}`);
+        card.append(title);
+
+        const given = document.createElement("p");
+        given.className = "answer-line";
+        const mark = document.createElement("span");
+        mark.className = `mark ${outcome.correct ? "ok" : "bad"}`;
+        mark.textContent = outcome.correct ? "\u2713 Correct" : "\u2717 Wrong";
+        const givenLabel = document.createElement("span");
+        richText(givenLabel, `Your answer: ${givenText(q)}`);
+        given.append(mark, givenLabel);
+        card.append(given);
+
+        if (!outcome.correct) {
+            const right = document.createElement("p");
+            right.className = "answer-line";
+            richText(right, `Correct answer: ${outcome.correct_answer}`);
+            card.append(right);
+            if (steps[q.id]) {
+                const stepBody = document.createElement("div");
+                stepBody.className = "step-body";
+                renderFinalMessage(stepBody, steps[q.id]);
+                card.append(stepBody);
+            }
+        }
+        return card;
+    });
+    body.replaceChildren(...cards);
+    if (tip) {
+        const tipCard = document.createElement("div");
+        tipCard.className = "tip-card";
+        const label = document.createElement("strong");
+        label.textContent = "Study tip";
+        const tipBody = document.createElement("div");
+        renderFinalMessage(tipBody, tip);
+        tipCard.append(label, tipBody);
+        body.append(tipCard);
+    }
+}
 
 // ---------------------------------------------------------------- go
 async function init() {

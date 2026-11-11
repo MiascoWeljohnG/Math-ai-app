@@ -116,8 +116,18 @@
         .extra h2 { margin: 0 0 0.6rem; font-size: 1.05rem; color: var(--heading); }
         .breakdown-body { line-height: 1.6; overflow-wrap: anywhere; }
         .breakdown-body mjx-container { max-width: 100%; overflow-x: auto; }
-        .board-list { margin: 0; padding-left: 1.4rem; line-height: 1.9; }
-        .board-list li.you { font-weight: 700; color: var(--accent); }
+        .step-card { margin-top: 0.9rem; padding: 0.9rem 1rem; border: 1px solid var(--border); border-left-width: 5px; border-radius: 8px; background: var(--bg-input); overflow-wrap: anywhere; }
+        .step-card.ok { border-left-color: var(--q-green); }
+        .step-card.bad { border-left-color: var(--danger); }
+        .step-card h3 { margin: 0 0 0.5rem; font-size: 1rem; color: var(--heading); }
+        .step-card .answer-line { margin: 0.3rem 0; display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
+        .mark { display: inline-block; padding: 0.1rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.02em; border: 1px solid; }
+        .mark.ok { color: var(--q-ink); background: var(--q-mint); border-color: var(--q-green); }
+        .mark.bad { color: var(--danger); border-color: var(--danger); }
+        .step-body { margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed var(--border); line-height: 1.6; }
+        .step-body > :first-child { margin-top: 0; }
+        .step-body > :last-child { margin-bottom: 0; }
+        .tip-card { margin-top: 1rem; line-height: 1.6; }
 
         @media (max-width: 820px) {
             .layout { grid-template-columns: 1fr; }
@@ -247,10 +257,6 @@
                 <p class="muted" id="breakdownStatus" role="status"></p>
                 <div class="breakdown-body" id="breakdownBody"></div>
                 <button class="btn" id="breakdownRetry" type="button" hidden>Try again</button>
-            </section>
-            <section class="extra" id="board" hidden>
-                <h2>Leaderboard</h2>
-                <ol class="board-list" id="boardList"></ol>
             </section>
             <div class="review" id="review"></div>
         </section>

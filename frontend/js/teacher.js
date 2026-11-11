@@ -318,6 +318,20 @@ function fillLessonTitle(button, lesson) {
     button.append(source);
 }
 
+// A published lesson can't be deleted outright: the teacher asks and the school admin decides.
+// Which lessons were already asked about (waiting, or recently kept) so the list can say so next to the lesson.
+let lessonDeletionTimer = null;
+async function loadLessonDeletionStatus() {
+    let asked = new Map();
+    try {
+        const res = await fetch(`${API}/lesson-deletions/mine`, { headers: getHeaders() });
+        if (res.ok) asked = new Map((await res.json()).map(item => [item.lesson_id, item.status]));
+    } catch (_) { /* the list still works without the notes */ }
+    clearTimeout(lessonDeletionTimer);
+    if ([...asked.values()].includes("pending")) lessonDeletionTimer = setTimeout(loadLessonList, 15000);   // notice the answer
+    return asked;
+}
+
 async function loadLessonList() {
     if (activeLessonSubjectId === null) return;
     try {
@@ -331,6 +345,7 @@ async function loadLessonList() {
         }
         if (!response.ok) throw new Error("Couldn't load lessons.");
         const lessons = await response.json();
+        const asked = await loadLessonDeletionStatus();
         const rows = lessons.map(lesson => {
             const row = document.createElement("div");
             row.className = "lesson-row" + (lesson.id === editingLessonId ? " active" : "");
@@ -343,9 +358,22 @@ async function loadLessonList() {
             const deleteButton = document.createElement("button");
             deleteButton.type = "button";
             deleteButton.className = "lesson-delete";
-            setIconButton(deleteButton, "trash", "Delete this lesson");
-            deleteButton.addEventListener("click", () => deleteLesson(lesson.id));
-            row.append(editButton, makePdfButton(lesson.id), deleteButton);
+            const state = asked.get(lesson.id);
+            if (state === "pending") {   // waiting for the school admin: nothing more to do here
+                deleteButton.disabled = true;
+                setIconButton(deleteButton, "trash", "Deletion requested. Waiting for the school admin.");
+            } else {
+                setIconButton(deleteButton, "trash", "Ask the school admin to delete this lesson");
+                deleteButton.addEventListener("click", () => deleteLesson(lesson.id, false));
+            }
+            row.append(editButton);
+            if (state) {
+                const note = document.createElement("span");
+                note.className = state === "pending" ? "tag warn" : "tag";
+                note.textContent = state === "pending" ? "Deletion requested" : "Admin kept this";
+                row.append(note);
+            }
+            row.append(makePdfButton(lesson.id), deleteButton);
             return row;
         });
         if (rows.length === 0) {
@@ -402,8 +430,8 @@ function renderDraftList() {
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
         deleteButton.className = "lesson-delete";
-        setIconButton(deleteButton, "trash", "Delete this lesson");
-        deleteButton.addEventListener("click", () => deleteLesson(lesson.id));
+        setIconButton(deleteButton, "trash", "Delete this draft");
+        deleteButton.addEventListener("click", () => deleteLesson(lesson.id, true));
         row.append(openButton, approveButton, makePdfButton(lesson.id), deleteButton);
         return row;
     }));
@@ -606,21 +634,41 @@ async function editLesson(lessonId) {
     }
 }
 
-async function deleteLesson(lessonId) {
-    if (!await uiConfirm("Delete this lesson?", { title: "Delete lesson", okText: "Delete", danger: true })) return;
+async function deleteLesson(lessonId, isDraft) {
+    if (!isDraft) return requestLessonDeletion(lessonId);
+    if (!await uiConfirm("Delete this draft?", { title: "Delete draft", okText: "Delete", danger: true })) return;
     try {
         const response = await fetch(
             `${API}/subjects/${activeLessonSubjectId}/lessons/${lessonId}`,
             { method: "DELETE", headers: getHeaders() },
         );
         const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || "Couldn't delete this lesson.");
+        if (!response.ok) throw new Error(result.detail || "Couldn't delete this draft.");
         if (editingLessonId === lessonId) startNewLesson();
-        showLessonStatus("Lesson deleted.", "success");
+        showLessonStatus("Draft deleted.", "success");
         await loadLessonList();
     } catch (error) {
         showLessonStatus(error.message, "error");
     }
+}
+
+async function requestLessonDeletion(lessonId) {
+    if (!await uiConfirm("Ask your school admin to delete this lesson?\n\nThe lesson is NOT deleted yet. Students can still see it until the admin approves.", { title: "Request lesson deletion", okText: "Continue", danger: true })) return;
+    const reason = await uiPrompt("Why should it be deleted? (optional)", "", { title: "Reason", okText: "Send request" });
+    if (reason === null) return;
+    try {
+        const response = await fetch(`${API}/lesson-deletions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...getHeaders() },
+            body: JSON.stringify({ subject_id: activeLessonSubjectId, lesson_id: lessonId, reason: reason.trim() || null }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || "Couldn't send the request.");
+        showLessonStatus(result.message, "success");
+    } catch (error) {
+        showLessonStatus(error.message, "error");
+    }
+    await loadLessonList();
 }
 
 // --- Download a lesson as a PDF: same Markdown + math rendering as the preview, saved with the formatting kept ---

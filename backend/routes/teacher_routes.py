@@ -50,7 +50,7 @@ def teacher_overview(user: User = Depends(require_teacher), db: Session = Depend
     subject_ids = {sid for (sid,) in db.query(Subject.id).filter(shared_subjects(user)).all()}
     subjects = len(subject_ids)
     # Teachers can't delete a subject on their own: an admin has to approve. Until then its lessons are still live,
-    # but at risk. (There is no request for a single lesson; those are deleted directly.)
+    # but at risk. (A single published lesson works the same way: see lesson_deletion_routes.)
     asked = {sid for (sid,) in db.query(SubjectDeletionRequest.subject_id)
              .filter(SubjectDeletionRequest.status == "pending").all()} & subject_ids
 

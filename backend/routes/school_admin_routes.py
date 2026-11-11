@@ -12,7 +12,7 @@ import drive_storage
 from accounts import CreateTeacherRequest, new_account
 from auth import require_school_admin
 from database import get_db
-from models import ACTIVE, DISABLED, PENDING, AuditLog, FileDeletionRequest, Material, Subject, SubjectDeletionRequest, User
+from models import ACTIVE, DISABLED, PENDING, AuditLog, FileDeletionRequest, LessonDeletionRequest, Material, Subject, SubjectDeletionRequest, User
 from routes.materials_routes import material_summary
 from routes.subject_deletion_routes import OPEN as OPEN_DELETION_STATUSES
 from school import in_school, school_name, shared_subjects
@@ -69,7 +69,7 @@ def school_overview(user: User = Depends(require_school_admin), db: Session = De
     online_by_role = dict(seen_since(ONLINE_WINDOW))
     seen_today = sum(dict(seen_since(timedelta(hours=24))).values())
 
-    # What needs the admin: students waiting for approval and subject deletions waiting for a decision.
+    # What needs the admin: students waiting for approval, and subject, lesson and module (file) deletions waiting for a decision.
     waiting = db.query(func.count(User.id), func.min(User.created_at)).filter(in_my_school, User.role == "user", User.status == PENDING).one()
     pending_approvals, oldest_waiting = waiting[0] or 0, waiting[1]
     pending_deletions = (
@@ -81,6 +81,11 @@ def school_overview(user: User = Depends(require_school_admin), db: Session = De
     pending_deletions += (
         db.query(func.count(FileDeletionRequest.id))
         .filter(FileDeletionRequest.status == "pending", FileDeletionRequest.school_id == user.school_id)
+        .scalar() or 0
+    )
+    pending_deletions += (
+        db.query(func.count(LessonDeletionRequest.id))
+        .filter(LessonDeletionRequest.status == "pending", LessonDeletionRequest.school_id == user.school_id)
         .scalar() or 0
     )
 
@@ -174,7 +179,7 @@ def delete_school_file(filename: str, user: User = Depends(require_school_admin)
 @router.get("/audit-log")
 def school_audit_log(limit: int = 200, user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
     """What happened in this school: sign-ups, approvals and rejections, certificate views, accounts created,
-    files and subjects deleted. The school comes from the signed-in account, so another school's events are unreachable."""
+    files, lessons and subjects deleted. The school comes from the signed-in account, so another school's events are unreachable."""
     rows = (
         db.query(AuditLog).filter(AuditLog.school_id == user.school_id)
         .order_by(AuditLog.id.desc()).limit(max(1, min(limit, 500))).all()
