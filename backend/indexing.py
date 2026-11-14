@@ -16,6 +16,7 @@ from pathlib import Path
 import config
 from database import SessionLocal
 from models import Material
+from notifications import notify_teacher
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +104,13 @@ def _finish(material_id: int, status: str, error: str | None) -> bool:
         if material is None:
             return False
         material.index_status, material.index_error = status, error
+        # Tell the teacher who uploaded it how it went: they may have left the page long ago (a big PDF takes minutes).
+        if status == READY:
+            notify_teacher(db, material.uploaded_by, "upload_ok", "Upload complete",
+                           f'"{material.display_name}" is uploaded and the AI has read it ({material.branch}).')
+        elif status == FAILED:
+            notify_teacher(db, material.uploaded_by, "upload_failed", "Upload failed",
+                           f'"{material.display_name}" could not be processed: {error} Open Your Uploaded Files and press Retry.')
         db.commit()
         return True
     except Exception:

@@ -244,6 +244,7 @@ const AUDIT_LABEL = {
     "file.delete.reject": "Rejected a module (file) deletion",
     "lesson.delete": "Deleted a lesson", "lesson.delete.request": "Asked to delete a lesson",
     "lesson.delete.approve": "Approved a lesson deletion", "lesson.delete.reject": "Rejected a lesson deletion",
+    "quiz.retake.approve": "Approved a quiz retake", "quiz.retake.reject": "Rejected a quiz retake",
 };
 
 async function loadAuditLog() {

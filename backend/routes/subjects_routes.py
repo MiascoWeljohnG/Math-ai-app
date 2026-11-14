@@ -13,13 +13,15 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 import config
+import retakes
 from auth import get_current_user, require_staff
 from database import get_db
-from models import AuditLog, Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, Subject, User
+from models import AuditLog, Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, QuizRetakeRequest, Subject, User
 from classifier import (
     check_relevance, choose_subject, document_text, parse_page_range, read_upload, relevant_text, sample_text,
     summarize_document,
 )
+from notifications import notify_teacher
 from rag import ask_stream, generate_text
 from routes.materials_routes import material_bytes
 from school import in_school, shared_subjects, visible_subjects
@@ -149,6 +151,7 @@ def _delete_lesson_children(db: Session, lesson_ids: list[int]) -> None:
         db.query(LessonCompletion).filter(LessonCompletion.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
         db.query(LessonQuiz).filter(LessonQuiz.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
         db.query(PracticeSet).filter(PracticeSet.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+        db.query(QuizRetakeRequest).filter(QuizRetakeRequest.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
 
 
 def delete_lesson_cascade(db: Session, lesson: Lesson) -> None:
@@ -203,6 +206,14 @@ def update_draft_lesson(subject_id: int, lesson_id: int, req: "LessonRequest", u
     return _serialize_lesson(lesson)
 
 
+def _lesson_failed(db: Session, user: User, title: str, detail: str) -> HTTPException:
+    """The AI could not write a lesson. A teacher also gets it in their bell (they may have left the page by now).
+    Returns the error for the caller to raise."""
+    notify_teacher(db, user.username, "lesson_failed", "Lesson could not be generated", f'"{title}": {detail}')
+    db.commit()
+    return HTTPException(status_code=502, detail=detail)
+
+
 @router.post("/{subject_id}/lessons/{lesson_id}/retry")
 async def retry_draft_lesson(subject_id: int, lesson_id: int, user: User = Depends(require_staff), db: Session = Depends(get_db)):
     subject = _shared_subject_or_404(db, subject_id, user)
@@ -215,10 +226,11 @@ async def retry_draft_lesson(subject_id: int, lesson_id: int, user: User = Depen
     try:
         content = await generate_text(LESSON_SYSTEM, prompt, subject.name, f"{subject.name} {lesson.title}", school_id=user.school_id)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Lesson generation failed: {exc}")
+        raise _lesson_failed(db, user, lesson.title, f"Lesson generation failed: {exc}")
     if not content:
-        raise HTTPException(status_code=502, detail="The model returned an empty lesson")
+        raise _lesson_failed(db, user, lesson.title, "The model returned an empty lesson")
     lesson.content = content
+    notify_teacher(db, user.username, "lesson_ready", "Lesson regenerated", f'"{lesson.title}" in {subject.name} was written again and is waiting in Drafts.')
     db.commit()
     db.refresh(lesson)
     return _serialize_lesson(lesson)
@@ -548,9 +560,9 @@ async def generate_lesson(
     try:
         content = await generate_text(LESSON_SYSTEM, prompt, subject.name, f"{subject.name} {topic}", school_id=user.school_id)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Lesson generation failed: {exc}")
+        raise _lesson_failed(db, user, topic, f"Lesson generation failed: {exc}")
     if not content:
-        raise HTTPException(status_code=502, detail="The model returned an empty lesson")
+        raise _lesson_failed(db, user, topic, "The model returned an empty lesson")
     return _serialize_lesson(_save_generated_lesson(db, subject, user, topic, content))
 
 
@@ -569,6 +581,8 @@ def _save_generated_lesson(db: Session, subject: Subject, user: User, topic: str
         status="draft" if subject.owner_user_id is None else "published",
     )
     db.add(lesson)
+    notify_teacher(db, user.username, "lesson_ready", "Lesson generated",
+                   f'"{topic}" in {subject.name} is ready' + (" and waiting in Drafts for your approval." if lesson.status == "draft" else "."))
     db.commit()
     db.refresh(lesson)
 
@@ -583,7 +597,7 @@ async def _lesson_from_text(db: Session, subject: Subject, user: User, text: str
         try:
             topic, _ = await summarize_document(excerpt)
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Couldn't title the lesson: {exc}")
+            raise _lesson_failed(db, user, "Untitled lesson", f"Couldn't title the lesson: {exc}")
     prompt = (
         f'Write a lesson titled "{topic}" for the subject {subject.name}, for a student new to it, '
         "based ONLY on the source document below (ignore anything in it that is off-topic). "
@@ -595,9 +609,9 @@ async def _lesson_from_text(db: Session, subject: Subject, user: User, text: str
     try:
         content = await generate_text(LESSON_SYSTEM, prompt, "", "")
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Lesson generation failed: {exc}")
+        raise _lesson_failed(db, user, topic, f"Lesson generation failed: {exc}")
     if not content:
-        raise HTTPException(status_code=502, detail="The model returned an empty lesson")
+        raise _lesson_failed(db, user, topic, "The model returned an empty lesson")
     return _serialize_lesson(_save_generated_lesson(db, subject, user, topic, content))
 
 
@@ -910,9 +924,9 @@ async def compose_lesson(
     try:
         content = await generate_text(LESSON_SYSTEM, prompt, branch, query, school_id=user.school_id)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Lesson generation failed: {exc}")
+        raise _lesson_failed(db, user, title, f"Lesson generation failed: {exc}")
     if not content:
-        raise HTTPException(status_code=502, detail="The model returned an empty lesson")
+        raise _lesson_failed(db, user, title, "The model returned an empty lesson")
     if not save:
         return {"title": title, "description": description, "content": content, "source_name": source_name}
     return _serialize_lesson(_save_generated_lesson(db, subject, user, title, content, description, source_name))
@@ -1109,7 +1123,16 @@ def _quiz_payload(db: Session, subject: Subject, lesson: Lesson, user: User, qui
         "next_lesson_id": ids[position + 1] if position + 1 < len(ids) else None,
         "can_regenerate": subject.owner_user_id is not None or user.role in ("teacher", "school_admin"),
         "quiz": None,
+        "lock": None,              # set when a teacher must approve a retake first (see retakes.py)
+        "retake_approved": False,  # the teacher approved a retake: this attempt is the one they allowed
     }
+    lock = retakes.blocking_lock(db, user, lesson.id)
+    if lock is not None:
+        payload["lock"] = retakes.lock_payload(lock)   # no questions while locked
+        return payload
+    if user.role == "user":
+        row = retakes.open_row(db, user.id, lesson.id)
+        payload["retake_approved"] = row is not None and row.status == retakes.APPROVED
     if quiz:
         stored = json.loads(quiz.questions)
         shown = []
@@ -1156,7 +1179,7 @@ async def generate_quiz(
     lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
     can_replace = subject.owner_user_id is not None or user.role in ("teacher", "school_admin")
     quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
-    if quiz and not can_replace:
+    if (quiz and not can_replace) or retakes.blocking_lock(db, user, lesson_id) is not None:
         return _quiz_payload(db, subject, lesson, user, quiz)
 
     prompt = (
@@ -1198,6 +1221,9 @@ class SubmitQuizRequest(BaseModel):
     # question id -> mcq: choice index, tf: true/false, id/num: the typed text
     answers: dict[str, Optional[Union[bool, int, str]]] = Field(default_factory=dict)
     seconds: Optional[int] = Field(default=None, ge=0, le=86_400)   # how long the student took (browser clock)
+    # how many times the page caught them leaving the quiz. ponytail: counted in the browser, so a student who talks to the
+    # API directly can under-report it. Upgrade: heartbeat pings from the quiz page, so the server can count absences itself.
+    violations: int = Field(default=0, ge=0, le=100)
 
 
 @router.post("/{subject_id}/lessons/{lesson_id}/quiz/submit")
@@ -1208,11 +1234,13 @@ def submit_quiz(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _visible_subject_or_404(db, subject_id, user)
-    _lesson_in_subject_or_404(db, subject_id, lesson_id)
+    subject = _visible_subject_or_404(db, subject_id, user)
+    lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
     quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
     if quiz is None:
         raise HTTPException(status_code=404, detail="This lesson has no quiz yet")
+    if retakes.blocking_lock(db, user, lesson_id) is not None:
+        raise HTTPException(status_code=403, detail="This quiz is locked until your teacher approves a retake.")
     results = []
     for i, question in enumerate(json.loads(quiz.questions)):
         results.append({
@@ -1224,6 +1252,7 @@ def submit_quiz(
     score = sum(r["correct"] for r in results)
     passed = score * 100 >= PASS_PERCENT * len(results)   # whole numbers, so exactly 80% passes
     recorded = user.role == "user"   # a teacher previewing a quiz must not land on the leaderboard
+    lock = None
     if recorded:
         limit = len(results) * SECONDS_PER_QUESTION[quiz.difficulty or 3]
         db.add(QuizAttempt(
@@ -1232,6 +1261,12 @@ def submit_quiz(
             seconds=None if req.seconds is None else min(req.seconds, limit + 30),
             missed=json.dumps([r["id"] for r in results if not r["correct"]]),
         ))
+        # Ended for violations: lock it for this student and tell the teachers. (A student's own personal subject has no
+        # teacher to approve anything, so it is never locked.) Any other submit spends an approved retake.
+        if req.violations >= MAX_VIOLATIONS and subject.owner_user_id is None:
+            lock = retakes.lock_for_violations(db, user, lesson, subject, req.violations)
+        else:
+            retakes.consume_approval(db, user, lesson_id)
         db.commit()
     return {
         "score": score,
@@ -1240,7 +1275,37 @@ def submit_quiz(
         "pass_percent": PASS_PERCENT,
         "recorded": recorded,
         "results": results,
+        "lock": retakes.lock_payload(lock),
     }
+
+
+class RetakeRequestBody(BaseModel):
+    feedback: str = Field(min_length=1, max_length=600)
+
+
+@router.post("/{subject_id}/lessons/{lesson_id}/quiz/retake-request")
+def request_quiz_retake(
+    subject_id: int,
+    lesson_id: int,
+    req: RetakeRequestBody,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """A locked student explains what happened and asks their teacher for another try. Also allowed again after a
+    rejection, with new feedback."""
+    _visible_subject_or_404(db, subject_id, user)
+    lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
+    row = retakes.blocking_lock(db, user, lesson_id)
+    if row is None:
+        raise HTTPException(status_code=409, detail="This quiz is not locked, so there is nothing to request.")
+    if row.status == retakes.PENDING:
+        raise HTTPException(status_code=409, detail="Your request is already with your teacher.")
+    feedback = " ".join(req.feedback.split())   # one tidy paragraph
+    if len(feedback) < retakes.MIN_FEEDBACK_CHARS:
+        raise HTTPException(status_code=400, detail=f"Please write at least {retakes.MIN_FEEDBACK_CHARS} characters so your teacher understands what happened.")
+    retakes.send_request(db, user, row, feedback, lesson)
+    db.commit()
+    return {"lock": retakes.lock_payload(row)}
 
 
 @router.post("/{subject_id}/lessons/{lesson_id}/quiz/breakdown")

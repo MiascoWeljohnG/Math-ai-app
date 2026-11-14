@@ -98,6 +98,15 @@
         .banner.pass { color: var(--q-ink); background: var(--q-mint); border-color: var(--q-green); }
         .banner.fail { color: var(--danger); border-color: var(--danger); }
         .notice { margin: 0.8rem 0; padding: 0.7rem 1rem; border: 1px solid var(--danger); border-radius: 8px; color: var(--danger); font-weight: 700; }
+        /* ---- locked after violations: feedback to the teacher ---- */
+        .lock-box { margin: 0.8rem 0; padding: 1rem; border: 1px solid var(--danger); border-radius: 8px; display: grid; gap: 0.6rem; }
+        .lock-box h2 { margin: 0; font-size: 1.05rem; color: var(--danger); }
+        .lock-box p { margin: 0; }
+        .lock-box textarea { width: 100%; min-height: 6rem; resize: vertical; font: inherit; padding: 0.6rem 0.7rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); }
+        .lock-box .quote { padding: 0.6rem 0.8rem; border-left: 4px solid var(--border); background: var(--bg-input); border-radius: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .lock-box .lock-status { font-size: 0.9rem; min-height: 1.2em; }
+        .lock-box .lock-status.bad { color: var(--danger); }
+        .lock-box .row-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
         .review { margin-top: 1.4rem; display: grid; gap: 0.8rem; }
         .review-item { padding: 0.8rem 1rem; border: 1px solid var(--border); border-left-width: 5px; border-radius: 8px; background: var(--bg-input); overflow-wrap: anywhere; }
         .review-item.ok { border-left-color: var(--q-green); }
@@ -165,6 +174,7 @@
         <section id="screenStart" class="card screen" hidden>
             <h1 id="startTitle">Quiz</h1>
             <p class="muted" id="startSubtitle"></p>
+            <div class="banner pass" id="retakeNote" hidden>Your teacher approved a retake. This is your one extra try, and the same rules apply.</div>
             <ul class="facts">
                 <li><strong>Questions</strong><span id="factCount"></span></li>
                 <li><strong>Types</strong><span>Multiple choice, true or false, identification and exact-number answers</span></li>
@@ -246,6 +256,7 @@
             <p class="muted" id="resultSub"></p>
             <div class="banner" id="resultBanner"></div>
             <div class="notice" id="resultNotice" hidden></div>
+            <div id="resultLockBox" hidden></div>
             <div class="actions">
                 <a class="btn primary" id="nextLessonBtn" href="lessons.html" hidden>Next lesson</a>
                 <a class="btn" id="backToLessonBtn" href="lessons.html">Back to the lesson</a>
@@ -262,6 +273,14 @@
         </section>
 
         <!-- Something went wrong -->
+        <!-- Locked: the quiz was ended for violations and a teacher has to approve a retake -->
+        <section id="screenLocked" class="card screen" hidden>
+            <h1>Quiz locked</h1>
+            <p class="muted" id="lockSubtitle"></p>
+            <div id="lockBox"></div>
+            <div class="actions"><a class="btn" id="lockBack" href="lessons.html">Back to the lesson</a></div>
+        </section>
+
         <section id="screenError" class="card screen" hidden>
             <h1>Something went wrong</h1>
             <p class="error" id="errorText"></p>

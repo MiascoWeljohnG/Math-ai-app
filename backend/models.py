@@ -275,7 +275,8 @@ class LessonDeletionRequest(Base):
 
 
 class Notification(Base):
-    """One entry in an admin's bell. notify_admins() (notifications.py) writes them; routes/notification_routes.py reads them."""
+    """One entry in a bell: a school admin's or a teacher's (`admin_username` is whoever it is for, whatever their role).
+    notify_admins() / notify_teachers() (notifications.py) write them; routes/notification_routes.py reads them."""
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -285,6 +286,28 @@ class Notification(Base):
     message = Column(Text, nullable=False, default="")
     read = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class QuizRetakeRequest(Base):
+    """A student's quiz was ended for violations (leaving the tab, minimizing, shrinking the window). Until a
+    teacher approves, they cannot open or submit that lesson's quiz again.
+    status: locked (ended for violations, no feedback sent yet) -> pending (feedback sent, teacher decides)
+            -> approved (one more try) | rejected (still locked; the student may send new feedback)
+            -> used (the approved retake was taken; kept as history). One open row per student and lesson."""
+    __tablename__ = "quiz_retake_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True, nullable=False)
+    lesson_id = Column(Integer, ForeignKey("lessons.id"), index=True, nullable=False)
+    school_id = Column(Integer, index=True, nullable=True)   # the student's school: only its staff see the request
+    violations = Column(Integer, nullable=False, default=0)
+    status = Column(String, nullable=False, default="locked", index=True)
+    feedback = Column(Text, nullable=True)        # what the student wrote when asking to retake
+    teacher_note = Column(String, nullable=True)  # the teacher's reply, shown to the student
+    created_at = Column(DateTime, default=datetime.utcnow)   # when the quiz was ended
+    requested_at = Column(DateTime, nullable=True)
+    decided_at = Column(DateTime, nullable=True)
+    decided_by = Column(String, nullable=True)
 
 
 class PracticeSet(Base):

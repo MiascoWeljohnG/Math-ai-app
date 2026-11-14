@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine, SessionLocal, migrate_add_missing_columns, drop_legacy_full_name, backfill_user_status
 from models import User, Subject
 from bootstrap import ensure_schools, ensure_school_admins, retire_main_admins, warn_if_default_password
-from routes import approval_routes, auth_routes, user_routes, teacher_routes, materials_routes, profile_routes, subjects_routes, subject_deletion_routes, file_deletion_routes, lesson_deletion_routes, notification_routes, learning_routes, schools_routes, school_admin_routes, practice_routes
+from routes import approval_routes, auth_routes, user_routes, teacher_routes, materials_routes, profile_routes, subjects_routes, subject_deletion_routes, file_deletion_routes, lesson_deletion_routes, notification_routes, learning_routes, schools_routes, school_admin_routes, practice_routes, retake_routes
 import config
 
 Base.metadata.create_all(bind=engine)
@@ -163,6 +163,7 @@ app.include_router(learning_routes.router)
 app.include_router(schools_routes.router)
 app.include_router(school_admin_routes.router)
 app.include_router(practice_routes.router)
+app.include_router(retake_routes.router)
 
 @app.get("/")
 def root():

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from auth import check_password_strength, create_access_token, get_current_user, hash_password, verify_password
 from database import get_db
-from models import Material, Lesson, Notification, Reminder, SubjectDeletionRequest, SubjectDeletionVote, User
+from models import Material, Lesson, Notification, QuizRetakeRequest, Reminder, SubjectDeletionRequest, SubjectDeletionVote, User
 
 router = APIRouter(tags=["profile"])
 
@@ -60,6 +60,7 @@ _USERNAME_REFERENCES = (
     (SubjectDeletionRequest, SubjectDeletionRequest.requested_by),
     (SubjectDeletionVote, SubjectDeletionVote.admin_username),
     (Notification, Notification.admin_username),
+    (QuizRetakeRequest, QuizRetakeRequest.decided_by),
 )
 
 

@@ -62,7 +62,7 @@ function iconForSection(title) {
     if (/deletion/.test(t)) return ICONS.trash;
     if (/file|knowledge/.test(t)) return ICONS.files;
     if (/score|ranking|progress/.test(t)) return ICONS.chart;
-    if (/reminder/.test(t)) return ICONS.bell;
+    if (/reminder|retake/.test(t)) return ICONS.bell;
 
     if (/school/.test(t) && !/teachers|students/.test(t)) return ICONS.school;
     if (/lesson/.test(t)) return ICONS.lessons;

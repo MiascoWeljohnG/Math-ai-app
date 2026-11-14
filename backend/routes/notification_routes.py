@@ -1,8 +1,10 @@
-"""The admin bell: what the AI wasn't sure about, uploads by teachers, deleted files, deletion requests."""
+"""The bell. School admin: what the AI wasn't sure about, uploads by teachers, deleted files, deletion requests.
+Teacher: whether their uploads and AI-written lessons worked, and students whose quiz was ended for violations.
+Each person only reads the entries written for them."""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from auth import require_school_admin
+from auth import require_staff
 from database import get_db
 from models import Notification, User
 
@@ -15,7 +17,7 @@ def _mine(db: Session, user: User):
 
 
 @router.get("")
-def list_notifications(user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
+def list_notifications(user: User = Depends(require_staff), db: Session = Depends(get_db)):
     rows = _mine(db, user).order_by(Notification.created_at.desc(), Notification.id.desc()).all()
     for old in rows[KEEP_LATEST:]:
         db.delete(old)
@@ -34,14 +36,14 @@ def list_notifications(user: User = Depends(require_school_admin), db: Session =
 
 
 @router.post("/read-all")
-def mark_all_read(user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
+def mark_all_read(user: User = Depends(require_staff), db: Session = Depends(get_db)):
     _mine(db, user).filter(Notification.read.is_(False)).update({"read": True})
     db.commit()
     return {"message": "All notifications marked as read."}
 
 
 @router.post("/{notification_id}/read")
-def mark_read(notification_id: int, user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
+def mark_read(notification_id: int, user: User = Depends(require_staff), db: Session = Depends(get_db)):
     row = _mine(db, user).filter(Notification.id == notification_id).first()
     if row is None:
         raise HTTPException(status_code=404, detail="Notification not found")
@@ -51,7 +53,7 @@ def mark_read(notification_id: int, user: User = Depends(require_school_admin), 
 
 
 @router.delete("")
-def clear_notifications(user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
+def clear_notifications(user: User = Depends(require_staff), db: Session = Depends(get_db)):
     _mine(db, user).delete()
     db.commit()
     return {"message": "Notifications cleared."}

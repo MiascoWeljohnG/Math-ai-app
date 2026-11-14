@@ -290,6 +290,11 @@ td.nowrap { white-space: nowrap; }
 .bell-item .b-time { display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem; }
 .bell-empty { padding: 0 1rem 1rem; text-align: center; }
 
+/* teacher: quiz retake requests */
+.retake-feedback { max-width: 38ch; white-space: pre-wrap; overflow-wrap: anywhere; }
+.retake-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+#retakeSection .file-list .tag { max-width: none; white-space: normal; }
+
 /* teacher: "New subject" dialog (a native <dialog>, so it sits above everything else) */
 .subject-dialog { margin: auto; /* the global "* { margin: 0 }" reset removes the dialog's default centering */ background: var(--bg-elevated); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-xl); padding: 1.5rem; width: 460px; max-width: 92vw; max-height: 92vh; overflow-y: auto; }
 .subject-dialog::backdrop { background: rgba(14, 18, 38, 0.6); }

@@ -10,7 +10,7 @@ const base = `${API}/subjects/${subjectId}/lessons/${lessonId}/quiz`;
 const lessonUrl = (id) => `lessons.html?subject=${subjectId}&lesson=${id}`;
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ["screenLoading", "screenStart", "screenQuiz", "screenResult", "screenError"];
+const SCREENS = ["screenLoading", "screenStart", "screenQuiz", "screenResult", "screenLocked", "screenError"];
 const show = (name) => SCREENS.forEach(id => { $(id).hidden = id !== name; });
 const pad = (n) => String(n).padStart(2, "0");
 const clock = (seconds) => `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)}`;
@@ -89,6 +89,7 @@ async function generate() {
     try {
         meta = await api("/generate", { method: "POST" });
         quiz = meta.quiz;
+        if (meta.lock) { progress.stop(); return showLocked(); }
         progress.finish();
         await new Promise(resolve => setTimeout(resolve, 500));   // let the bar visibly hit 100%
         showStart();
@@ -112,6 +113,7 @@ function showStart() {
     $("prepMaxViolations").textContent = quiz.max_violations;
     $("bannerMaxViolations").textContent = quiz.max_violations;
     $("regenBtn").hidden = !meta.can_regenerate;
+    $("retakeNote").hidden = !meta.retake_approved;
     show("screenStart");
 }
 $("startBtn").addEventListener("click", startQuiz);
@@ -332,7 +334,7 @@ async function sendAnswers(reason) {
         const result = await api("/submit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ answers, seconds: elapsed }),
+            body: JSON.stringify({ answers, seconds: elapsed, violations }),
         });
         showResult(result, reason);
     } catch (error) {
@@ -357,14 +359,19 @@ function showResult(result, reason) {
     notice.hidden = reason === "manual";
     notice.textContent = reason === "time"
         ? "Time ran out, so your answers were submitted automatically."
-        : `You reached ${quiz.max_violations} violations, so the quiz ended and your answers were submitted automatically.`;
+        : `You reached ${quiz.max_violations} violations, so the quiz ended and your answers were submitted automatically.`
+          + (result.lock ? " Your teacher has been told." : "");
+    if (result.lock) renderLock($("resultLockBox"), result.lock);
+    else $("resultLockBox").hidden = true;
 
     // Passing (80%+) unlocks the next lesson. Below that, the student goes back to the lesson and retries.
     const banner = $("resultBanner");
     banner.className = `banner ${result.passed ? "pass" : "fail"}`;
     banner.textContent = result.passed
         ? `Passed! You scored ${result.pass_percent}% or higher.`
-        : `You need ${result.pass_percent}% or higher to move on. Review the lesson, then take the quiz again.`;
+        : result.lock
+            ? `You need ${result.pass_percent}% or higher to move on. Review the lesson while you wait for your teacher.`
+            : `You need ${result.pass_percent}% or higher to move on. Review the lesson, then take the quiz again.`;
     $("nextLessonBtn").hidden = !(result.passed && meta.next_lesson_id);
     $("backToLessonBtn").textContent = result.passed ? "Back to the lesson" : "Review the lesson";
     $("backToLessonBtn").classList.toggle("primary", !result.passed);
@@ -394,6 +401,7 @@ function showResult(result, reason) {
     typeset($("review"));
     loadPracticeLink(result.recorded);
     $("breakdown").hidden = true;
+    $("review").hidden = false;   // shown again on every result; hidden only once the step-by-step cards replace it
     if (result.recorded && !result.passed) loadBreakdown();   // a failed attempt gets the steps re-taught
 }
 
@@ -467,21 +475,21 @@ function renderBreakdown(text) {
         given.append(mark, givenLabel);
         card.append(given);
 
-        if (!outcome.correct) {
-            const right = document.createElement("p");
-            right.className = "answer-line";
-            richText(right, `Correct answer: ${outcome.correct_answer}`);
-            card.append(right);
-            if (steps[q.id]) {
-                const stepBody = document.createElement("div");
-                stepBody.className = "step-body";
-                renderFinalMessage(stepBody, steps[q.id]);
-                card.append(stepBody);
-            }
+        // The correct answer is shown on every card, right or wrong; the steps only for missed questions.
+        const right = document.createElement("p");
+        right.className = "answer-line";
+        richText(right, `Correct answer: ${outcome.correct_answer}`);
+        card.append(right);
+        if (!outcome.correct && steps[q.id]) {
+            const stepBody = document.createElement("div");
+            stepBody.className = "step-body";
+            renderFinalMessage(stepBody, steps[q.id]);
+            card.append(stepBody);
         }
         return card;
     });
     body.replaceChildren(...cards);
+    $("review").hidden = true;   // the cards above already show right/wrong, your answer, the correct answer and the steps
     if (tip) {
         const tipCard = document.createElement("div");
         tipCard.className = "tip-card";
@@ -507,6 +515,104 @@ async function init() {
     }
     quiz = meta.quiz;
     if (meta.next_lesson_id) $("nextLessonBtn").href = lessonUrl(meta.next_lesson_id);
-    if (quiz) showStart(); else generate();
+    $("lockBack").href = lessonUrl(lessonId);
+    if (meta.lock) showLocked();
+    else if (quiz) showStart();
+    else generate();
+}
+
+// ---------------------------------------------------------------- locked after violations
+// A quiz ended for violations stays locked until a teacher approves a retake. The server enforces it (no questions are
+// sent and submitting is refused); this only shows where the student stands and lets them send their feedback.
+function showLocked() {
+    $("lockSubtitle").textContent = `${meta.subject}: ${meta.lesson_title}`;
+    typeset($("lockSubtitle"));
+    renderLock($("lockBox"), meta.lock);
+    show("screenLocked");
+}
+
+function lockLine(text, className) {
+    const p = document.createElement("p");
+    if (className) p.className = className;
+    p.textContent = text;
+    return p;
+}
+
+// Builds the lock card into `container` (the lock screen, or under the result when the quiz has just ended).
+function renderLock(container, lock) {
+    container.hidden = false;
+    container.className = "lock-box";
+    const parts = [];
+    const heading = document.createElement("h2");
+    heading.textContent = lock.status === "pending" ? "Waiting for your teacher"
+        : lock.status === "rejected" ? "Your teacher did not approve a retake yet" : "You can't retake this quiz yet";
+    parts.push(heading);
+
+    if (lock.status === "locked") {
+        parts.push(lockLine(`Your quiz was ended after ${lock.violations} violations (leaving the quiz page). Your teacher has to approve a retake. Tell them what happened, then press Send.`));
+    } else if (lock.status === "pending") {
+        parts.push(lockLine("Your request was sent. You can retake the quiz once your teacher approves it."));
+        parts.push(lockLine(lock.feedback, "quote"));
+    } else {
+        if (lock.teacher_note) { parts.push(lockLine("Your teacher wrote:")); parts.push(lockLine(lock.teacher_note, "quote")); }
+        parts.push(lockLine("Review the lesson, then you can send a new request."));
+    }
+
+    const status = lockLine("", "lock-status");
+    status.setAttribute("role", "status");
+    if (lock.can_request) {
+        const box = document.createElement("textarea");
+        box.maxLength = 600;
+        box.placeholder = "What happened? For example: my internet dropped, or I opened another tab by mistake.";
+        box.setAttribute("aria-label", "Your feedback for your teacher");
+        const send = document.createElement("button");
+        send.type = "button";
+        send.className = "btn primary";
+        send.textContent = "Send request to my teacher";
+        send.addEventListener("click", async () => {
+            const feedback = box.value.trim();
+            if (feedback.length < 10) { status.className = "lock-status bad"; status.textContent = "Please write at least 10 characters so your teacher understands."; return; }
+            send.disabled = true;
+            try {
+                const { lock: next } = await api("/retake-request", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ feedback }),
+                });
+                meta.lock = next;
+                renderLock(container, next);
+            } catch (error) {
+                send.disabled = false;
+                status.className = "lock-status bad";
+                status.textContent = error.message;
+            }
+        });
+        parts.push(box, send);
+    }
+    if (lock.status === "pending") {
+        const check = document.createElement("button");
+        check.type = "button";
+        check.className = "btn";
+        check.textContent = "Check for an answer";
+        check.addEventListener("click", async () => {
+            check.disabled = true;
+            try {
+                meta = await api("");
+                quiz = meta.quiz;
+                if (meta.next_lesson_id) $("nextLessonBtn").href = lessonUrl(meta.next_lesson_id);
+                if (!meta.lock) return quiz ? showStart() : generate();   // approved: the quiz is open again
+                renderLock(container, meta.lock);   // rebuilds the card, so look the status line up again
+                container.querySelector(".lock-status").textContent = meta.lock.status === "pending"
+                    ? "Still waiting for your teacher." : "Your teacher answered. See above.";
+            } catch (error) {
+                status.className = "lock-status bad";
+                status.textContent = error.message;
+                check.disabled = false;
+            }
+        });
+        parts.push(check);
+    }
+    parts.push(status);
+    container.replaceChildren(...parts);
 }
 init();

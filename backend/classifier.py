@@ -292,7 +292,7 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
     {"file name": "Algebra"}, sent when the uploader re-submits those files.
     """
     from models import Material, Subject
-    from notifications import notify_admins
+    from notifications import notify_admins, notify_teacher
     from progress import UPLOAD_BRANCHES
     from school import shared_subjects
     from rag import save_originals
@@ -359,12 +359,14 @@ async def ingest_with_detection(files: list[UploadFile], branch: str, branches_j
         try:
             stored = await run_in_threadpool(save_originals, group, target, None, school_id)
         except (ValueError, FileNotFoundError) as exc:
+            notify_teacher(db, username, "upload_failed", "Upload failed", f"{', '.join(name for name, _ in group)}: {str(exc)[:200]}")
             db.commit()   # keep the records of groups that were already saved
             _start_jobs(jobs, indexing)
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             # Without this, the error escapes as a bare 500 that carries no CORS headers, and the
             # browser can only report "Failed to fetch". An HTTPException reaches the page intact.
+            notify_teacher(db, username, "upload_failed", "Upload failed", f"{', '.join(name for name, _ in group)}: {str(exc)[:200]}")
             db.commit()
             _start_jobs(jobs, indexing)
             logging.getLogger(__name__).exception("Upload failed while saving")
