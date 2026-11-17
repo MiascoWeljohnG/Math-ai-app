@@ -164,7 +164,7 @@ function updateSubjectProgress() {
 function showLockHint() {
     const blocker = activeLessons.find(lesson => !lesson.completed);
     lockHint.textContent = blocker
-        ? `Finish "${blocker.title}" first. Pass its quiz or mark it complete to unlock the next lesson.`
+        ? `Finish "${blocker.title}" first. Pass its quiz (80% or higher) to unlock the next lesson.`
         : "Finish the previous lesson to unlock this one.";
     lockHint.hidden = false;
 }
@@ -198,8 +198,15 @@ function renderLessonList(lessons) {
         if (lesson.locked || index === upNext) {
             const state = document.createElement("span");
             state.className = `lesson-state${lesson.locked ? "" : " next"}`;
-            state.setAttribute("aria-hidden", "true");
-            state.textContent = lesson.locked ? "Locked" : "Up next";
+            if (lesson.locked) {
+                state.innerHTML = ICON_LOCK;   // a padlock instead of the word "Locked"
+                state.setAttribute("role", "img");
+                state.setAttribute("aria-label", "Locked");
+                state.title = "Locked";
+            } else {
+                state.setAttribute("aria-hidden", "true");
+                state.textContent = "Up next";
+            }
             button.append(state);
         }
 
@@ -271,7 +278,7 @@ async function selectLesson(lessonId) {
 
 const quizUrl = (subjectId, lessonId) => `quiz.html?subject=${subjectId}&lesson=${lessonId}`;
 
-// After ">" completes a lesson: the next lesson is open; offer the quiz now, or carry on to the next lesson.
+// ">" on a lesson that is not finished yet: a lesson only counts as complete once its quiz is passed.
 const readyModal = document.getElementById("readyModal");
 function askReadyForQuiz(subjectId, lessonId, onLater) {
     document.getElementById("readyYes").onclick = () => { window.location.href = quizUrl(subjectId, lessonId); };
@@ -279,7 +286,8 @@ function askReadyForQuiz(subjectId, lessonId, onLater) {
     readyModal.showModal();
 }
 
-// One ">" button: marks the lesson complete (which unlocks the next one), offers the quiz, then moves on.
+// One ">" button: on a finished lesson it moves on to the next one; otherwise it offers the quiz.
+// Nothing is marked complete here. Passing the quiz is what completes a lesson and unlocks the next one.
 function buildCompleteFooter(subjectId, lesson) {
     const footer = document.createElement("div");
     footer.className = "lesson-footer";
@@ -287,8 +295,8 @@ function buildCompleteFooter(subjectId, lesson) {
     button.type = "button";
     button.className = "complete-btn continue-btn";
     button.textContent = ">";
-    button.title = "Mark as complete and continue";
-    button.setAttribute("aria-label", "Mark as complete and continue");
+    button.title = lesson.completed ? "Continue to the next lesson" : "Take the quiz to finish this lesson";
+    button.setAttribute("aria-label", button.title);
     const error = document.createElement("span");
     error.className = "complete-error";
     footer.append(button, error);
@@ -308,30 +316,7 @@ function buildCompleteFooter(subjectId, lesson) {
             else askReadyForQuiz(subjectId, lesson.id);
             return;
         }
-        button.disabled = true;
-        try {
-            const response = await fetch(`${API}/subjects/${subjectId}/lessons/${lesson.id}/completion`, {
-                method: "PUT",
-                headers: { ...lessonAuthHeaders(), "Content-Type": "application/json" },
-                body: JSON.stringify({ completed: true }),
-            });
-            if (!response.ok) throw new Error("Couldn't save your progress. Please try again.");
-
-            lesson.completed = true;
-            if (activeSubjectId === subjectId) {
-                const listed = activeLessons.find(item => item.id === lesson.id);
-                if (listed) listed.completed = true;
-                await refreshLessons();   // the next lesson unlocks
-            }
-            askReadyForQuiz(subjectId, lesson.id, () => {
-                const following = followingLesson();
-                if (following) selectLesson(following.id);
-            });
-        } catch (err) {
-            error.textContent = err.message;
-        } finally {
-            button.disabled = false;
-        }
+        askReadyForQuiz(subjectId, lesson.id);   // not completed yet: the quiz is the only way to finish the lesson
     });
     return footer;
 }

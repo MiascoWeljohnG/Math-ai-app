@@ -1,0 +1,29 @@
+/* Materials page: "Ask the AI" side panel.
+   Everything here is scoped to .ask-pane so it can't affect the chat page (user.html) or any other box. */
+
+.ask-pane { flex: 1; min-width: 280px; max-width: 380px; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg-elevated-2); min-height: 0; }
+.ask-pane .ask-pane-header { padding: 0.9rem 1.1rem; border-bottom: 1px solid var(--border); font-size: 0.85rem; color: var(--text-muted); flex: none; }
+
+/* The ONLY scrolling area of the panel. */
+.ask-pane .ask-log { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 1rem; display: flex; flex-direction: column; gap: 0.7rem; }
+
+/* Bubbles grow to fit their whole content: no height cap, no scrollbar of their own.
+   flex: none stops the flex column from squeezing a bubble (the cause of the inner scrollbars). */
+.ask-pane .ask-msg { flex: none; height: auto; max-height: none; overflow: visible; padding: 0.6rem 0.85rem; border-radius: var(--r-md); font-size: 0.85rem; line-height: 1.4; white-space: pre-wrap; max-width: 90%; overflow-wrap: anywhere; }
+.ask-pane .ask-msg.user { background: var(--accent); color: var(--on-accent); align-self: flex-end; }
+.ask-pane .ask-msg.bot { background: var(--bg-elevated); border: 1px solid var(--border); align-self: flex-start; }
+.ask-pane .ask-note { flex: none; align-self: center; font-size: 0.72rem; color: var(--text-muted); text-align: center; padding: 0.2rem 0.5rem; }
+
+/* Markdown content inside a bubble */
+.ask-pane .ask-msg > *:first-child { margin-top: 0; }
+.ask-pane .ask-msg > *:last-child { margin-bottom: 0; }
+.ask-pane .ask-msg p, .ask-pane .ask-msg ul, .ask-pane .ask-msg ol { margin: 0.4rem 0; padding-left: 0; }
+.ask-pane .ask-msg ul, .ask-pane .ask-msg ol { padding-left: 1.2rem; }
+.ask-pane .ask-msg pre { white-space: pre-wrap; overflow: visible; max-height: none; }
+.ask-pane .ask-msg table { display: block; max-width: 100%; overflow-x: auto; }   /* only a wide table may scroll sideways */
+.ask-pane mjx-container[display="true"] { max-width: 100%; overflow-x: auto; overflow-y: hidden; }   /* only a wide formula scrolls sideways */
+
+.ask-pane .ask-input-row { display: flex; gap: 0.5rem; padding: 0.75rem; border-top: 1px solid var(--border); flex: none; }
+.ask-pane .ask-input-row input { flex: 1; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font-size: 0.85rem; }
+.ask-pane .ask-input-row button { padding: 0.6rem 1rem; border: none; border-radius: 8px; background: var(--accent); color: var(--on-accent); cursor: pointer; font-size: 0.85rem; }
+.ask-pane .ask-input-row button:disabled { opacity: 0.5; cursor: not-allowed; }

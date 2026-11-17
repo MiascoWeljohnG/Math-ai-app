@@ -65,7 +65,8 @@
         .lesson-row.locked:hover { background: transparent; border-color: var(--field-border); }
         .lesson-row.locked .lesson-badge { background: var(--hover-bg); color: var(--text-muted); }
         .lesson-title { flex: 1; min-width: 0; }
-        .lesson-state { flex: none; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+        .lesson-state { flex: none; display: inline-flex; align-items: center; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+        .lesson-state .icon { width: 1.15rem; height: 1.15rem; stroke-width: 1.8; }
         .lesson-state.next { color: var(--accent); }
         .lock-hint { margin: 0.9rem 0 0; padding: 0.7rem 0.9rem; border-radius: var(--r-sm); background: var(--sun2); color: var(--sun-ink); font-size: 0.85rem; line-height: 1.45; }
         .lesson-empty-actions { margin-top: 1rem; }
@@ -180,12 +181,12 @@ mjx-container::-webkit-scrollbar-thumb {
             </div>
         </dialog>
 
-        <!-- Asked right after "Mark as complete" -->
+        <!-- Asked when the student presses ">" on a lesson they have not passed yet -->
         <dialog id="readyModal" class="lesson-modal">
-            <div class="modal-header"><h2>Lesson complete!</h2></div>
-            <p style="line-height:1.5; margin:0;">The next lesson is now unlocked. Want to take the quiz as well? You need 80% or higher to pass it. It is timed, the AI sets the difficulty for this topic, and switching tabs or windows, minimizing the browser or shrinking the window counts as a violation, and 3 violations end the quiz.</p>
+            <div class="modal-header"><h2>Ready for the quiz?</h2></div>
+            <p style="line-height:1.5; margin:0;">Passing the quiz finishes this lesson and unlocks the next one. You need 80% or higher to pass it. It is timed, the AI sets the difficulty for this topic, and switching tabs or windows, minimizing the browser or shrinking the window counts as a violation, and 3 violations end the quiz.</p>
             <div style="display:flex; gap:0.6rem; margin-top:1.2rem;">
-                <button id="readyNotYet" type="button" class="complete-btn" style="flex:1;">Maybe later</button>
+                <button id="readyNotYet" type="button" class="complete-btn" style="flex:1;">Not yet</button>
                 <button id="readyYes" type="button" class="complete-btn" style="flex:1; background:var(--accent); border-color:var(--accent); color:#fff;">Yes, start the quiz</button>
             </div>
         </dialog>

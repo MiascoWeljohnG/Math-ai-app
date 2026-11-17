@@ -13,6 +13,8 @@ router = APIRouter(tags=["profile"])
 # The photo is stored as a small data-URL (the browser shrinks it first), so
 # no file-upload plumbing is needed. Hard cap keeps the DB row sane.
 MAX_AVATAR_CHARS = 400_000
+# Only plain raster photos are accepted (no SVG, which can carry scripts).
+_ALLOWED_AVATAR_PREFIXES = ("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")
 
 
 class ProfileUpdate(BaseModel):
@@ -184,7 +186,7 @@ def update_profile(
         user.student_id = req.student_id.strip()
 
     if req.avatar is not None:
-        if req.avatar and not req.avatar.startswith("data:image/"):
+        if req.avatar and not req.avatar.startswith(_ALLOWED_AVATAR_PREFIXES):
             raise HTTPException(400, "Invalid image")
         if len(req.avatar) > MAX_AVATAR_CHARS:
             raise HTTPException(400, "Image is too large")

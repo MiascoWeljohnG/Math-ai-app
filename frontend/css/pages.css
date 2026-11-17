@@ -62,8 +62,6 @@ main { padding-left: clamp(1rem, 3vw, 2.5rem) !important; padding-right: clamp(1
 .sidebar { background: var(--bg-elevated) !important; }
 
 /* modules (materials.html) */
-.ask-msg.user, .ask-input-row button { color: var(--on-accent) !important; }
-.ask-msg { border-radius: var(--r-md) !important; }
 .file-item.active { background: var(--nav-active-bg) !important; color: var(--accent) !important; font-weight: 600; }
 .file-item { border-radius: var(--r-sm) !important; }
 .branch-chip { font-family: var(--font-body); }

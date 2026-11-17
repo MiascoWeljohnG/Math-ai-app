@@ -57,6 +57,7 @@ async function load() {
         original = await res.json();
         fill(original);
         localStorage.setItem("profile_avatar", original.avatar || "");
+        localStorage.setItem("profile_avatar_owner", localStorage.getItem("username") || "");
         localStorage.setItem("full_name", original.display_name || "");
         localStorage.setItem("first_name", original.first_name || "");
         if (typeof refreshNavProfile === "function") refreshNavProfile();
@@ -121,6 +122,7 @@ $("profileForm").addEventListener("submit", async (e) => {
         localStorage.setItem("full_name", data.display_name);
         localStorage.setItem("first_name", data.first_name);
         localStorage.setItem("profile_avatar", data.avatar || "");
+        localStorage.setItem("profile_avatar_owner", localStorage.getItem("username") || "");
         if (typeof refreshNavProfile === "function") refreshNavProfile();
         showMsg("Profile saved.", "ok");
     } catch (err) {

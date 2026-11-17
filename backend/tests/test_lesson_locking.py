@@ -1,12 +1,12 @@
-"""Lesson locking: a student opens a shared subject's lessons in order. Passing the quiz or marking a lesson complete
-unlocks the next one. Teachers and a student's own personal subject are never locked."""
+"""Lesson locking: a student opens a shared subject's lessons in order. Passing the quiz unlocks the next one
+(students cannot just mark a lesson complete). Teachers and a student's own personal subject are never locked."""
 import json
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from models import Lesson, LessonQuiz, Subject, User
+from models import Lesson, LessonCompletion, LessonQuiz, Subject, User
 
 
 @pytest.fixture
@@ -68,10 +68,24 @@ def test_a_locked_lesson_and_its_quiz_cannot_be_opened_by_guessing_the_id(world)
     assert world.post(f"{base}/{two.id}/quiz/submit", json={"answers": {}}).status_code == 403
 
 
-def test_marking_a_lesson_complete_unlocks_the_next_one(world):
+def finish(world, lesson):
+    """What passing the quiz records, without going through the quiz."""
+    student = world.db.query(User).filter(User.username == "stud").one()
+    world.db.add(LessonCompletion(user_id=student.id, lesson_id=lesson.id))
+    world.db.commit()
+
+
+def test_a_student_cannot_mark_a_shared_lesson_complete_without_the_quiz(world):
     one, two, _ = make_lessons(world)
     base = f"/subjects/{world.shared.id}/lessons"
-    assert world.put(f"{base}/{one.id}/completion", json={"completed": True}).status_code == 200
+    assert world.put(f"{base}/{one.id}/completion", json={"completed": True}).status_code == 403
+    assert states(world) == [(False, False), (False, True), (False, True)]
+
+
+def test_a_finished_lesson_unlocks_the_next_one(world):
+    one, two, _ = make_lessons(world)
+    base = f"/subjects/{world.shared.id}/lessons"
+    finish(world, one)
     assert states(world) == [(True, False), (False, False), (False, True)]
     assert world.get(f"{base}/{two.id}").status_code == 200
 
@@ -79,8 +93,8 @@ def test_marking_a_lesson_complete_unlocks_the_next_one(world):
 def test_undoing_a_lesson_locks_everything_after_it_again(world):
     one, two, _ = make_lessons(world)
     base = f"/subjects/{world.shared.id}/lessons"
-    world.put(f"{base}/{one.id}/completion", json={"completed": True})
-    world.put(f"{base}/{two.id}/completion", json={"completed": True})
+    finish(world, one)
+    finish(world, two)
     assert states(world) == [(True, False), (True, False), (False, False)]
     world.put(f"{base}/{one.id}/completion", json={"completed": False})
     assert states(world) == [(False, False), (True, True), (False, True)]

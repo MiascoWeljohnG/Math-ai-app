@@ -202,7 +202,7 @@ def _require_unlocked(db: Session, subject: Subject, lesson: Lesson, user: User)
     )
     done = _completed_ids(db, user, [item.id for item in published])
     if lesson.id in _locked_ids(published, done):
-        raise HTTPException(status_code=403, detail="Finish the previous lesson (pass its quiz or mark it complete) to unlock this one.")
+        raise HTTPException(status_code=403, detail="Pass the previous lesson's quiz to unlock this one.")
 
 
 def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: bool = False, locked: bool = False) -> dict:
@@ -344,10 +344,13 @@ def set_lesson_completion(
     db: Session = Depends(get_db),
 ):
     """The "Mark as complete" button. Per student; this is what the progress bars count."""
-    _visible_subject_or_404(db, subject_id, user)
+    subject = _visible_subject_or_404(db, subject_id, user)
     lesson = db.query(Lesson).filter(Lesson.id == lesson_id, Lesson.subject_id == subject_id).first()
     if lesson is None:
         raise HTTPException(status_code=404, detail="Lesson not found")
+    if req.completed and _gated(subject, user):
+        # A student's lesson in a shared subject is finished by passing its quiz (the quiz submit records it), not by a click.
+        raise HTTPException(status_code=403, detail="Pass this lesson's quiz (80% or higher) to complete it.")
     row = db.query(LessonCompletion).filter(
         LessonCompletion.user_id == user.id,
         LessonCompletion.lesson_id == lesson_id,

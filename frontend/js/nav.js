@@ -95,7 +95,9 @@ function initialsFor() {
 }
 
 function profileAvatarHTML() {
-    const photo = localStorage.getItem("profile_avatar") || "";
+    // Only trust the cached photo if it was saved for the account that is signed in right now.
+    const mine = localStorage.getItem("profile_avatar_owner") === (localStorage.getItem("username") || "");
+    const photo = mine ? (localStorage.getItem("profile_avatar") || "") : "";
     const initials = initialsFor();
     return photo
         ? `<img class="avatar-photo" src="${escapeNavText(photo)}" alt="" aria-hidden="true">`
@@ -288,6 +290,19 @@ function initNavDrawer(options = {}) {
             navUser.innerHTML = `${profileAvatarHTML()}<span class="nav-user-text"><span class="nav-user-name">${escapeNavText(name)}</span><span class="nav-user-role">${escapeNavText(roleLine)}</span></span>`;
         }
     };
+    // Always load the signed-in user's own photo from the server, so a photo cached in this browser
+    // by another account can never show up in the sidebar.
+    if (localStorage.getItem("token")) {
+        fetch(`${API}/profile`, { headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` } })
+            .then(r => (r.ok ? r.json() : null))
+            .then(p => {
+                if (!p) return;
+                localStorage.setItem("profile_avatar", p.avatar || "");
+                localStorage.setItem("profile_avatar_owner", localStorage.getItem("username") || "");
+                window.refreshNavProfile();
+            })
+            .catch(() => {});
+    }
     drawer.querySelector(".nav-theme-compact").addEventListener("click", () => {
         toggleTheme();
         const sw = document.getElementById("navThemeSwitch");

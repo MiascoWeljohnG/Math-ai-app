@@ -124,7 +124,8 @@ $("regenBtn").addEventListener("click", async () => {
 // ---------------------------------------------------------------- the quiz
 function startQuiz() {
     if (isWindowTooSmall()) {
-        uiAlert("Your browser window is too small. Please maximize it (use the full screen) and press Start again.", { title: "Maximize your window" });
+        const m = windowSizes();
+        uiAlert(`Your browser window is too small. Please maximize it (use the full screen) and press Start again.\n\nIf it is already maximized, reset the page zoom to 100% (Ctrl + 0) and try again. (Window ${m.w}\u00d7${m.h}, screen ${m.availW}\u00d7${m.availH}.)`, { title: "Maximize your window" });
         return;
     }
     smallWindow = false;
@@ -280,12 +281,24 @@ window.addEventListener("focus", comeBack);
 
 // Small window: compared with the screen, so a half-screen, split-screen or restored (un-maximized) window is caught.
 // On phones/tablets only the width is checked, because the on-screen keyboard changes the height.
+// outerWidth/innerWidth are scaled differently by browser zoom, display scaling and some privacy settings
+// (e.g. Brave's fingerprint protection), so the larger of the two readings is used. Otherwise a window that is
+// already maximized could be judged "too small" and the quiz could never start.
+function windowSizes() {
+    return {
+        touch: window.matchMedia("(pointer: coarse)").matches,
+        availW: screen.availWidth || screen.width || 0,
+        availH: screen.availHeight || screen.height || 0,
+        w: Math.max(window.outerWidth || 0, window.innerWidth || 0),
+        h: Math.max(window.outerHeight || 0, window.innerHeight || 0),
+    };
+}
 function isWindowTooSmall() {
-    const touch = window.matchMedia("(pointer: coarse)").matches;
-    const availW = screen.availWidth || screen.width, availH = screen.availHeight || screen.height;
-    const w = window.outerWidth || window.innerWidth, h = window.outerHeight || window.innerHeight;
-    if (w < availW * 0.8) return true;
-    return !touch && h < availH * 0.8;
+    const m = windowSizes();
+    if (!m.availW || !m.availH) return false;   // the browser did not report a screen size: cannot tell, so do not block
+    // Below 60% catches a half-screen or restored window; a maximized one (even with zoom or scaling) passes.
+    if (m.w < m.availW * 0.6) return true;
+    return !m.touch && m.h < m.availH * 0.6;
 }
 
 let resizeTimer = 0;
