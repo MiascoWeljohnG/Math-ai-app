@@ -60,6 +60,9 @@ def _save_certificate(db: Session, user: User, data: bytes, content_type: str, e
     return ref
 
 
+TERMS_VERSION = "2026-11-17"   # keep in step with the date on frontend/terms.html and privacy.html
+
+
 @router.post("/register")
 async def register(
     request: Request,
@@ -72,11 +75,15 @@ async def register(
     password: str = Form(...),
     school_id: int = Form(...),           # one of the two fixed schools
     certificate: UploadFile = File(...),  # proof of enrollment (PDF / PNG / JPG)
+    accept_terms: str = Form(""),         # "true" once the Terms of Service and Privacy Policy were accepted
     db: Session = Depends(get_db),
 ):
     """Self-service sign-up creates a PENDING student and nothing else: no token, no access, and the role is
     never taken from the request. A reviewer of the chosen school has to approve it (routes/approval_routes.py)."""
     ratelimit.limit(request, "register", max_hits=config.SIGNUP_ATTEMPTS_PER_HOUR, per_seconds=3600)
+
+    if accept_terms.strip().lower() != "true":
+        raise HTTPException(400, "Please agree to the Terms of Service and Privacy Policy")
 
     student_id = student_id.strip()
     last_name = " ".join(last_name.split())
@@ -120,7 +127,9 @@ async def register(
         db.add(user)
         db.flush()
         ref = _save_certificate(db, user, data, content_type, ext, certificate.filename)
-        db.add(AuditLog(actor=student_id, school_id=school.id, action="student.register", target=student_id))
+        # the detail is the proof of consent: which version of the legal pages was accepted (the row's time says when)
+        db.add(AuditLog(actor=student_id, school_id=school.id, action="student.register", target=student_id,
+                        detail=f"accepted terms/privacy version {TERMS_VERSION}"))
         db.commit()
     except Exception:
         db.rollback()   # no half-created account, and no orphaned file

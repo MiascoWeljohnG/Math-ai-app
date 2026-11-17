@@ -1,4 +1,5 @@
 const ICON_CHECK = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+const ICON_LOCK = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 function lessonAuthHeaders() {
     return { Authorization: `Bearer ${localStorage.getItem("token")}` };
 }
@@ -16,8 +17,13 @@ function typesetMath(...elements) {
     if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise(elements).catch(err => console.log(err));
 }
 
-const subjectList = document.getElementById("subjectList");
+const subjectSelect = document.getElementById("subjectSelect");
+const openLessons = document.getElementById("openLessons");
+const openLessonsTitle = document.getElementById("openLessonsTitle");
+const openLessonsSub = document.getElementById("openLessonsSub");
+const pickerError = document.getElementById("pickerError");
 const lessonListContainer = document.getElementById("lessonListContainer");
+const lockHint = document.getElementById("lockHint");
 const lessonContent = document.getElementById("lessonContent");
 const subjectProgress = document.getElementById("subjectProgress");
 const subjectProgressFill = document.getElementById("subjectProgressFill");
@@ -27,6 +33,7 @@ const subjectProgressPct = document.getElementById("subjectProgressPct");
 // Modal Elements
 const lessonModal = document.getElementById("lessonModal");
 document.getElementById("closeLessonModal").addEventListener("click", () => lessonModal.close());
+openLessons.addEventListener("click", () => { if (!lessonModal.open) lessonModal.showModal(); });
 
 const generateBox = document.getElementById("generateBox");
 const generateTopic = document.getElementById("generateTopic");
@@ -39,6 +46,11 @@ let subjects = [];
 let activeSubjectId = null;
 let activeLessonId = null;
 let activeLessons = [];
+
+function showPickerError(message) {
+    pickerError.textContent = message;
+    pickerError.hidden = !message;
+}
 
 async function loadSubjects() {
     try {
@@ -55,53 +67,58 @@ async function loadSubjects() {
             await selectSubject(initialSubject.id, { openList: !requestedLesson });
             if (requestedLesson && activeLessons.some(lesson => lesson.id === requestedLesson)) await selectLesson(requestedLesson);
             else if (requestedLesson && !lessonModal.open) lessonModal.showModal();
-        } else subjectList.textContent = "No subjects are available yet.";
+        }
     } catch (error) {
-        subjectList.textContent = error.message;
+        showPickerError(error.message);
+        subjectSelect.replaceChildren(new Option("Couldn't load subjects", ""));
     }
 }
 
 function renderSubjects() {
-    const buttons = subjects.map(subject => {
-        const button = document.createElement("button");
-        button.type = "button";
-        
-        const isActive = subject.id === activeSubjectId;
-        button.className = `subject-btn ${isActive ? "active" : ""}`;
-        
-        // Add the (...) to the active subject
-        button.textContent = `${subject.name}${subject.is_personal ? " (personal)" : ""}${isActive ? " (...)" : ""}`;
-        
-        // Single click selects the subject (and opens modal if already active)
-        button.addEventListener("click", () => {
-            if (!isActive) selectSubject(subject.id);
-            else if (!lessonModal.open) lessonModal.showModal();
-        });
-        
-        // Double click pops up the modal safely
-        button.addEventListener("dblclick", () => {
-            if (!lessonModal.open) lessonModal.showModal();
-        });
-        
-        return button;
-    });
-    subjectList.replaceChildren(...buttons);
+    if (subjects.length === 0) {
+        subjectSelect.replaceChildren(new Option("No subjects are available yet", ""));
+        subjectSelect.disabled = true;
+        return;
+    }
+    subjectSelect.replaceChildren(...subjects.map(subject =>
+        new Option(`${subject.name}${subject.is_personal ? " (personal)" : ""}`, String(subject.id), false, subject.id === activeSubjectId)));
+    subjectSelect.disabled = false;
+}
+
+subjectSelect.addEventListener("change", () => {
+    const id = Number(subjectSelect.value);
+    if (id && id !== activeSubjectId) selectSubject(id);
+});
+
+// The lesson button doubles as a status line: current lesson (or a prompt) plus how far through the subject you are.
+function updateLessonButton() {
+    const total = activeLessons.length;
+    const completed = activeLessons.filter(lesson => lesson.completed).length;
+    const current = activeLessons.find(lesson => lesson.id === activeLessonId);
+    openLessonsTitle.textContent = current ? current.title : (total ? "Choose a lesson" : "No lessons yet");
+    openLessonsSub.textContent = total ? `${completed} of ${total} complete` : "";
+    openLessons.disabled = activeSubjectId === null;
+}
+
+function showPlaceholder(text) {
+    const placeholder = document.createElement("p");
+    placeholder.className = "lesson-empty";
+    placeholder.textContent = text;
+    lessonContent.replaceChildren(placeholder);
 }
 
 async function selectSubject(subjectId, { openList = true } = {}) {
     activeSubjectId = subjectId;
+    subjectSelect.value = String(subjectId);
+    showPickerError("");
     generateBox.hidden = !subjects.find(subject => subject.id === subjectId)?.is_personal;
     activeLessonId = null;
     activeLessons = [];
     subjectProgress.hidden = true;
-    renderSubjects();
+    lockHint.hidden = true;
     lessonListContainer.textContent = "Loading lessons…";
-    lessonContent.replaceChildren();
-    
-    const placeholder = document.createElement("p");
-    placeholder.className = "lesson-empty";
-    placeholder.textContent = "Subject selected. Tap the subject button above again to pick a lesson.";
-    lessonContent.appendChild(placeholder);
+    updateLessonButton();
+    showPlaceholder("Subject selected. Pick a lesson to begin.");
 
     try {
         const response = await fetch(`${API}/subjects/${subjectId}/lessons`, { headers: lessonAuthHeaders() });
@@ -111,15 +128,26 @@ async function selectSubject(subjectId, { openList = true } = {}) {
         activeLessons = lessons;
         renderLessonList(activeLessons);
         updateSubjectProgress();
-        
-        // Automatically pop up the modal when a new subject is selected
+
+        // Automatically pop up the lesson list when a new subject is selected
         if (openList && !lessonModal.open) lessonModal.showModal();
     } catch (error) {
         if (activeSubjectId === subjectId) lessonListContainer.textContent = error.message;
     }
 }
 
+// Re-read the list from the server: completing (or un-completing) a lesson changes which later ones are locked.
+async function refreshLessons() {
+    const subjectId = activeSubjectId;
+    const response = await fetch(`${API}/subjects/${subjectId}/lessons`, { headers: lessonAuthHeaders() });
+    if (!response.ok || activeSubjectId !== subjectId) return;
+    activeLessons = await response.json();
+    renderLessonList(activeLessons);
+    updateSubjectProgress();
+}
+
 function updateSubjectProgress() {
+    updateLessonButton();
     const total = activeLessons.length;
     if (total === 0) {
         subjectProgress.hidden = true;
@@ -133,62 +161,105 @@ function updateSubjectProgress() {
     subjectProgress.hidden = false;
 }
 
+function showLockHint() {
+    const blocker = activeLessons.find(lesson => !lesson.completed);
+    lockHint.textContent = blocker
+        ? `Finish "${blocker.title}" first. Pass its quiz or mark it complete to unlock the next lesson.`
+        : "Finish the previous lesson to unlock this one.";
+    lockHint.hidden = false;
+}
+
 function renderLessonList(lessons) {
     if (lessons.length === 0) {
         lessonListContainer.textContent = "No lessons here yet.";
         return;
     }
-    const buttons = lessons.map(lesson => {
+    const upNext = lessons.findIndex(lesson => !lesson.completed && !lesson.locked);
+    const rows = lessons.map((lesson, index) => {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = lesson.id === activeLessonId ? "active" : "";
-        button.setAttribute("aria-label", lesson.completed ? `${lesson.title} (completed)` : lesson.title);
-        const check = document.createElement("span");
-        check.className = "lesson-check";
-        check.setAttribute("aria-hidden", "true");
-        check.innerHTML = lesson.completed ? ICON_CHECK : "";
+        button.className = ["lesson-row",
+            lesson.id === activeLessonId ? "active" : "",
+            lesson.completed ? "done" : "",
+            lesson.locked ? "locked" : ""].filter(Boolean).join(" ");
+        const status = lesson.locked ? "locked" : lesson.completed ? "completed" : "";
+        button.setAttribute("aria-label", status ? `${lesson.title} (${status})` : lesson.title);
+        if (lesson.locked) button.setAttribute("aria-disabled", "true");
+
+        const badge = document.createElement("span");
+        badge.className = "lesson-badge";
+        badge.setAttribute("aria-hidden", "true");
+        badge.innerHTML = lesson.locked ? ICON_LOCK : lesson.completed ? ICON_CHECK : String(index + 1);
         const title = document.createElement("span");
+        title.className = "lesson-title";
         title.textContent = lesson.title;
-        button.append(check, title);
-        
-        button.addEventListener("click", () => selectLesson(lesson.id));
+        button.append(badge, title);
+
+        if (lesson.locked || index === upNext) {
+            const state = document.createElement("span");
+            state.className = `lesson-state${lesson.locked ? "" : " next"}`;
+            state.setAttribute("aria-hidden", "true");
+            state.textContent = lesson.locked ? "Locked" : "Up next";
+            button.append(state);
+        }
+
+        button.addEventListener("click", () => {
+            if (lesson.locked) showLockHint();
+            else selectLesson(lesson.id);
+        });
         return button;
     });
-    lessonListContainer.replaceChildren(...buttons);
+    lessonListContainer.replaceChildren(...rows);
     typesetMath(lessonListContainer);
 }
 
 async function selectLesson(lessonId) {
+    const listed = activeLessons.find(lesson => lesson.id === lessonId);
+    if (listed && listed.locked) {   // e.g. a stale ?lesson= link
+        showLockHint();
+        if (!lessonModal.open) lessonModal.showModal();
+        return;
+    }
     activeLessonId = lessonId;
     const subjectId = activeSubjectId;
+    lockHint.hidden = true;
     renderLessonList(activeLessons);
-    
+    updateLessonButton();
+
     // Hide the modal once a lesson is picked
     lessonModal.close();
-    
+
     lessonContent.innerHTML = '<p class="lesson-empty">Loading lesson content...</p>';
-    
+
     try {
         const response = await fetch(
             `${API}/subjects/${subjectId}/lessons/${lessonId}`,
             { headers: lessonAuthHeaders() },
         );
+        if (response.status === 403) {   // locked on the server: our list was out of date
+            activeLessonId = null;
+            await refreshLessons();
+            showPlaceholder("This lesson is locked. Finish the one before it to unlock it.");
+            showLockHint();
+            if (!lessonModal.open) lessonModal.showModal();
+            return;
+        }
         if (!response.ok) throw new Error("Couldn't load this lesson.");
         const lesson = await response.json();
         if (activeSubjectId !== subjectId || activeLessonId !== lessonId) return;
-        
+
         const heading = document.createElement("h1");
         heading.textContent = lesson.title;
         const meta = document.createElement("p");
         meta.className = "lesson-meta";
         meta.textContent = `By ${lesson.created_by}`;
         const body = document.createElement("div");
-        
+
         // Protect the math brackets before rendering
         renderFinalMessage(body, protectMath(lesson.content));
-        
+
         lessonContent.replaceChildren(heading, meta, body, buildCompleteFooter(subjectId, lesson));
-        
+
         typesetMath(lessonContent);
 
     } catch (error) {
@@ -200,65 +271,62 @@ async function selectLesson(lessonId) {
 
 const quizUrl = (subjectId, lessonId) => `quiz.html?subject=${subjectId}&lesson=${lessonId}`;
 
-// After "Mark as complete": take the quiz now (80% unlocks the next lesson) or come back to it later.
+// After ">" completes a lesson: the next lesson is open; offer the quiz now, or carry on to the next lesson.
 const readyModal = document.getElementById("readyModal");
-function askReadyForQuiz(subjectId, lessonId) {
+function askReadyForQuiz(subjectId, lessonId, onLater) {
     document.getElementById("readyYes").onclick = () => { window.location.href = quizUrl(subjectId, lessonId); };
-    document.getElementById("readyNotYet").onclick = () => readyModal.close();
+    document.getElementById("readyNotYet").onclick = () => { readyModal.close(); if (onLater) onLater(); };
     readyModal.showModal();
 }
 
+// One ">" button: marks the lesson complete (which unlocks the next one), offers the quiz, then moves on.
 function buildCompleteFooter(subjectId, lesson) {
     const footer = document.createElement("div");
     footer.className = "lesson-footer";
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "complete-btn";
+    button.className = "complete-btn continue-btn";
+    button.textContent = ">";
+    button.title = "Mark as complete and continue";
+    button.setAttribute("aria-label", "Mark as complete and continue");
     const error = document.createElement("span");
     error.className = "complete-error";
-    const quizLink = document.createElement("a");
-    quizLink.className = "complete-btn";
-    quizLink.href = quizUrl(subjectId, lesson.id);
-    quizLink.textContent = "Take quiz";
-    footer.append(button, quizLink, error);
+    footer.append(button, error);
 
-    const paint = () => {
-        button.classList.toggle("done", lesson.completed);
-        button.innerHTML = lesson.completed ? `${ICON_CHECK} Completed (click to undo)` : "Mark as complete";
+    const followingLesson = () => {
+        const index = activeLessons.findIndex(item => item.id === lesson.id);
+        const following = index >= 0 ? activeLessons[index + 1] : null;
+        return following && !following.locked ? following : null;
     };
-    paint();
 
     button.addEventListener("click", async () => {
-        const next = !lesson.completed;
-        
-        // FIX: If the user is trying to mark the lesson as complete, just open the quiz modal.
-        // The actual database completion will be handled after they pass the quiz.
-        if (next) {
-            askReadyForQuiz(subjectId, lesson.id);
-            return; // Exit the function early so we don't trigger the API call or UI update below.
-        }
-
-        // The logic below will now ONLY run if the user is clicking to undo a completed lesson.
-        button.disabled = true;
         error.textContent = "";
+        // Already done: just go on to the next lesson (the last lesson offers the quiz again instead).
+        if (lesson.completed) {
+            const following = followingLesson();
+            if (following) selectLesson(following.id);
+            else askReadyForQuiz(subjectId, lesson.id);
+            return;
+        }
+        button.disabled = true;
         try {
             const response = await fetch(`${API}/subjects/${subjectId}/lessons/${lesson.id}/completion`, {
                 method: "PUT",
                 headers: { ...lessonAuthHeaders(), "Content-Type": "application/json" },
-                body: JSON.stringify({ completed: false }), // Always false here since it's an undo action
+                body: JSON.stringify({ completed: true }),
             });
             if (!response.ok) throw new Error("Couldn't save your progress. Please try again.");
-            
-            lesson.completed = false;
-            paint();
-            
-            // Keep the list + bar in step
+
+            lesson.completed = true;
             if (activeSubjectId === subjectId) {
                 const listed = activeLessons.find(item => item.id === lesson.id);
-                if (listed) listed.completed = false;
-                renderLessonList(activeLessons);
-                updateSubjectProgress();
+                if (listed) listed.completed = true;
+                await refreshLessons();   // the next lesson unlocks
             }
+            askReadyForQuiz(subjectId, lesson.id, () => {
+                const following = followingLesson();
+                if (following) selectLesson(following.id);
+            });
         } catch (err) {
             error.textContent = err.message;
         } finally {

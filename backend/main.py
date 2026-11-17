@@ -123,9 +123,13 @@ _ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
+_LOCAL_ORIGIN_RE = r"^http://(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
+    # any port on localhost / a private LAN address (e.g. `py -m http.server 5500`, Live Server, a phone on the same Wi-Fi)
+    allow_origin_regex=_LOCAL_ORIGIN_RE,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -171,7 +171,41 @@ def _completed_ids(db: Session, user: User, lesson_ids: list[int]) -> set[int]:
     return {lesson_id for (lesson_id,) in rows}
 
 
-def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: bool = False) -> dict:
+STAFF_ROLES = ("teacher", "school_admin", "admin")
+
+
+def _gated(subject: Subject, user: User) -> bool:
+    """Students work through a shared subject in order. Staff, and a student's own personal subject, are never locked."""
+    return subject.owner_user_id is None and user.role not in STAFF_ROLES
+
+
+def _locked_ids(lessons: list[Lesson], done: set[int]) -> set[int]:
+    """`lessons` in course order. Everything up to and including the first unfinished lesson is open; the rest wait."""
+    locked, blocked = set(), False
+    for lesson in lessons:
+        if blocked:
+            locked.add(lesson.id)
+        elif lesson.id not in done:
+            blocked = True
+    return locked
+
+
+def _require_unlocked(db: Session, subject: Subject, lesson: Lesson, user: User) -> None:
+    """403 when a student reaches for a lesson (or its quiz) before finishing the one before it."""
+    if lesson.status != "published" or not _gated(subject, user):
+        return
+    published = (
+        db.query(Lesson)
+        .filter(Lesson.subject_id == subject.id, Lesson.status == "published")
+        .order_by(Lesson.order_index.asc(), Lesson.id.asc())
+        .all()
+    )
+    done = _completed_ids(db, user, [item.id for item in published])
+    if lesson.id in _locked_ids(published, done):
+        raise HTTPException(status_code=403, detail="Finish the previous lesson (pass its quiz or mark it complete) to unlock this one.")
+
+
+def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: bool = False, locked: bool = False) -> dict:
     result = {
         "id": lesson.id,
         "subject_id": lesson.subject_id,
@@ -179,6 +213,7 @@ def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: b
         "order_index": lesson.order_index,
         "created_by": lesson.created_by,
         "completed": completed,
+        "locked": locked,
         "status": lesson.status,
         "source_name": lesson.source_name or "",
     }
@@ -263,7 +298,7 @@ def list_lessons(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _visible_subject_or_404(db, subject_id, user)
+    subject = _visible_subject_or_404(db, subject_id, user)
     lessons = (
         db.query(Lesson)
         .filter(Lesson.subject_id == subject_id, Lesson.status == "published")
@@ -271,7 +306,11 @@ def list_lessons(
         .all()
     )
     done = _completed_ids(db, user, [lesson.id for lesson in lessons])
-    return [_serialize_lesson(lesson, include_content=False, completed=lesson.id in done) for lesson in lessons]
+    locked = _locked_ids(lessons, done) if _gated(subject, user) else set()
+    return [
+        _serialize_lesson(lesson, include_content=False, completed=lesson.id in done, locked=lesson.id in locked)
+        for lesson in lessons
+    ]
 
 
 @router.get("/{subject_id}/lessons/{lesson_id}")
@@ -281,13 +320,14 @@ def get_lesson(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _visible_subject_or_404(db, subject_id, user)
+    subject = _visible_subject_or_404(db, subject_id, user)
     lesson = db.query(Lesson).filter(
         Lesson.id == lesson_id,
         Lesson.subject_id == subject_id,
     ).first()
     if lesson is None or (lesson.status != "published" and user.role not in ("teacher", "school_admin")):   # drafts are for staff only
         raise HTTPException(status_code=404, detail="Lesson not found")
+    _require_unlocked(db, subject, lesson, user)
     return _serialize_lesson(lesson, completed=lesson.id in _completed_ids(db, user, [lesson.id]))
 
 
@@ -435,7 +475,7 @@ async def draft_lesson(
         "aimed at a student who is new to the topic. Use markdown: a title, 2-4 short "
         "sections with headers, and at least one worked example. Keep it focused, not long."
     )
-    async for event in ask_stream(prompt, school_id=user.school_id):
+    async for event in ask_stream(prompt, school_id=user.school_id, tutor_mode=False):   # lesson drafts need full worked examples
         if event["type"] == "done":
             if not event.get("answer", "").strip():
                 raise HTTPException(status_code=502, detail="The model returned an empty lesson draft")
@@ -1162,6 +1202,7 @@ def get_quiz(
 ):
     subject = _visible_subject_or_404(db, subject_id, user)
     lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
+    _require_unlocked(db, subject, lesson, user)
     quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
     return _quiz_payload(db, subject, lesson, user, quiz)
 
@@ -1177,6 +1218,7 @@ async def generate_quiz(
     teachers/admins (and a student's own personal subjects), so students can't keep re-rolling it."""
     subject = _visible_subject_or_404(db, subject_id, user)
     lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
+    _require_unlocked(db, subject, lesson, user)
     can_replace = subject.owner_user_id is not None or user.role in ("teacher", "school_admin")
     quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
     if (quiz and not can_replace) or retakes.blocking_lock(db, user, lesson_id) is not None:
@@ -1236,6 +1278,7 @@ def submit_quiz(
 ):
     subject = _visible_subject_or_404(db, subject_id, user)
     lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
+    _require_unlocked(db, subject, lesson, user)
     quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
     if quiz is None:
         raise HTTPException(status_code=404, detail="This lesson has no quiz yet")
@@ -1261,6 +1304,8 @@ def submit_quiz(
             seconds=None if req.seconds is None else min(req.seconds, limit + 30),
             missed=json.dumps([r["id"] for r in results if not r["correct"]]),
         ))
+        if passed and lesson.id not in _completed_ids(db, user, [lesson.id]):   # passing counts as finishing the lesson
+            db.add(LessonCompletion(user_id=user.id, lesson_id=lesson.id))
         # Ended for violations: lock it for this student and tell the teachers. (A student's own personal subject has no
         # teacher to approve anything, so it is never locked.) Any other submit spends an approved retake.
         if req.violations >= MAX_VIOLATIONS and subject.owner_user_id is None:

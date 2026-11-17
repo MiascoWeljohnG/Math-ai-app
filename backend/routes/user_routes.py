@@ -246,6 +246,9 @@ async def ask_question(
     db.commit()
     convo_id, convo_title = convo.id, convo.title  # capture before db may close
     school_id = user.school_id   # the answer may only draw on this school's files
+    # Students get a tutor: hints and similar examples, never the answers to module activities.
+    # Staff (teacher / school admin / admin) are exempt because they need answer keys.
+    tutor_mode = user.role == "user"
     async def event_stream():
         full_answer = ""
         try:
@@ -255,6 +258,7 @@ async def ask_question(
                 material_filename=req.material_filename,
                 images=req.images,
                 school_id=school_id,
+                tutor_mode=tutor_mode,
             ):
                 if event["type"] == "meta":
                     event["conversation_id"] = convo_id

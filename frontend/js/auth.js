@@ -245,7 +245,7 @@ if (registerForm) {
         try {
             // multipart (not JSON) because a file goes with it; the browser sets the Content-Type and boundary itself
             const body = new FormData();
-            Object.entries({ student_id, last_name, first_name, middle_name, email, birthday, password, school_id: schoolSelect.value })
+            Object.entries({ student_id, last_name, first_name, middle_name, email, birthday, password, school_id: schoolSelect.value, accept_terms: "true" })
                 .forEach(([k, v]) => body.append(k, v));
             body.append("certificate", certificate);
             const res = await fetch(`${API}/auth/register`, { method: "POST", body });

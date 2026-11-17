@@ -131,6 +131,8 @@ body {
 .terms { display: flex; align-items: center; gap: 0.6rem; margin: 1.1rem 0 1rem; font: 500 0.92rem var(--font-body); color: var(--text-muted); }
 .terms input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
 .terms b { color: var(--text); font-weight: 600; }
+.terms a { color: var(--accent); text-decoration: none; }
+.terms a:hover { text-decoration: underline; }
 .divider { display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0; font: 500 0.88rem var(--font-body); color: var(--text-muted); }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 

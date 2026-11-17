@@ -25,12 +25,22 @@
         .back { color: var(--text); font-size: 1.8rem; line-height: 1; text-decoration: none; }
         h1 { margin: 0; font-size: 1.7rem; font-weight: 900; color: var(--heading); }
 
-        /* --- New Horizontal Subject Buttons --- */
-        .subjects-row { display: flex; gap: 0.8rem; overflow-x: auto; padding-bottom: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
-        .subject-btn { padding: 0.65rem 1.2rem; border: 1px solid var(--field-border); border-radius: 999px; background: var(--bg-elevated); color: var(--text-muted); font-size: 0.9rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .subject-btn:hover { background: var(--hover-bg); color: var(--text); }
-        .subject-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
-        
+        /* --- Picker bar: subject dropdown + lesson button --- */
+        .picker { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.9rem; margin-bottom: 1.5rem; }
+        .picker-field { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+        .picker-label { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); }
+        .select-wrap { position: relative; }
+        .select-wrap::after { content: ""; position: absolute; right: 1.1rem; top: 50%; width: 0.5rem; height: 0.5rem; border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted); transform: translateY(-70%) rotate(45deg); pointer-events: none; }
+        .picker select, .picker-btn { width: 100%; min-height: 3.25rem; padding: 0.7rem 1rem; border: 1px solid var(--field-border); border-radius: var(--r-md); background: var(--bg-elevated); color: var(--text); font: 600 0.98rem var(--font-body); text-align: left; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+        .picker select { appearance: none; -webkit-appearance: none; padding-right: 2.6rem; text-overflow: ellipsis; }
+        .picker select:hover:not(:disabled), .picker-btn:hover:not(:disabled) { border-color: var(--accent); background: var(--hover-bg); }
+        .picker select:disabled, .picker-btn:disabled { opacity: 0.6; cursor: default; }
+        .picker-btn { display: flex; flex-direction: column; justify-content: center; gap: 0.1rem; }
+        .picker-btn-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .picker-btn-sub { font-size: 0.78rem; font-weight: 500; color: var(--text-muted); }
+        .picker-error { grid-column: 1 / -1; margin: 0; }
+        @media (max-width: 640px) { .picker { grid-template-columns: 1fr; } }
+
         /* --- Main Lesson Content Area --- */
         .lesson-content { line-height: 1.6; overflow-wrap: anywhere; background: var(--bg-elevated); padding: 2rem; border-radius: 12px; border: 1px solid var(--field-border); box-shadow: 1px 2px 8px rgba(0,0,0,0.1); }
         .lesson-content h1 { font-size: 1.8rem; margin-bottom: 0.5rem;}
@@ -45,10 +55,20 @@
         .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); line-height: 1;}
         .close-modal:hover { color: var(--danger); }
         
-        #lessonListContainer button { display: flex; align-items: center; gap: 0.5rem; width: 100%; margin: 6px 0; padding: 0.8rem 1rem; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-input); color: var(--text); font: inherit; font-size: 0.95rem; text-align: left; cursor: pointer; transition: background 0.15s; }
-        #lessonListContainer button:hover { background: var(--hover-bg); border-color: var(--accent); }
-        #lessonListContainer button.active { border-color: var(--accent); font-weight: 700; background: var(--nav-active-bg); }
-        .lesson-check { flex: none; width: 1.1rem; color: var(--accent-hover); font-weight: 900; }
+        #lessonListContainer { display: grid; gap: 0.5rem; }
+        .lesson-row { display: flex; align-items: center; gap: 0.8rem; width: 100%; padding: 0.75rem 0.9rem; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-input); color: var(--text); font: inherit; font-size: 0.95rem; text-align: left; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+        .lesson-row:hover { background: var(--hover-bg); border-color: var(--accent); }
+        .lesson-row.active { border-color: var(--accent); background: var(--nav-active-bg); font-weight: 700; }
+        .lesson-badge { flex: none; display: grid; place-items: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; background: var(--pri2); color: var(--accent); font-size: 0.82rem; font-weight: 700; }
+        .lesson-row.done .lesson-badge { background: var(--ok2); color: var(--ok-ink); }
+        .lesson-row.locked { background: transparent; color: var(--text-muted); border-style: dashed; cursor: not-allowed; }
+        .lesson-row.locked:hover { background: transparent; border-color: var(--field-border); }
+        .lesson-row.locked .lesson-badge { background: var(--hover-bg); color: var(--text-muted); }
+        .lesson-title { flex: 1; min-width: 0; }
+        .lesson-state { flex: none; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+        .lesson-state.next { color: var(--accent); }
+        .lock-hint { margin: 0.9rem 0 0; padding: 0.7rem 0.9rem; border-radius: var(--r-sm); background: var(--sun2); color: var(--sun-ink); font-size: 0.85rem; line-height: 1.45; }
+        .lesson-empty-actions { margin-top: 1rem; }
 
         /* Progress Bar */
         .subject-progress { margin-bottom: 1.2rem; }
@@ -65,6 +85,8 @@
         .complete-error { font-size: 0.8rem; color: var(--danger); }
         
         a.complete-btn { display: inline-block; text-decoration: none; }
+        .continue-btn { min-width: 4rem; padding: 0.7rem 1.6rem; background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-size: 1.1rem; }
+        .continue-btn:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--on-accent); }
         /* --- Fix for Overflowing Math Equations --- */
 .lesson-content {
     overflow-x: auto; 
@@ -102,12 +124,26 @@ mjx-container::-webkit-scrollbar-thumb {
             <h1>Lessons</h1>
         </div>
         
-        <!-- NEW: Horizontal Subjects Row -->
-        <div class="subjects-row" id="subjectList">Loading subjects…</div>
+        <div class="picker">
+            <div class="picker-field">
+                <label class="picker-label" for="subjectSelect">Subject</label>
+                <div class="select-wrap">
+                    <select id="subjectSelect" disabled><option>Loading subjects…</option></select>
+                </div>
+            </div>
+            <div class="picker-field">
+                <span class="picker-label" id="lessonPickerLabel">Lesson</span>
+                <button type="button" id="openLessons" class="picker-btn" aria-labelledby="lessonPickerLabel openLessonsTitle" disabled>
+                    <span class="picker-btn-title" id="openLessonsTitle">Choose a lesson</span>
+                    <span class="picker-btn-sub" id="openLessonsSub"></span>
+                </button>
+            </div>
+            <p id="pickerError" class="complete-error picker-error" role="alert" hidden></p>
+        </div>
 
         <!-- NEW: Full Width Lesson Content -->
         <article id="lessonContent" class="lesson-content" aria-live="polite">
-            <p class="lesson-empty">Choose a subject, then tap it again to pick a lesson.</p>
+            <p class="lesson-empty">Choose a subject, then pick a lesson to begin.</p>
         </article>
 
         <!-- NEW: Hidden Modal for the Lesson List -->
@@ -122,6 +158,7 @@ mjx-container::-webkit-scrollbar-thumb {
             </div>
             
             <div id="lessonListContainer" class="lesson-empty">Choose a subject.</div>
+            <p id="lockHint" class="lock-hint" role="status" hidden></p>
             
             <div id="generateBox" hidden style="margin-top:1.5rem;">
                 <input id="generateTopic" maxlength="160" placeholder="What do you want to learn?" style="width:100%; padding:0.7rem; border:1px solid var(--field-border); border-radius:8px; background:var(--bg-elevated); color:var(--text); font:inherit;">
@@ -146,9 +183,9 @@ mjx-container::-webkit-scrollbar-thumb {
         <!-- Asked right after "Mark as complete" -->
         <dialog id="readyModal" class="lesson-modal">
             <div class="modal-header"><h2>Lesson complete!</h2></div>
-            <p style="line-height:1.5; margin:0;">Are you ready for the quiz? You need 80% or higher to move on to the next lesson. It is timed, the AI sets the difficulty for this topic, and switching tabs or windows, minimizing the browser or shrinking the window counts as a violation, and 3 violations end the quiz.</p>
+            <p style="line-height:1.5; margin:0;">The next lesson is now unlocked. Want to take the quiz as well? You need 80% or higher to pass it. It is timed, the AI sets the difficulty for this topic, and switching tabs or windows, minimizing the browser or shrinking the window counts as a violation, and 3 violations end the quiz.</p>
             <div style="display:flex; gap:0.6rem; margin-top:1.2rem;">
-                <button id="readyNotYet" type="button" class="complete-btn" style="flex:1;">Not yet</button>
+                <button id="readyNotYet" type="button" class="complete-btn" style="flex:1;">Maybe later</button>
                 <button id="readyYes" type="button" class="complete-btn" style="flex:1; background:var(--accent); border-color:var(--accent); color:#fff;">Yes, start the quiz</button>
             </div>
         </dialog>

@@ -39,7 +39,7 @@ def api(db, tmp_path, monkeypatch):
 
 def form(api, student_id="2024-1", **over):
     data = {"student_id": student_id, "last_name": "Cruz", "first_name": "Ana", "middle_name": "", "email": "ana@school.ph",
-            "birthday": "2005-03-08", "password": PASSWORD, "school_id": str(api.a.id)}
+            "birthday": "2005-03-08", "password": PASSWORD, "school_id": str(api.a.id), "accept_terms": "true"}
     data.update(over)
     return data
 
@@ -293,3 +293,11 @@ def test_old_main_and_super_admin_accounts_are_retired(api):
     assert gone.status_code == 403 and "not active" in gone.json()["detail"]
     assert api.client.get("/approvals/pending", headers={"Authorization": f"Bearer {token}"}).status_code == 403   # an old token dies too
     retire_main_admins(api.db)   # idempotent
+
+
+def test_signup_requires_terms_and_records_consent(api):
+    assert sign_up(api, "2024-9", accept_terms="").status_code == 400
+    assert api.db.query(User).filter(User.username == "2024-9").first() is None
+    assert sign_up(api, "2024-9").status_code == 200
+    log = api.db.query(AuditLog).filter(AuditLog.action == "student.register").first()
+    assert log is not None and "2026-11-17" in log.detail
