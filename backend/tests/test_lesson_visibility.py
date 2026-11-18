@@ -114,3 +114,12 @@ def test_invalid_preferred_game_is_rejected(world):
         json={"game_id": "not-a-game"},
     )
     assert response.status_code == 400
+
+
+def test_teacher_existing_lesson_has_game_selector_and_save_action():
+    from pathlib import Path
+    source = Path(__file__).resolve().parents[2].joinpath("frontend/js/lessons.js").read_text()
+    assert 'function buildLessonGamePanel(subjectId, lesson)' in source
+    assert 'Choose a game for this lesson' in source
+    assert 'Save game' in source
+    assert 'preferred-game' in source

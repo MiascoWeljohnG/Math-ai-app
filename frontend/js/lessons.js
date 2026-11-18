@@ -292,6 +292,7 @@ function buildLessonGamePanel(subjectId, lesson) {
     LESSON_GAMES.forEach(([id, label]) => select.add(new Option(label, id)));
     select.value = lesson.preferred_game || "";
     const status = document.createElement("p"); status.className = "lesson-meta";
+    status.setAttribute("role", "status");
     if (teacher) {
         const save = document.createElement("button"); save.type = "button"; save.textContent = "Save game";
         save.addEventListener("click", async () => {
