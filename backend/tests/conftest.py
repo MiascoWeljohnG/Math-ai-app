@@ -23,7 +23,7 @@ async def generate_text(system, prompt, branch, query):
     return reply
 
 
-def extract_text_from_bytes(filename, contents):
+def extract_text_from_bytes(filename, contents, page_range=None, figures_too=False):
     text = contents.decode("utf-8", errors="ignore")
     return [(0, text, [])] if text.strip() else []
 

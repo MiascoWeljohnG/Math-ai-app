@@ -65,6 +65,8 @@ def decide(request_id: int, req: DecisionRequest, user: User = Depends(require_s
     if request.status != retakes.PENDING:
         raise HTTPException(status_code=409, detail="This request was already decided or the student hasn't sent feedback yet.")
     request.status = retakes.APPROVED if req.approve else retakes.REJECTED
+    if req.approve:
+        retakes.reset_practice_tries(db, request.user_id, request.lesson_id)   # a fresh set of practice tries
     request.teacher_note = (req.note or "").strip() or None
     request.decided_by, request.decided_at = user.username, datetime.utcnow()
     db.add(AuditLog(

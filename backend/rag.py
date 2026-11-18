@@ -16,6 +16,8 @@ from langchain_core.embeddings import Embeddings
 
 import config
 import vectorstore
+import figures
+import ocr
 
 log = logging.getLogger(__name__)
 
@@ -369,13 +371,23 @@ def extract_text_by_page(file_path: str) -> list[tuple[int, str, list[str]]]:
     path = Path(file_path)
     return extract_text_from_bytes(path.name, path.read_bytes())
 
-def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[int, int] | None = None) -> list[tuple[int, str, list[str]]]:
+def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[int, int] | None = None,
+                            figures_too: bool = False) -> list[tuple[int, str, list[str]]]:
     """[(page number, text, tables)]. `page_range` = (first, last) makes a PDF read only those pages: on a
     300-page module that is the difference between seconds and a minute. Other file types ignore it."""
     suffix = Path(filename).suffix.lower()
+    if suffix in ocr.IMAGE_SUFFIXES:   # a photo or scan of a page: read it with OCR
+        try:
+            text = ocr.ocr_image_bytes(contents).strip()
+        except ocr.OcrUnavailable as exc:
+            raise ValueError(str(exc)) from exc
+        return [(1, text, [])] if text else []
+
     if suffix == ".pdf":
         import pdfplumber
         pages = []
+        scanned = ocr_missing = 0
+        figure_budget = figures.Budget()
         with pdfplumber.open(io.BytesIO(contents)) as pdf:
             for i, page in enumerate(pdf.pages, start=1):
                 if page_range is not None:
@@ -386,8 +398,21 @@ def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[in
                 text = (page.extract_text() or "").strip()
                 tables = [_table_to_markdown(t) for t in page.extract_tables()]
                 tables = [t for t in tables if t]
+                if figures_too and (len(text) >= 20 or tables):   # diagrams on a normal page: labels (OCR) and a description
+                    notes = figures.pdf_page_notes(page, figure_budget)
+                    if notes:
+                        text = (text + "\n\n" + "\n".join(notes)).strip()
+                if len(text) < 20 and not tables:   # no text layer: a scanned page, so read the picture (OCR)
+                    if scanned < ocr.MAX_PAGES and not ocr_missing:
+                        try:
+                            text = ocr.ocr_pdf_page(page).strip() or text
+                            scanned += 1
+                        except ocr.OcrUnavailable:
+                            ocr_missing = 1
                 if text or tables:
                     pages.append((i, text, tables))
+        if ocr_missing and not pages:
+            raise ValueError("This PDF has no text layer (it is a scan) and OCR is not available on the server, so it can't be read.")
         return pages
 
     elif suffix in {".txt", ".md"}:
@@ -406,12 +431,17 @@ def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[in
             md = _table_to_markdown(rows)
             if md:
                 tables.append(md)
+        if figures_too:
+            notes = figures.docx_notes(doc, figures.Budget())
+            if notes:
+                text = (text + "\n" + "\n".join(notes)).strip()
         return [(0, text, tables)]
 
     elif suffix == ".pptx":
         from pptx import Presentation
         prs = Presentation(io.BytesIO(contents))
         slides = []
+        figure_budget = figures.Budget()
         for i, slide in enumerate(prs.slides, start=1):
             slide_texts = []
             slide_tables = []
@@ -427,6 +457,8 @@ def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[in
                     md = _table_to_markdown(table_rows)
                     if md:
                         slide_tables.append(md)
+            if figures_too:
+                slide_texts += figures.pptx_slide_notes(slide, figure_budget)
             body = "\n".join(slide_texts)
             if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
                 notes = slide.notes_slide.notes_text_frame.text.strip()
@@ -504,7 +536,7 @@ def _index_documents(documents: list[tuple[str, str, str, bytes]], school_id=_UN
         path_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
         note_type = "uploaded_material"
         file_school = _school_of_source(source) if school_id is _UNSET else school_id
-        pages = extract_text_from_bytes(file_name, contents)
+        pages = extract_text_from_bytes(file_name, contents, figures_too=True)
 
         for page_number, page_text, tables in pages:
             content = "\n\n".join([page_text, *tables]).strip()
@@ -543,11 +575,17 @@ def _prepare_uploads(files: list[tuple[str, bytes]], storage_ids: Optional[list[
         if not safe_name:
             raise ValueError("Uploaded material must have a valid filename")
         suffix = Path(safe_name).suffix.lower()
-        if suffix not in {".pdf", ".docx", ".pptx", ".txt", ".md"}:
+        if suffix not in {".pdf", ".docx", ".pptx", ".txt", ".md"} | ocr.IMAGE_SUFFIXES:
             raise ValueError(f"Unsupported material file type: {suffix or '(no extension)'}")
+        if suffix in ocr.IMAGE_SUFFIXES:   # a photo or scan becomes a one-page PDF, which OCR then reads like any scanned PDF
+            try:
+                contents = ocr.image_to_pdf(contents)
+            except Exception as exc:
+                raise ValueError(f"{display_name} is not a readable image ({exc})") from exc
+            suffix = ".pdf"
         safe_name = f"{Path(safe_name).stem[:100]}{suffix}"
         if check_text:   # reading every page is slow; background indexing does this check itself
-            pages = extract_text_from_bytes(safe_name, contents)
+            pages = extract_text_from_bytes(safe_name, contents, figures_too=True)
             if not any(text.strip() or any(table.strip() for table in tables) for _, text, tables in pages):
                 raise ValueError(f"No readable text found in uploaded file: {display_name}")
         storage_id = storage_ids[index] if storage_ids is not None else uuid.uuid4().hex

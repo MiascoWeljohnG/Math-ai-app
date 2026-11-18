@@ -15,6 +15,7 @@ const NOTE = " It is only practice: it does not change your score, your level or
 
 let questions = [];
 let retryAction = null;
+let tries = 0, maxTries = null;   // maxTries is null when there is no limit (a student's own subject)
 
 async function api(path = "", options = {}) {
     const response = await fetch(base + path, {
@@ -39,8 +40,49 @@ function fail(message, retry) {
     $("status").className = "muted error";
     $("status").textContent = message;
     $("retryBtn").hidden = !retry;
+    $("tryAgainBtn").disabled = false;
 }
-$("retryBtn").addEventListener("click", () => { $("retryBtn").hidden = true; if (retryAction) retryAction(); });
+function working(message) {   // clears an earlier error and shows progress
+    $("status").className = "muted";
+    $("status").textContent = message;
+    $("retryBtn").hidden = true;
+}
+// "Try again" after an error repeats exactly what failed (loading the page, or writing a new set).
+$("retryBtn").addEventListener("click", () => { const again = retryAction; retryAction = null; if (again) again(); });
+
+const THE_LIMIT = (n) => `You have used all ${n} of your tries. You can only retake the exam if your teacher approves it. Your teacher has been notified. Open the quiz page to send them a message.`;
+
+function showTries() {
+    $("triesNote").hidden = maxTries === null;
+    if (maxTries !== null) $("triesNote").textContent = `Try ${Math.min(tries, maxTries)} of ${maxTries}`;
+}
+
+// The notice shown when every try is used: the quiz needs the teacher's approval.
+function showLimit() {
+    const box = $("limitNote");
+    box.replaceChildren(node("p", {}, THE_LIMIT(maxTries || 3)));
+    box.hidden = false;
+    $("tryAgainBtn").hidden = true;
+    $("checkBtn").hidden = true;
+    $("result").hidden = false;
+}
+
+// A brand new set of questions on the same ideas. Each one uses one of the tries.
+async function tryAgain() {
+    $("tryAgainBtn").disabled = true;
+    working("The AI is writing a new set for you… this can take a minute.");
+    try {
+        render(await api("/generate?fresh=true", { method: "POST" }));
+    } catch (error) {
+        $("tryAgainBtn").disabled = false;
+        if (/only retake the exam if your teacher approves/i.test(error.message)) {
+            $("status").textContent = "";
+            return showLimit();
+        }
+        fail(error.message, tryAgain);
+    }
+}
+$("tryAgainBtn").addEventListener("click", tryAgain);
 
 function buildQuestion(q, i) {
     const box = node("div", { className: "q", id: `q${q.id}` }, node("p", { className: "q-text" }, `${i + 1}. ${q.question}`));
@@ -69,10 +111,19 @@ function render(data) {
     $("title").textContent = data.kind === "harder" ? "Challenge set" : "Practice set";
     $("subtitle").textContent = `${data.subject}: ${data.lesson_title}`;
     $("blurb").textContent = BLURB[data.kind] + NOTE;
+    $("status").className = "muted";
     $("status").textContent = "";
+    tries = data.tries || 0;
+    maxTries = data.max_tries ?? null;
     questions = data.questions;
     $("questions").replaceChildren(...questions.map(buildQuestion));
     $("checkBtn").hidden = false;
+    $("checkBtn").disabled = false;
+    $("result").hidden = true;
+    $("limitNote").hidden = true;
+    $("tryAgainBtn").hidden = true;
+    $("tryAgainBtn").disabled = false;
+    showTries();
     typeset($("subtitle"), $("questions"));
 }
 
@@ -91,6 +142,16 @@ $("checkBtn").addEventListener("click", async () => {
         $("score").textContent = `You got ${result.score} of ${result.total} right.`;
         $("result").hidden = false;
         $("checkBtn").hidden = true;
+        tries = result.tries ?? tries;
+        maxTries = result.max_tries ?? null;
+        showTries();
+        if (result.exhausted) showLimit();   // that was the last try
+        else {
+            $("tryAgainBtn").hidden = false;
+            const left = maxTries === null ? null : maxTries - tries;
+            $("tryAgainBtn").textContent = left === null ? "Try again with new questions"
+                : `Try again with new questions (${left} ${left === 1 ? "try" : "tries"} left)`;
+        }
         typeset($("questions"), $("score"));
     } catch (error) {
         $("checkBtn").disabled = false;
@@ -113,12 +174,24 @@ async function init() {
             $("score").textContent = "";
             return;
         }
+        tries = data.tries || 0;
+        maxTries = data.max_tries ?? null;
+        if (data.exhausted && !data.questions) {   // all tries used and no set to show: the teacher has to approve
+            $("subtitle").textContent = `${data.subject}: ${data.lesson_title}`;
+            $("status").textContent = "";
+            showTries();
+            return showLimit();
+        }
         if (!data.questions) {
-            $("status").textContent = "The AI is writing a set for you… this can take a minute.";
+            working("The AI is writing a set for you… this can take a minute.");
             data = await api("/generate", { method: "POST" });
         }
         render(data);
     } catch (error) {
+        if (/only retake the exam if your teacher approves/i.test(error.message)) {
+            $("status").textContent = "";
+            return showLimit();
+        }
         fail(error.message, init);
     }
 }

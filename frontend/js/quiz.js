@@ -562,7 +562,9 @@ function renderLock(container, lock) {
     parts.push(heading);
 
     if (lock.status === "locked") {
-        parts.push(lockLine(`Your quiz was ended after ${lock.violations} violations (leaving the quiz page). Your teacher has to approve a retake. Tell them what happened, then press Send.`));
+        parts.push(lockLine(lock.violations > 0
+            ? `Your quiz was ended after ${lock.violations} violations (leaving the quiz page). Your teacher has to approve a retake. Tell them what happened, then press Send.`
+            : "You have used all 3 of your practice tries. You can only retake the exam if your teacher approves it, and your teacher has been notified. Tell them what you find hard, then press Send."));
     } else if (lock.status === "pending") {
         parts.push(lockLine("Your request was sent. You can retake the quiz once your teacher approves it."));
         parts.push(lockLine(lock.feedback, "quote"));
@@ -576,7 +578,9 @@ function renderLock(container, lock) {
     if (lock.can_request) {
         const box = document.createElement("textarea");
         box.maxLength = 600;
-        box.placeholder = "What happened? For example: my internet dropped, or I opened another tab by mistake.";
+        box.placeholder = lock.violations > 0
+            ? "What happened? For example: my internet dropped, or I opened another tab by mistake."
+            : "What do you find hard about this lesson? For example: I do not understand how to solve for x.";
         box.setAttribute("aria-label", "Your feedback for your teacher");
         const send = document.createElement("button");
         send.type = "button";

@@ -10,7 +10,8 @@ from fastapi.testclient import TestClient
 from adaptive import mastery_level, practice_kind
 from auth import get_current_user
 from database import get_db
-from models import Lesson, PracticeSet, QuizAttempt, Subject, User
+from models import QuizRetakeRequest, Lesson, PracticeSet, QuizAttempt, Subject, User
+import retakes
 from routes import learning_routes, practice_routes, subjects_routes, teacher_routes
 from test_quiz import QUIZ   # a model reply with 10 well-formed questions
 
@@ -118,7 +119,8 @@ def test_failed_quiz_gets_an_easier_set_written_once(api):
     assert api.client.post(practice_url(api, l1, "/generate")).status_code == 400   # no quiz result yet
     attempt(api, l1, 5)
     assert api.client.get(practice_url(api, l1)).json() == {
-        "subject": "Algebra", "lesson_title": "L1", "level": "struggling", "kind": "easier", "questions": None}
+        "subject": "Algebra", "lesson_title": "L1", "level": "struggling", "kind": "easier", "questions": None,
+        "tries": 0, "max_tries": 3, "exhausted": False}
 
     api.rag.reply = QUIZ
     made = api.client.post(practice_url(api, l1, "/generate")).json()
@@ -219,3 +221,87 @@ def test_teacher_table_counts_each_students_levels(api):
     api.current["user"] = api.teacher
     [row] = api.client.get("/teacher/students").json()
     assert row["levels"] == {"struggling": 1, "developing": 0, "proficient": 0, "mastered": 1}
+
+
+# ---------------------------------------------------------------- the 3-try limit
+def test_try_again_writes_a_new_set_and_never_repeats_the_old_questions(api, monkeypatch):
+    l1 = api.lessons[0]
+    attempt(api, l1, 5)
+    seen = []
+
+    async def spy(system, prompt, branch, query):
+        seen.append(prompt)
+        return QUIZ
+    monkeypatch.setattr(practice_routes, "generate_text", spy)
+    first = api.client.post(practice_url(api, l1, "/generate")).json()
+    assert first["tries"] == 1 and first["max_tries"] == 3 and first["exhausted"] is False
+    again = api.client.post(practice_url(api, l1, "/generate?fresh=true")).json()   # the "Try again" button
+    assert again["tries"] == 2 and len(seen) == 2                                    # a second model call was made
+    assert "Do NOT reuse" in seen[1] and "Do NOT reuse" not in seen[0]
+    assert api.client.post(practice_url(api, l1, "/generate")).json()["tries"] == 2  # opening the page again costs nothing
+
+
+def test_a_model_error_does_not_use_up_a_try(api, monkeypatch):
+    l1 = api.lessons[0]
+    attempt(api, l1, 5)
+    api.rag.reply = RuntimeError("model is down")
+    assert api.client.post(practice_url(api, l1, "/generate")).status_code == 502
+    api.rag.reply = QUIZ
+    assert api.client.post(practice_url(api, l1, "/generate")).json()["tries"] == 1
+
+
+def test_after_three_tries_the_student_must_ask_the_teacher(api):
+    l1 = api.lessons[0]
+    attempt(api, l1, 5)
+    api.rag.reply = QUIZ
+    for n in (1, 2, 3):
+        made = api.client.post(practice_url(api, l1, "/generate" if n == 1 else "/generate?fresh=true")).json()
+        assert made["tries"] == n
+    assert made["exhausted"] is False                                   # the third set is still theirs to do
+    answers = {str(q["id"]): None for q in made["questions"]}
+    done = api.client.post(practice_url(api, l1, "/submit"), json={"answers": answers}).json()
+    assert done["exhausted"] is True and done["tries"] == 3 and done["max_tries"] == 3   # the last try is used up
+    lock = api.db.query(QuizRetakeRequest).one()
+    assert lock.status == "locked" and lock.violations == 0
+    assert api.client.get(practice_url(api, l1)).json()["exhausted"] is True
+    blocked = api.client.post(practice_url(api, l1, "/generate?fresh=true"))
+    assert blocked.status_code == 403 and "only retake the exam if your teacher approves" in blocked.json()["detail"]
+    assert api.client.post(f"/subjects/{api.subject.id}/lessons/{l1.id}/quiz/generate").json()["lock"]["status"] == "locked"
+
+
+def test_asking_for_a_fourth_set_also_locks_and_tells_the_teacher(api):
+    l1 = api.lessons[0]
+    attempt(api, l1, 5)
+    api.rag.reply = QUIZ
+    api.client.post(practice_url(api, l1, "/generate"))
+    row = api.db.query(PracticeSet).one()
+    row.tries = 3
+    api.db.commit()
+    assert api.client.post(practice_url(api, l1, "/generate?fresh=true")).status_code == 403
+    assert api.db.query(QuizRetakeRequest).one().status == "locked"
+
+
+def test_a_teacher_approving_a_retake_gives_fresh_tries(api):
+    l1 = api.lessons[0]
+    attempt(api, l1, 5)
+    api.rag.reply = QUIZ
+    api.client.post(practice_url(api, l1, "/generate"))
+    api.db.query(PracticeSet).one().tries = 3
+    api.db.commit()
+    assert retakes.practice_tries(api.db, api.student.id, l1.id) == 3
+    retakes.reset_practice_tries(api.db, api.student.id, l1.id)
+    api.db.commit()
+    assert retakes.practice_tries(api.db, api.student.id, l1.id) == 0
+    assert api.client.post(practice_url(api, l1, "/generate?fresh=true")).json()["tries"] == 1
+
+
+def test_a_students_own_subject_has_no_try_limit(api):
+    api.subject.owner_user_id = api.student.id
+    api.db.commit()
+    l1 = api.lessons[0]
+    attempt(api, l1, 5)
+    api.rag.reply = QUIZ
+    for _ in range(5):
+        made = api.client.post(practice_url(api, l1, "/generate?fresh=true")).json()
+    assert made["max_tries"] is None and made["exhausted"] is False and made["tries"] == 5
+    assert api.db.query(QuizRetakeRequest).count() == 0

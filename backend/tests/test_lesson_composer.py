@@ -193,7 +193,7 @@ def module_pages(rag, monkeypatch):
     """A 40-page 'module' where page N says 'content of page N', and a way to see what the model was shown."""
     seen = []
 
-    def fake_extract(filename, contents, page_range=None):
+    def fake_extract(filename, contents, page_range=None, figures_too=False):
         if filename.endswith(".docx"):
             return [(0, "no pages here", [])]
         low, high = page_range or (1, 40)

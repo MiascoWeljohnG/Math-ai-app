@@ -107,9 +107,9 @@
     <div class="section">
         <h2>Upload Course Material</h2>
         <div class="drop-zone" id="dropZone">
-            <p class="placeholder" id="dropPlaceholder">Drag & drop text, PDF, Word, or PowerPoint files here, or click to browse</p>
+            <p class="placeholder" id="dropPlaceholder">Drag & drop text, PDF, Word, PowerPoint files, or scans and photos (read with OCR) here, or click to browse</p>
         </div>
-        <input type="file" id="fileInput" multiple accept=".txt,.pdf,.docx,.pptx" style="display:none">
+        <input type="file" id="fileInput" multiple accept=".txt,.pdf,.docx,.pptx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" style="display:none">
         <div class="field-row" style="margin-top:1rem;">
             <label for="branchSelect" class="label">Math branch</label>
             <select id="branchSelect" class="branch-select">
@@ -189,11 +189,11 @@
         </div>
         <div class="table-wrap file-list" id="retakeWrap" hidden>
             <table>
-                <thead><tr><th>Student</th><th>Quiz</th><th>Violations</th><th>Their feedback</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Student</th><th>Quiz</th><th>Reason</th><th>Their feedback</th><th>Status</th><th></th></tr></thead>
                 <tbody id="retakeRows"></tbody>
             </table>
         </div>
-        <p class="empty" id="noRetakes" style="display:none;">No quiz has been ended for violations yet.</p>
+        <p class="empty" id="noRetakes" style="display:none;">No student has used up their practice tries yet.</p>
         <div class="status" id="retakeStatus" role="status" aria-live="polite"></div>
     </div>
 
@@ -252,9 +252,9 @@
                 </div>
                 <div id="sourceUploadRow" hidden>
                     <div class="drop-zone drop-zone-compact" id="lessonDropZone" role="button" tabindex="0" aria-label="File to base the lessons on">
-                        <p class="placeholder" id="lessonDropPlaceholder">Drag &amp; drop a PDF, Word, or PowerPoint file here, or click to browse</p>
+                        <p class="placeholder" id="lessonDropPlaceholder">Drag &amp; drop a PDF, Word, PowerPoint file, or a scan or photo here, or click to browse</p>
                     </div>
-                    <input type="file" id="lessonFileInput" accept=".pdf,.docx,.pptx,.txt,.md" style="display:none" aria-label="File to base the lessons on">
+                    <input type="file" id="lessonFileInput" accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" style="display:none" aria-label="File to base the lessons on">
                     <button class="btn btn-secondary btn-sm" type="button" onclick="viewSourceFile()">View file contents</button>
                     <label class="check-row" for="saveLessonFile">
                         <input type="checkbox" id="saveLessonFile" checked>
@@ -370,8 +370,8 @@
     <dialog id="subjectDialog" class="subject-dialog" aria-labelledby="subjectDialogTitle">
         <h2 id="subjectDialogTitle">New subject</h2>
         <label for="subjectFileInput">Upload a file (optional)</label>
-        <input id="subjectFileInput" type="file" accept=".pdf,.docx,.pptx,.txt,.md">
-        <p class="hint">PDF, DOCX, PPTX, TXT or MD. The AI reads it, fills in the name and description, and can write the lessons too.</p>
+        <input id="subjectFileInput" type="file" accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff">
+        <p class="hint">PDF, DOCX, PPTX, TXT, MD, or a scan or photo (PNG, JPG). Scanned pages are read with OCR. The AI reads it, fills in the name and description, and can write the lessons too.</p>
         <label for="subjectNameInput">Name</label>
         <input id="subjectNameInput" type="text" maxlength="80" placeholder="e.g. Geometry">
         <label for="subjectDescInput">Description</label>

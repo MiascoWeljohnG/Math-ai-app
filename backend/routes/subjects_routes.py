@@ -1312,7 +1312,8 @@ def submit_quiz(
         # Ended for violations: lock it for this student and tell the teachers. (A student's own personal subject has no
         # teacher to approve anything, so it is never locked.) Any other submit spends an approved retake.
         if req.violations >= MAX_VIOLATIONS and subject.owner_user_id is None:
-            lock = retakes.lock_for_violations(db, user, lesson, subject, req.violations)
+            # Less punishing than a lock: it counts as a try, and the teachers get a "may be struggling" hint.
+            retakes.flag_struggling(db, user, lesson, subject, req.violations, round(score * 100 / max(len(results), 1)))
         else:
             retakes.consume_approval(db, user, lesson_id)
         db.commit()

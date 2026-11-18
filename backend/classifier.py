@@ -84,13 +84,13 @@ def document_text(filename: str, contents: bytes, pages: tuple[int, int] | None 
     is given (slides for a .pptx). Raises ValueError if it can't be read or the range doesn't fit."""
     from rag import extract_text_from_bytes
     if pages is None:
-        extracted = extract_text_from_bytes(filename, contents)
+        extracted = extract_text_from_bytes(filename, contents, figures_too=True)
     else:
         name = Path(filename).name
         if Path(filename).suffix.lower() not in {".pdf", ".pptx"}:   # .docx / .txt / .md have no fixed pages
             raise ValueError(f"{name} has no page numbers, so a page range can't be used with it. Use a PDF or PowerPoint file, or clear the page range.")
         first, last = pages
-        extracted = [item for item in extract_text_from_bytes(filename, contents, pages) if first <= item[0] <= last]
+        extracted = [item for item in extract_text_from_bytes(filename, contents, pages, figures_too=True) if first <= item[0] <= last]
         if not extracted:   # rare path, so reading the whole file again just to explain the problem is fine
             highest = max((number for number, _, _ in extract_text_from_bytes(filename, contents)), default=0)
             if highest:

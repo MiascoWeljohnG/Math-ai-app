@@ -323,6 +323,9 @@ class PracticeSet(Base):
     kind = Column(String, nullable=False)          # easier | harder
     questions = Column(Text, nullable=False)
     attempt_id = Column(Integer, nullable=False)
+    # Practice sets written for this student on this lesson (the "tries"), counted across quiz attempts. Capped by
+    # retakes.MAX_PRACTICE_TRIES; a teacher approving a retake gives a fresh count. NULL (older rows) counts as 1.
+    tries = Column(Integer, nullable=True, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

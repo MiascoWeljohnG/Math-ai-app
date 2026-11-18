@@ -35,6 +35,7 @@
         .q .why { color: var(--text-muted); font-size: 0.9rem; margin: 0.3rem 0 0; }
         .score { font-size: 1.3rem; font-weight: 700; margin: 0.5rem 0; }
         .error { color: #c0392b; }
+        .limit-note { margin: 0.6rem 0; padding: 0.8rem 1rem; border: 1px solid #c0392b; border-radius: 10px; background: rgba(192,57,43,0.08); }
     </style>
     <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
@@ -52,8 +53,11 @@
             <button class="btn primary" id="checkBtn" type="button" hidden>Check my answers</button>
             <button class="btn" id="retryBtn" type="button" hidden>Try again</button>
         </div>
+        <p class="muted" id="triesNote" hidden></p>
         <div id="result" hidden>
             <p class="score" id="score"></p>
+            <div class="limit-note" id="limitNote" hidden></div>
+            <button class="btn primary" id="tryAgainBtn" type="button" hidden>Try again with new questions</button>
             <a class="btn primary" id="quizLink" href="quiz.html">Take the quiz again</a>
             <a class="btn" id="lessonLink" href="lessons.html">Review the lesson</a>
         </div>

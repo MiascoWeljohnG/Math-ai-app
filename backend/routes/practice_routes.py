@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+import retakes
 from adaptive import mastery_level, practice_kind
 from auth import get_current_user
 from database import get_db
@@ -22,6 +23,16 @@ router = APIRouter(prefix="/subjects", tags=["practice"])
 
 PRACTICE_LENGTH = 5
 PRACTICE_MIN = 3   # fewer readable questions than this and the model's answer is rejected
+MAX_TRIES = retakes.MAX_PRACTICE_TRIES   # practice sets per lesson before a teacher has to approve a retake
+TRY_LIMIT_MESSAGE = (
+    f"You have used all {MAX_TRIES} of your tries. You can only retake the exam if your teacher approves it. "
+    "Your teacher has been notified. Open the quiz page to send them a message."
+)
+
+
+def _limited(subject: Subject, user: User) -> bool:
+    """The try limit applies to students in a shared subject. A student's own subject has no teacher to ask."""
+    return user.role == "user" and subject.owner_user_id is None
 
 
 def _standing(db: Session, user: User, lesson_id: int):
@@ -41,7 +52,8 @@ def _saved(db: Session, user: User, lesson_id: int, kind: Optional[str], latest:
     return row if row and row.kind == kind and row.attempt_id == latest.id else None
 
 
-def _payload(subject: Subject, lesson: Lesson, level: str, kind: Optional[str], row: Optional[PracticeSet]) -> dict:
+def _payload(subject: Subject, lesson: Lesson, level: str, kind: Optional[str], row: Optional[PracticeSet],
+             tries: int = 0, limited: bool = False, locked: bool = False) -> dict:
     """What the page needs. Answers are left out on purpose."""
     questions = None
     if row is not None:
@@ -51,7 +63,17 @@ def _payload(subject: Subject, lesson: Lesson, level: str, kind: Optional[str], 
             if item["type"] == "mcq":
                 item["choices"] = q["choices"]
             questions.append(item)
-    return {"subject": subject.name, "lesson_title": lesson.title, "level": level, "kind": kind, "questions": questions}
+    return {
+        "subject": subject.name, "lesson_title": lesson.title, "level": level, "kind": kind, "questions": questions,
+        "tries": tries, "max_tries": MAX_TRIES if limited else None,
+        "exhausted": limited and locked,   # the tries are used up and a teacher has to approve a retake
+    }
+
+
+def _page(db: Session, user: User, subject: Subject, lesson: Lesson, level: str, kind: Optional[str], latest, row) -> dict:
+    limited = _limited(subject, user)
+    locked = limited and retakes.blocking_lock(db, user, lesson.id) is not None
+    return _payload(subject, lesson, level, kind, row, retakes.practice_tries(db, user.id, lesson.id), limited, locked)
 
 
 @router.get("/{subject_id}/lessons/{lesson_id}/practice")
@@ -59,11 +81,15 @@ def get_practice(subject_id: int, lesson_id: int, user: User = Depends(get_curre
     subject = _visible_subject_or_404(db, subject_id, user)
     lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
     level, kind, latest = _standing(db, user, lesson_id)
-    return _payload(subject, lesson, level, kind, _saved(db, user, lesson_id, kind, latest))
+    return _page(db, user, subject, lesson, level, kind, latest, _saved(db, user, lesson_id, kind, latest))
 
 
 @router.post("/{subject_id}/lessons/{lesson_id}/practice/generate")
-async def generate_practice(subject_id: int, lesson_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def generate_practice(
+    subject_id: int, lesson_id: int, fresh: bool = False,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """The page's first set, or with ?fresh=true a NEW set ("Try again"). Every new set uses one of the MAX_TRIES."""
     subject = _visible_subject_or_404(db, subject_id, user)
     lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
     level, kind, latest = _standing(db, user, lesson_id)
@@ -71,9 +97,21 @@ async def generate_practice(subject_id: int, lesson_id: int, user: User = Depend
         raise HTTPException(status_code=400, detail=(
             "Take this lesson's quiz first, then come back." if level == "new"
             else "You passed this lesson, so there is no extra practice set to do."))
+    limited = _limited(subject, user)
+    if limited and retakes.blocking_lock(db, user, lesson_id) is not None:
+        raise HTTPException(status_code=403, detail=TRY_LIMIT_MESSAGE)
     row = _saved(db, user, lesson_id, kind, latest)
-    if row is not None:   # already written for this attempt: no second model call
-        return _payload(subject, lesson, level, kind, row)
+    if row is not None and not fresh:   # already written for this attempt: no second model call
+        return _page(db, user, subject, lesson, level, kind, latest, row)
+    tries = retakes.practice_tries(db, user.id, lesson_id)
+    if limited and tries >= MAX_TRIES:   # asking for one more than allowed: ask the teacher instead
+        retakes.lock_for_tries(db, user, lesson, subject)
+        db.commit()
+        raise HTTPException(status_code=403, detail=TRY_LIMIT_MESSAGE)
+    previous = []   # a fresh set must not repeat the one the student just did
+    old = db.query(PracticeSet).filter(PracticeSet.user_id == user.id, PracticeSet.lesson_id == lesson_id).first()
+    if old is not None:
+        previous = [q.get("question", "") for q in json.loads(old.questions)]
 
     quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
     quiz_level = (quiz.difficulty if quiz else None) or 3
@@ -94,6 +132,8 @@ async def generate_practice(subject_id: int, lesson_id: int, user: User = Depend
             f"Write a {PRACTICE_LENGTH}-question CHALLENGE set that is HARDER than the quiz: multi-step problems "
             f"that combine the ideas. Use DIFFICULTY {min(5, quiz_level + 1)}. "
         )
+    if previous:
+        intro += "Do NOT reuse or reword any of these earlier questions:\n" + "\n".join(f"- {q}" for q in previous) + "\n\n"
     prompt = (
         intro + "The first line is DIFFICULTY: n. "
         f"Then exactly {PRACTICE_LENGTH} questions: 2 multiple choice (TYPE: MCQ), 1 true or false (TYPE: TF), "
@@ -114,13 +154,14 @@ async def generate_practice(subject_id: int, lesson_id: int, user: User = Depend
     if len(questions) < PRACTICE_MIN:
         raise HTTPException(status_code=502, detail="The model's practice set could not be read. Please try again.")
 
-    row = db.query(PracticeSet).filter(PracticeSet.user_id == user.id, PracticeSet.lesson_id == lesson_id).first()
+    row = old
     if row is None:
-        row = PracticeSet(user_id=user.id, lesson_id=lesson_id, kind=kind, questions="[]", attempt_id=latest.id)
+        row = PracticeSet(user_id=user.id, lesson_id=lesson_id, kind=kind, questions="[]", attempt_id=latest.id, tries=0)
         db.add(row)
     row.kind, row.questions, row.attempt_id = kind, json.dumps(questions[:PRACTICE_LENGTH]), latest.id
+    row.tries = tries + 1   # only counted once the set was really written, so a model error costs nothing
     db.commit()
-    return _payload(subject, lesson, level, kind, row)
+    return _page(db, user, subject, lesson, level, kind, latest, row)
 
 
 class SubmitPracticeRequest(BaseModel):
@@ -133,8 +174,8 @@ def submit_practice(
     subject_id: int, lesson_id: int, req: SubmitPracticeRequest,
     user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
-    _visible_subject_or_404(db, subject_id, user)
-    _lesson_in_subject_or_404(db, subject_id, lesson_id)
+    subject = _visible_subject_or_404(db, subject_id, user)
+    lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
     _, kind, latest = _standing(db, user, lesson_id)
     row = _saved(db, user, lesson_id, kind, latest)
     if row is None:
@@ -144,4 +185,12 @@ def submit_practice(
          "explanation": q.get("explanation", "")}
         for i, q in enumerate(json.loads(row.questions))
     ]
-    return {"kind": kind, "score": sum(r["correct"] for r in results), "total": len(results), "results": results}
+    tries = retakes.practice_tries(db, user.id, lesson_id)
+    exhausted = _limited(subject, user) and tries >= MAX_TRIES
+    if exhausted:   # that was the last try: the quiz now needs the teacher's approval, and the teacher is told
+        retakes.lock_for_tries(db, user, lesson, subject)
+        db.commit()
+    return {
+        "kind": kind, "score": sum(r["correct"] for r in results), "total": len(results), "results": results,
+        "tries": tries, "max_tries": MAX_TRIES if _limited(subject, user) else None, "exhausted": exhausted,
+    }

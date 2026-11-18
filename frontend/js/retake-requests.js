@@ -101,7 +101,7 @@
             actions.append(button("Approve", "btn-primary", () => decide(item, true)),
                            button("Reject", "btn-danger", () => decide(item, false)));
         }
-        tr.append(cell(who, user), cell(quiz, subject), cell(text(String(item.violations))),
+        tr.append(cell(who, user), cell(quiz, subject), cell(text(item.violations > 0 ? `${item.violations} violations` : "Used all 3 practice tries")),
                   cell(feedback, stamp, note), cell(tag, decided), cell(actions));
         return tr;
     }

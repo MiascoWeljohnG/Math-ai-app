@@ -114,3 +114,12 @@ MAX_ANALYZE_BYTES = int(os.getenv("MAX_ANALYZE_BYTES", str(15 * 1024 * 1024)))
 # A dense text page is roughly 3,000-4,000 characters; longer ranges keep the parts that best match the
 # lesson title. Raise it if your model has a large context window.
 PAGE_RANGE_CHARS = int(os.getenv("PAGE_RANGE_CHARS", "14000"))
+
+# Figures (diagrams, graphs, geometry drawings) inside PDF / DOCX / PPTX files. When a file is read for the knowledge base
+# or for lessons, text printed inside a figure is read with OCR, and, if a Groq vision model is set (GROQ_VISION_MODEL),
+# each figure also gets a short description. Both end up in the page's text as "[Figure: ...]".
+FIGURE_OCR = os.getenv("FIGURE_OCR", "1") != "0"
+FIGURE_DESCRIPTIONS = os.getenv("FIGURE_DESCRIPTIONS", "1") != "0"   # only does anything when GROQ_VISION_MODEL is set
+FIGURE_MAX_VISION = int(os.getenv("FIGURE_MAX_VISION", "15"))        # vision calls per file (rate limits, speed)
+FIGURE_MAX_OCR = int(os.getenv("FIGURE_MAX_OCR", "60"))              # figures read with OCR per file
+FIGURE_MIN_PX = int(os.getenv("FIGURE_MIN_PX", "120"))               # smaller images (icons, bullets, logos) are skipped
