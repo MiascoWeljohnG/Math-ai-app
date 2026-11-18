@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <link rel="icon" href="data:,">
+    <title>Student Scores · Teacher Dashboard</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/overview.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/mobile.css?v=1">
+    <link rel="stylesheet" href="css/admin-profile.css?v=1">
+</head>
+<body>
+<div class="page">
+    <div class="header" id="staffHeader" data-title="Teacher Dashboard"></div>
+    <script src="js/staff-header.js"></script>
+
+    <div class="section">
+        <div class="section-head">
+            <h2>Student Scores</h2>
+            <p class="hint">Top quiz results across your students. Ranked by lessons passed, then average best score, then total time.</p>
+        </div>
+        <div class="stack">
+            <label for="rankBranch" class="label">Branch</label>
+            <select id="rankBranch" class="branch-select"></select>
+        </div>
+        <div class="table-wrap file-list">
+            <table>
+                <thead><tr><th>#</th><th>Student</th><th>Username</th><th>Lessons passed</th><th>Avg score</th><th>Total time</th><th>Attempts</th><th>Scores</th></tr></thead>
+                <tbody id="rankBody"></tbody>
+            </table>
+        </div>
+        <p class="empty" id="rankEmpty" hidden></p>
+    </div>
+</div>
+
+    <dialog id="attemptsDialog" class="subject-dialog attempts-dialog" aria-labelledby="attemptsTitle">
+        <div class="fp-head">
+            <h2 id="attemptsTitle">Quiz attempts</h2>
+            <button class="btn btn-secondary btn-sm" type="button" id="attemptsClose">Close</button>
+        </div>
+        <p class="hint" id="attemptsHint"></p>
+        <div class="attempts-summary" id="attemptsSummary" hidden></div>
+        <div class="table-wrap attempts-table" id="attemptsTableWrap" hidden>
+            <table>
+                <thead><tr><th>Date</th><th>Branch</th><th>Lesson</th><th>Try</th><th>Score</th><th>Result</th><th>Time</th></tr></thead>
+                <tbody id="attemptsBody"></tbody>
+            </table>
+        </div>
+        <p class="empty" id="attemptsEmpty" hidden></p>
+    </dialog>
+
+
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/icons.js"></script>
+    <script src="js/material-table.js"></script>
+    <script src="js/teacher-common.js"></script>
+    <script src="js/rankings.js"></script>
+    <script src="js/student-attempts.js"></script>
+    <script>
+        initRankings({ select: document.getElementById("rankBranch"), body: document.getElementById("rankBody"), empty: document.getElementById("rankEmpty"), limit: 200, staff: true, onView: showStudentAttempts });
+    </script>
+    <script src="js/teacher-bell.js"></script>
+    <script>
+        requireRole("teacher");
+        initNavDrawer({ staff: true, pages: STAFF_PAGES.teacher });
+    </script>
+</body>
+</html>

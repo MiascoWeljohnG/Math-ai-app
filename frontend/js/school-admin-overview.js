@@ -1,4 +1,4 @@
-// School admin overview: the four cards at the top of school-admin.html (styles: css/overview.css, helpers: overview.js).
+// School admin overview: the four cards on admin-overview.html (styles: css/overview.css, helpers: overview.js).
 // The numbers come from GET /school-admin/overview, which only ever counts the admin's own school.
 //   1. Active accounts  - accounts that can sign in (ring = share of all the school's accounts)
 //   2. Files uploaded   - files in the knowledge base
@@ -67,9 +67,21 @@ function paintAdminOverview(o) {
         if (attention.oldest_approval_days >= 1) parts.push(`oldest waiting ${plural(attention.oldest_approval_days, "day")}`);
         set("ovAttentionSub", joinParts(parts));
     }
-    // Jump to whichever list actually has something in it.
-    document.getElementById("ovAttentionCard").setAttribute("href", !attention.approvals && attention.deletions ? "#deletionSection" : "#approvalSection");
+    // Open whichever page actually has something waiting on it.
+    document.getElementById("ovAttentionCard").setAttribute("href", !attention.approvals && attention.deletions ? "deletion-request.html" : "pending-approvals.html");
+    announceDeletions(attention.deletions);
     overviewShown = true;
+}
+
+// Deletion requests used to pop up once each time the single dashboard page opened. The dashboard is split into pages now,
+// so it is announced once per browser session, from this page only (not every time the admin comes back to the overview).
+function announceDeletions(waiting) {
+    if (!waiting) return;
+    try {
+        if (sessionStorage.getItem("deletionsAnnounced")) return;
+        sessionStorage.setItem("deletionsAnnounced", "1");
+    } catch (_) { /* no session storage: just show it */ }
+    showNotification("Approval needed", `${plural(waiting, "deletion request")} ${waiting === 1 ? "is" : "are"} waiting for your decision.`);
 }
 
 async function loadAdminOverview() {

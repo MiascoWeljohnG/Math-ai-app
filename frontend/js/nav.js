@@ -1,7 +1,9 @@
 // Shared app sidebar. Include this on any logged-in page and call initNavDrawer().
 //
 //   Student pages:  initNavDrawer()                -> fixed list of pages (NAV_ITEMS below)
-//   Dashboards:     initNavDrawer({ staff: true }) -> one link per `.section` on the page, which scrolls to it
+//   Dashboards:     initNavDrawer({ staff: true }) -> one link per `.section` on the page, which scrolls to it (admin.html)
+//   Staff pages:    initNavDrawer({ staff: true, pages: STAFF_PAGES.teacher }) -> one link per page, each section has its own
+//                   page (school admin and teacher dashboards)
 //
 // On desktop the sidebar is always visible; on phones it is a drawer opened with the hamburger button.
 // The link for the page you are on is highlighted, and that highlight follows you as you navigate.
@@ -30,6 +32,8 @@ const ICONS = {
     trash:     navIcon('<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>'),
     warning:   navIcon('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>'),
     dot:       navIcon('<circle cx="12" cy="12" r="3"/>'),
+    log:       navIcon('<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>'),
+    retake:    navIcon('<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>'),
 };
 
 const NAV_ITEMS = [
@@ -41,6 +45,29 @@ const NAV_ITEMS = [
     { label: "Profile",  icon: ICONS.profile, href: "profile.html" },
     { label: "iChatbot", icon: ICONS.chat,    href: "user.html" },
 ];
+
+// Dashboards with one page per section. Pass one list to initNavDrawer({ staff: true, pages: ... }); the page you are on is
+// highlighted by its file name. admin.html (the system administrator) still uses the single-page scroll mode.
+const STAFF_PAGES = {
+    school_admin: [
+        { label: "Overview",                  icon: ICONS.overview, href: "admin-overview.html" },
+        { label: "Pending student approvals", icon: ICONS.idcard,   href: "pending-approvals.html" },
+        { label: "Deletion requests",         icon: ICONS.trash,    href: "deletion-request.html" },
+        { label: "Teachers & Students",       icon: ICONS.users,    href: "teachers-students.html" },
+        { label: "Files from your school",    icon: ICONS.files,    href: "school-files.html" },
+        { label: "Audit log",                 icon: ICONS.log,      href: "audit-log.html" },
+    ],
+    teacher: [
+        { label: "Overview",              icon: ICONS.overview, href: "teacher-overview.html" },
+        { label: "Upload Course Material", icon: ICONS.upload,  href: "upload-material.html" },
+        { label: "Your Uploaded Files",   icon: ICONS.files,    href: "teacher-files.html" },
+        { label: "Manage Lessons",        icon: ICONS.lessons,  href: "manage-lessons.html" },
+        { label: "Student Scores",        icon: ICONS.chart,    href: "student-scores.html" },
+        { label: "Quiz retake requests",  icon: ICONS.retake,   href: "retake-requests.html" },
+        { label: "Reminders",             icon: ICONS.bell,     href: "reminders.html" },
+        { label: "Your Students",        icon: ICONS.users,    href: "teacher-students.html" },
+    ],
+};
 
 const ROLE_LABELS = { user: "Student", teacher: "Instructor", school_admin: "School admin", admin: "Administrator" };
 
@@ -227,6 +254,8 @@ function openAdminProfileModal() {
 
 function initNavDrawer(options = {}) {
     const staff = !!options.staff;
+    const pagedStaff = staff && Array.isArray(options.pages);   // one page per section: real links instead of scrolling
+    const scrollStaff = staff && !pagedStaff;                   // everything on one page: links scroll to the sections
     const role = localStorage.getItem("role") || "user";
     const here = currentPageName();
 
@@ -241,10 +270,10 @@ function initNavDrawer(options = {}) {
     drawer.className = "nav-drawer";
     drawer.setAttribute("aria-label", "Main menu");
 
-    const items = staff ? staffItemsFromPage() : NAV_ITEMS;
+    const items = pagedStaff ? options.pages : scrollStaff ? staffItemsFromPage() : NAV_ITEMS;
     const itemsHtml = items.map((item, i) => {
         const label = escapeNavText(item.label);
-        if (staff) {
+        if (scrollStaff) {
             return `<a href="#" class="nav-drawer-item${i === 0 ? " active" : ""}" title="${label}">` +
                    `<span class="nav-icon">${item.icon}</span><span class="nav-label">${label}</span></a>`;
         }
@@ -260,7 +289,7 @@ function initNavDrawer(options = {}) {
     const userHref = staff ? "" : ' href="profile.html"';
 
     drawer.innerHTML = `
-        <div class="nav-drawer-header"><a class="brand-lockup" href="${staff ? "#" : "landing.html"}"><span class="brand-mark" aria-hidden="true"></span>IsipNayan</a></div>
+        <div class="nav-drawer-header"><a class="brand-lockup" href="${scrollStaff ? "#" : pagedStaff ? items[0].href : "landing.html"}"><span class="brand-mark" aria-hidden="true"></span>IsipNayan</a></div>
         <nav class="nav-drawer-items">${itemsHtml}</nav>
         <div class="nav-drawer-foot">
             <div class="nav-drawer-theme-row"><span>Theme</span>${themeSwitchHTML("navThemeSwitch")}</div>
@@ -326,7 +355,7 @@ function initNavDrawer(options = {}) {
     }
     if (hamburgerBtn) hamburgerBtn.addEventListener("click", openDrawer);
 
-    if (!staff) return;
+    if (!scrollStaff) return;
 
     // ---- dashboards: links scroll to their section, and the current section stays highlighted ----
     const links = [...drawer.querySelectorAll(".nav-drawer-items .nav-drawer-item")];
@@ -371,6 +400,22 @@ function initNavDrawer(options = {}) {
         badge.textContent = name;
         badge.title = name;
         badge.style.display = "";
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fill);
+    else fill();
+})();
+
+// Dashboard heading: "<the signed-in person's name> Dashboard". Uses the same saved name as the sidebar
+// (kept current by the profile editor), and keeps the plain word if no name is saved.
+// The heading is written by staff-header.js (data-title="Teacher Dashboard"), so the page title keeps its page name:
+// "Overview · Teacher Dashboard" becomes "Overview · <name> Dashboard".
+(function showDashboardOwner() {
+    const fill = () => {
+        const owner = document.getElementById("dashboardOwner");
+        const name = (localStorage.getItem("full_name") || localStorage.getItem("username") || "").trim();
+        if (!owner || !name) return;
+        owner.textContent = name;
+        document.title = document.title.replace(/Teacher Dashboard$/, `${name} Dashboard`);
     };
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fill);
     else fill();

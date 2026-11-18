@@ -1,5 +1,5 @@
 // "View" on the teacher's Student Scores table: a popup listing every quiz attempt one student made.
-// Needs js/auth.js (for API) and the #attemptsDialog markup in teacher.html. Reads /teacher/students/<username>/attempts.
+// Needs js/auth.js (for API) and the #attemptsDialog markup in student-scores.html. Reads /teacher/students/<username>/attempts.
 // showStudentAttempts(entry, branch): entry is a rankings row ({username, name}); branch is {id, name} of the table's
 // branch filter, so the popup shows the same branch the table is showing.
 (function () {

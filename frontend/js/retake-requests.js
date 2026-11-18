@@ -1,6 +1,6 @@
 // "Quiz retake requests" on the teacher page: students whose quiz was ended for violations and are locked out of it
 // until a teacher approves their feedback. Reads /retake-requests, answers with /retake-requests/<id>/decision.
-// Needs js/auth.js (API), js/modal.js (uiConfirm, uiPrompt) and the #retakeSection markup in teacher.html.
+// Needs js/auth.js (API), js/modal.js (uiConfirm, uiPrompt) and the #retakeSection markup in retake-requests.html.
 // Exposes loadRetakeRequests() so the notification bell can refresh the list when a new request arrives.
 (() => {
     const $ = (id) => document.getElementById(id);

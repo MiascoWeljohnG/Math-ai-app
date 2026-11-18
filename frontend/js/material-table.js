@@ -5,6 +5,8 @@ function formatUploadDate(iso) {
 }
 
 async function downloadMaterial(file) {
+    // Same popup style as deleting: nothing is saved until the person confirms.
+    if (!await uiConfirm(`Download "${file.display_name}"?\n\nThe file will be saved to this device.`, { title: "Download file", okText: "Download" })) return;
     try {
         const res = await fetch(`${API}/materials/${encodeURIComponent(file.filename)}/file`, { headers: getHeaders() });
         if (!res.ok) throw new Error("missing");

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>Overview · School Admin</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/overview.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/mobile.css?v=1">
+    <link rel="stylesheet" href="css/admin-profile.css?v=1">
+</head>
+<body>
+<div class="page">
+    <div class="header" id="staffHeader" data-title="School Admin" data-add-teacher="link"></div>
+    <script src="js/staff-header.js"></script>
+
+    <h2 class="ov-title"><span class="ov-title-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg></span>Overview</h2>
+    <section class="ov-grid" id="overviewGrid" aria-label="School overview">
+        <article class="ov-card" data-tone="accounts">
+            <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="ov-label">Active accounts</span></div>
+            <div class="ov-body">
+                <strong class="ov-value" id="ovAccounts">&ndash;</strong>
+                <div class="ov-gauge" id="ovAccountsGauge" role="img" aria-label="0 percent">
+                    <svg viewBox="0 0 80 80" aria-hidden="true"><circle class="g-track" cx="40" cy="40" r="33"/><circle class="g-fill" cx="40" cy="40" r="33" pathLength="100"/></svg>
+                    <span class="g-pct">0%</span>
+                </div>
+            </div>
+            <span class="ov-sub" id="ovAccountsSub">Loading&hellip;</span>
+        </article>
+        <article class="ov-card" data-tone="files">
+            <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3-3 3 3"/></svg></span><span class="ov-label">Files uploaded</span></div>
+            <div class="ov-body">
+                <strong class="ov-value" id="ovFiles">&ndash;</strong>
+            </div>
+            <span class="ov-sub" id="ovFilesSub">Loading&hellip;</span>
+        </article>
+        <article class="ov-card" data-tone="online">
+            <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span><span class="ov-label">Active now</span></div>
+            <div class="ov-body">
+                <strong class="ov-value ov-value-live"><span class="ov-live" aria-hidden="true"></span><span id="ovOnline">&ndash;</span></strong>
+                <div class="ov-gauge" id="ovOnlineGauge" role="img" aria-label="0 percent">
+                    <svg viewBox="0 0 80 80" aria-hidden="true"><circle class="g-track" cx="40" cy="40" r="33"/><circle class="g-fill" cx="40" cy="40" r="33" pathLength="100"/></svg>
+                    <span class="g-pct">0%</span>
+                </div>
+            </div>
+            <span class="ov-sub" id="ovOnlineSub">Loading&hellip;</span>
+        </article>
+        <a class="ov-card" data-tone="attention" id="ovAttentionCard" href="pending-approvals.html">
+            <div class="ov-head"><span class="ov-badge"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span><span class="ov-label">Needs your attention</span></div>
+            <div class="ov-body">
+                <strong class="ov-value" id="ovAttention">&ndash;</strong>
+            </div>
+            <span class="ov-sub" id="ovAttentionSub">Loading&hellip;</span>
+        </a>
+    </section>
+</div>
+
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/icons.js"></script>
+    <script src="js/material-table.js"></script>
+    <script src="js/school-admin-common.js"></script>
+    <script src="js/overview.js"></script>
+    <script src="js/school-admin-overview.js"></script>
+    <script src="js/school-admin-bell.js"></script>
+    <script>
+        requireRole("school_admin");
+        initNavDrawer({ staff: true, pages: STAFF_PAGES.school_admin });
+    </script>
+</body>
+</html>

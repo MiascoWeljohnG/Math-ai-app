@@ -48,7 +48,10 @@ function createHarness(materials, teacherFiles = [], drafts = []) {
         },
     };
     context.globalThis = context;
-    vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../js/teacher.js"), "utf8"), context);
+    // The teacher page is split into one script per page; the browser runs them as separate classic scripts that share one
+    // global scope, which joining them here reproduces.
+    const source = ["teacher-common.js", "teacher-files.js", "teacher.js"].map(name => fs.readFileSync(path.join(__dirname, "../js", name), "utf8")).join("\n");
+    vm.runInNewContext(source, context);
     return { element, calls, context, rendered, scheduled };
 }
 

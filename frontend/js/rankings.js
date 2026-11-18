@@ -1,4 +1,4 @@
-// Student rankings table, shared by landing.html (students) and teacher.html (monitoring).
+// Student rankings table, shared by landing.html (students) and student-scores.html (teacher monitoring).
 // Needs js/auth.js (for API). Fills the branch dropdown, loads /learning/rankings and reloads on change.
 // staff=true adds the username and attempts columns, which the server only sends to teachers/admins.
 // onView(entry, branch) adds a "View" button to each row (staff only); branch is {id, name} of the chosen branch ("" = all).

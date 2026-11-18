@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>Teachers & Students · School Admin</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/overview.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/mobile.css?v=1">
+    <link rel="stylesheet" href="css/admin-profile.css?v=1">
+</head>
+<body>
+<div class="page">
+    <div class="header" id="staffHeader" data-title="School Admin" data-add-teacher="button"></div>
+    <script src="js/staff-header.js"></script>
+
+    <div class="section">
+        <h2>Teachers &amp; Students</h2>
+        <div class="field-row" style="margin-bottom:0.75rem;">
+            <label for="roleFilter" class="label">Show</label>
+            <select id="roleFilter" class="branch-select">
+                <option value="all">Everyone</option>
+                <option value="user">Students</option>
+                <option value="teacher">Teachers</option>
+                <option value="school_admin">School admins</option>
+            </select>
+            <span id="userCount" class="hint"></span>
+        </div>
+        <div class="table-wrap file-list">
+            <table id="usersTable">
+                <thead><tr><th>Username</th><th>Last Name</th><th>First Name</th><th>Middle Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="teacherModal">
+        <div class="modal">
+            <button class="close-btn" id="closeTeacherModal">&times;</button>
+            <h2>Add Teacher Account</h2>
+            <form id="teacherForm">
+                <label>Username</label><input type="text" id="teacherUsername" required>
+                <label>First name</label><input type="text" id="teacherFirstName" required>
+                <label>Last name</label><input type="text" id="teacherLastName" required>
+                <label>Middle name <span class="opt">(optional)</span></label><input type="text" id="teacherMiddleName">
+                <label>Email</label><input type="email" id="teacherEmail" required>
+                <label>Birthday</label><input type="date" id="teacherBirthday" required>
+                <label>Temporary password (at least 8 characters)</label><input type="password" id="teacherPassword" required minlength="8">
+                <div class="status" id="teacherStatus"></div>
+                <button type="submit">Create Teacher Account</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/icons.js"></script>
+    <script src="js/material-table.js"></script>
+    <script src="js/school-admin-common.js"></script>
+    <script src="js/school-admin-users.js"></script>
+    <script src="js/school-admin-bell.js"></script>
+    <script>
+        requireRole("school_admin");
+        initNavDrawer({ staff: true, pages: STAFF_PAGES.school_admin });
+    </script>
+</body>
+</html>

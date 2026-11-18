@@ -1,4 +1,4 @@
-/* Overview cards, shared by the student home page (landing.html) and the school admin page (school-admin.html):
+/* Overview cards, shared by the student home page (landing.html) and the school admin overview page (admin-overview.html):
    four stat cards with icon badges and animated ring gauges. Colours come from theme.css. */
 .ov-title { margin-top: 1.5rem; display: flex; align-items: center; gap: 0.65rem; }
 .ov-title-badge { width: 38px; height: 38px; border-radius: 12px; background: var(--pri2); color: var(--accent); display: grid; place-items: center; flex: none; }

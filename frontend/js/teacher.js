@@ -1,261 +1,6 @@
-function getHeaders() {
-    return { "Authorization": `Bearer ${localStorage.getItem("token")}` };
-}
-
-// --- Upload (mirrors admin.js's chip-based uploader, posting to /teacher/upload) ---
-const dropZone = document.getElementById("dropZone");
-const fileInput = document.getElementById("fileInput");
-const dropPlaceholder = document.getElementById("dropPlaceholder");
-const uploadBtn = document.getElementById("uploadBtn");
-
-let selectedFiles = [];
-
-dropZone.addEventListener("click", (e) => {
-    if (e.target.closest(".fremove")) return;
-    fileInput.click();
-});
-dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
-dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
-dropZone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropZone.classList.remove("dragover");
-    addFiles(e.dataTransfer.files);
-});
-fileInput.addEventListener("change", (e) => {
-    addFiles(e.target.files);
-    fileInput.value = "";
-});
-
-function addFiles(fileList) {
-    for (const file of fileList) {
-        if (selectedFiles.some(f => f.name === file.name)) continue;
-        selectedFiles.push(file);
-    }
-    renderChips();
-}
-
-function removeFile(name) {
-    selectedFiles = selectedFiles.filter(f => f.name !== name);
-    renderChips();
-}
-
-function renderChips() {
-    dropZone.querySelectorAll(".file-chip").forEach(c => c.remove());
-    dropPlaceholder.style.display = selectedFiles.length === 0 ? "block" : "none";
-    for (const file of selectedFiles) {
-        const chip = document.createElement("div");
-        chip.className = "file-chip";
-        const name = document.createElement("span");
-        name.className = "fname";
-        name.title = file.name;
-        name.textContent = file.name;
-        const removeButton = document.createElement("button");
-        removeButton.className = "fremove";
-        removeButton.type = "button";
-        removeButton.title = "Remove";
-        removeButton.innerHTML = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
-        removeButton.setAttribute("aria-label", "Remove");
-        removeButton.addEventListener("click", () => removeFile(file.name));
-        chip.append(name, removeButton);
-        dropZone.appendChild(chip);
-    }
-    uploadBtn.disabled = selectedFiles.length === 0;
-}
-
-async function uploadFiles() {
-    if (!selectedFiles.length) return;
-    const statusEl = document.getElementById("uploadStatus");
-    statusEl.className = "status";
-    statusEl.textContent = "Checking your school's available subjects...";
-    statusEl.style.display = "block";
-
-    await withButtonLoading(uploadBtn, async () => {
-        const subjects = await loadUploadSubjects(`${API}/teacher/subjects`);
-        populateUploadSubjects(document.getElementById("branchSelect"), subjects);
-        statusEl.textContent = subjects.length ? "Select a subject, or leave Auto-detect (AI) to classify each file." : "No subjects are configured for this school. Uploading with AI auto-detection.";
-        const branch = document.getElementById("branchSelect").value;
-        const { message, savedNames } = await uploadWithTopics(`${API}/teacher/upload`, getHeaders(), selectedFiles, branch, subjects);
-
-        statusEl.className = "status success";
-        statusEl.textContent = message;
-        selectedFiles = selectedFiles.filter(f => !savedNames.has(f.name));   // unfiled files stay selected
-        renderChips();
-        loadMyFiles();
-        loadMaterialOptions();
-    }).catch(err => {
-        statusEl.className = "status error";
-        statusEl.textContent = err.message;
-    });
-}
-
-// --- Files this teacher uploaded (the server only returns their own) ---
-let myFiles = [];
-const fileSearch = document.getElementById("fileSearch");
-const fileSubjectFilter = document.getElementById("fileSubjectFilter");
-
-// Draws the table from the files that match the search words and the chosen subject. The search and subject choice
-// survive the automatic reloads, so a file finishing its indexing doesn't wipe what the teacher typed.
-function renderMyFiles() {
-    const wanted = fileSubjectFilter.value;
-    const labels = new Map();   // one entry per subject whatever its capitals; the first spelling seen is the label
-    for (const file of myFiles) {
-        const key = file.branch.trim().toLowerCase();
-        if (!labels.has(key)) labels.set(key, file.branch);
-    }
-    const subjects = [...labels.values()].sort((a, b) => a.localeCompare(b));
-    fileSubjectFilter.replaceChildren(new Option("All subjects", ""), ...subjects.map(name => new Option(name, name)));
-    fileSubjectFilter.value = subjects.includes(wanted) ? wanted : "";   // a subject that no longer has files falls back to All
-
-    const subject = fileSubjectFilter.value.trim().toLowerCase();
-    const words = fileSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const shown = myFiles.filter(file => {
-        if (subject && file.branch.trim().toLowerCase() !== subject) return false;
-        const text = `${file.display_name} ${file.branch}`.toLowerCase();
-        return words.every(word => text.includes(word));
-    });
-
-    const note = document.getElementById("noFiles");
-    note.textContent = myFiles.length ? "No files match your search." : "You haven't uploaded any files yet.";
-    note.style.display = shown.length ? "none" : "block";
-    document.getElementById("filesTable").style.display = shown.length ? "" : "none";
-    document.getElementById("fileFilter").hidden = myFiles.length === 0;
-    document.getElementById("fileCount").textContent = myFiles.length && shown.length !== myFiles.length
-        ? `Showing ${shown.length} of ${myFiles.length} files.` : "";
-    renderMaterialRows(document.querySelector("#filesTable tbody"), shown, false, requestFileDeletion, loadMyFiles);
-    // renderMaterialRows only watches the files it was given; keep reloading while ANY file (even a hidden one) is still being read
-    scheduleIndexingRefresh(myFiles, loadMyFiles);
-}
-fileSearch.addEventListener("input", renderMyFiles);
-fileSubjectFilter.addEventListener("change", renderMyFiles);
-
-let lastReadyCount = null;
-let filesRetryTimer = null;
-
-// A failed load must not look like "no files": say what happened, and try again by itself.
-function showFilesProblem(message) {
-    const note = document.getElementById("noFiles");
-    note.textContent = message;
-    note.style.display = "block";
-    document.getElementById("filesTable").style.display = "none";
-    clearTimeout(filesRetryTimer);
-    filesRetryTimer = setTimeout(loadMyFiles, 8000);
-}
-
-// A teacher can't delete a file outright: Delete sends a request and the school admin decides.
-// Marks the files already asked about (waiting for the admin, or recently kept) so the table can say so.
-let deletionRefreshTimer = null;
-async function attachDeletionStatus(files) {
-    try {
-        const res = await fetch(`${API}/file-deletions/mine`, { headers: getHeaders() });
-        const status = new Map((res.ok ? await res.json() : []).map(item => [item.filename, item.status]));
-        files.forEach(file => { file.deletion_status = status.get(file.filename) || null; });
-    } catch (_) { /* the table still works without the notes */ }
-    clearTimeout(deletionRefreshTimer);
-    if (files.some(file => file.deletion_status === "pending")) deletionRefreshTimer = setTimeout(loadMyFiles, 15000);   // notice the answer
-}
-
-async function requestFileDeletion(file) {
-    if (!await uiConfirm(`Ask your school admin to delete "${file.display_name}"?\n\nThe file is NOT deleted yet. It stays until the admin approves. Once deleted, the chatbot can no longer use it.`, { title: "Request file deletion", okText: "Continue", danger: true })) return;
-    const reason = await uiPrompt("Why should it be deleted? (optional)", "", { title: "Reason", okText: "Send request" });
-    if (reason === null) return;
-    try {
-        const response = await fetch(`${API}/file-deletions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", ...getHeaders() },
-            body: JSON.stringify({ filename: file.filename, reason: reason.trim() || null }),
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.detail || "Couldn't send the request.");
-        await uiAlert(result.message, { title: "Request sent" });
-    } catch (error) {
-        await uiAlert(error.message, { title: "Couldn't send the request" });
-    }
-    loadMyFiles();
-}
-
-async function loadMyFiles() {
-    try {
-        const res = await fetch(`${API}/teacher/files`, { headers: getHeaders() });
-        if (!res.ok) {
-            showFilesProblem(`Couldn't load your files (server error ${res.status}). Your uploads are safe. Trying again…`);
-            return;
-        }
-        const files = await res.json();
-        await attachDeletionStatus(files);
-        myFiles = files;
-        renderMyFiles();
-        if (typeof loadTeacherOverview === "function") loadTeacherOverview();
-        // a file that just finished being read can now be picked for lessons
-        const readyCount = files.filter(f => f.index_status === "ready").length;
-        if (readyCount !== lastReadyCount) {
-            if (lastReadyCount !== null) loadMaterialOptions();
-            lastReadyCount = readyCount;
-        }
-    } catch (err) {
-        console.error("Loading the teacher's files failed:", err);
-        showFilesProblem("Couldn't reach the server (it may be waking up). Your uploads are safe. Trying again…");
-    }
-}
-loadMyFiles();
-
-// --- Students + progress ---
-async function loadStudents() {
-    try {
-        const res = await fetch(`${API}/teacher/students`, { headers: getHeaders() });
-        if (!res.ok) return;
-        const students = await res.json();
-        const tbody = document.querySelector("#studentsTable tbody");
-        const noStudents = document.getElementById("noStudents");
-
-        if (students.length === 0) {
-            tbody.replaceChildren();
-            noStudents.style.display = "block";
-            return;
-        }
-        noStudents.style.display = "none";
-        document.getElementById("studentsHead").replaceChildren(...["Student", "Email", ...students[0].progress.map(p => p.branch), "Mastery"].map(text => {
-            const th = document.createElement("th");
-            th.textContent = text;
-            return th;
-        }));
-
-        const rows = students.map(s => {
-            const name = formatName(s) || s.username;
-            const row = document.createElement("tr");
-            const nameCell = document.createElement("td");
-            nameCell.textContent = name;
-            row.append(nameCell);
-
-            const emailCell = document.createElement("td");
-            emailCell.textContent = s.email || "";
-            row.append(emailCell);
-
-            for (const item of s.progress) {
-                const percent = Math.min(100, Math.max(0, Number(item.percent) || 0));
-                const cell = document.createElement("td");
-                const track = document.createElement("span");
-                track.className = "mini-progress-track";
-                const fill = document.createElement("span");
-                fill.className = "mini-progress-fill";
-                fill.style.width = `${percent}%`;
-                track.append(fill);
-                cell.append(track, document.createTextNode(`${percent}%`));
-                row.append(cell);
-            }
-
-            // adaptive levels (rules in backend/adaptive.py): who is stuck, who is ahead
-            const masteryCell = document.createElement("td");
-            const stuck = document.createElement("span");
-            stuck.textContent = `${s.levels.struggling} struggling`;
-            if (s.levels.struggling) { stuck.style.color = "var(--danger, #e57373)"; stuck.style.fontWeight = "600"; }
-            masteryCell.append(stuck, document.createTextNode(` · ${s.levels.mastered} mastered`));
-            row.append(masteryCell);
-            return row;
-        });
-        tbody.replaceChildren(...rows);
-    } catch (_) { /* leave table empty on failure */ }
-}
-loadStudents();
+// Teacher page: Manage Lessons (manage-lessons.html) - subjects, lessons, AI drafts, the lesson dialog and the uploaded-file picker.
+// Needs teacher-common.js (getHeaders) loaded first. The files table and students table live on their own pages now, so
+// the calls that used to refresh them are skipped when those scripts are not on the page.
 
 const lessonSubjectSelect = document.getElementById("lessonSubjectSelect");
 const lessonListEl = document.getElementById("lessonListEl");
@@ -1046,7 +791,7 @@ async function saveLessonFile(file) {
     }
     const saved = result.uploaded && result.uploaded[0];
     if (!saved || !saved.stored_name) throw new Error(`The file couldn't be saved. ${result.message || ""}${hint}`.replace("  ", " "));
-    loadMyFiles();
+    if (typeof loadMyFiles === "function") loadMyFiles();
     loadMaterialOptions();
     return saved.stored_name;
 }
@@ -1161,7 +906,7 @@ async function generateLessons() {
             lessonDialog.close();   // not closeLessonDialog(): lessonBusy is still set until the finally below
             showLessonStatus(`Done. ${saved.length} lessons saved as drafts.${quizNote} Review them under "Drafts to review" and press Approve so students can see them.`, quizFailures ? "error" : "success");
         }
-        loadStudents();
+        if (typeof loadStudents === "function") loadStudents();
         finished = true;
     }).catch(error => {
         const pending = titles.slice(saved.length);
@@ -1267,7 +1012,7 @@ async function refreshDeletionState() {
                 : `All admins approved. "${r.subject_name}" was deleted.`).join(" "),
             "success",
         );
-        loadStudents();
+        if (typeof loadStudents === "function") loadStudents();
     }
 }
 
@@ -1383,7 +1128,7 @@ async function writeLessonsFromFile(subject, file, withQuiz) {
         }
         const quizNote = quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "";
         showLessonStatus(`Done. ${written} lesson(s) saved to "${subject.name}" as drafts.${quizNote} Review them under "Drafts to review" and press Approve so students can see them.`, quizFailures ? "error" : "success");
-        loadStudents();
+        if (typeof loadStudents === "function") loadStudents();
         await reviewGeneratedLessons(savedLessons);
     } catch (error) {
         showLessonStatus(`${error.message} The subject "${subject.name}" was created; ${written} of ${total} lesson(s) were saved before it stopped.`, "error");
@@ -1470,17 +1215,6 @@ async function loadMaterialOptions() {
 }
 loadMaterialOptions();
 
-async function initUploadSubjects() {
-    const branchSelect = document.getElementById("branchSelect");
-    if (!branchSelect) return;
-    try {
-        const subjects = await loadUploadSubjects(`${API}/teacher/subjects`);
-        populateUploadSubjects(branchSelect, subjects);
-    } catch (_) {
-        // Fall back gracefully to existing select state if fetch fails
-    }
-}
-initUploadSubjects();
 
 async function postJson(url, body) {
     const response = await fetch(url, {

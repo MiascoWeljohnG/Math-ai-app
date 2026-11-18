@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>Pending student approvals · School Admin</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/overview.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/mobile.css?v=1">
+    <link rel="stylesheet" href="css/admin-profile.css?v=1">
+</head>
+<body>
+<div class="page">
+    <div class="header" id="staffHeader" data-title="School Admin"></div>
+    <script src="js/staff-header.js"></script>
+
+    <div class="section" id="approvalSection">
+        <div class="section-head">
+            <h2>Pending student approvals <span class="tag" id="pendingCount" style="display:none;">0</span></h2>
+            <p class="hint">Students who signed up for your school. Open the certificate, then approve or reject. A rejected student sees your reason and can send a new certificate.</p>
+        </div>
+        <div class="table-wrap file-list">
+            <table id="pendingTable">
+                <thead><tr><th>Student ID</th><th>Name</th><th>Email</th><th>Submitted</th><th>Checks</th><th>Certificate</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <p id="noPending" class="empty">No one is waiting for approval.</p>
+    </div>
+</div>
+
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/icons.js"></script>
+    <script src="js/material-table.js"></script>
+    <script src="js/school-admin-common.js"></script>
+    <script src="js/approvals.js"></script>
+    <script src="js/school-admin-bell.js"></script>
+    <script>
+        requireRole("school_admin");
+        initNavDrawer({ staff: true, pages: STAFF_PAGES.school_admin });
+    </script>
+</body>
+</html>

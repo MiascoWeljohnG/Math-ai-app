@@ -1,10 +1,11 @@
 """The school admin's own page: everything here is limited to the admin's school, and the school comes
 from their account (never from the request), so it cannot be switched by editing the page."""
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 import config
@@ -176,12 +177,48 @@ def delete_school_file(filename: str, user: User = Depends(require_school_admin)
     return {"message": f'Deleted "{name}".'}
 
 
+AUDIT_ROLES = {"user", "teacher", "school_admin"}   # "Who" filter: students, teachers, school admins
+
+
+def _naive_utc(value):
+    """The log stores naive UTC times; the browser sends ISO times that may carry a zone."""
+    if value is not None and value.tzinfo is not None:
+        value = value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
 @router.get("/audit-log")
-def school_audit_log(limit: int = 200, user: User = Depends(require_school_admin), db: Session = Depends(get_db)):
+def school_audit_log(
+    limit: int = 200,
+    since: Optional[datetime] = None,    # only events at or after this time
+    until: Optional[datetime] = None,    # only events before this time
+    role: Optional[str] = None,          # who did it: user (student) | teacher | school_admin
+    actions: Optional[str] = None,       # what: comma-separated action codes; a trailing/leading * is a wildcard (e.g. "student.*")
+    user: User = Depends(require_school_admin), db: Session = Depends(get_db),
+):
     """What happened in this school: sign-ups, approvals and rejections, certificate views, accounts created,
-    files, lessons and subjects deleted. The school comes from the signed-in account, so another school's events are unreachable."""
-    rows = (
-        db.query(AuditLog).filter(AuditLog.school_id == user.school_id)
-        .order_by(AuditLog.id.desc()).limit(max(1, min(limit, 500))).all()
-    )
+    files, lessons and subjects deleted. The school comes from the signed-in account, so another school's events are unreachable.
+    Optional filters: a time window (since/until), the kind of person (role), and the kind of event (actions)."""
+    query = db.query(AuditLog).filter(AuditLog.school_id == user.school_id)
+
+    since, until = _naive_utc(since), _naive_utc(until)
+    if since is not None:
+        query = query.filter(AuditLog.created_at >= since)
+    if until is not None:
+        query = query.filter(AuditLog.created_at < until)
+
+    if role:
+        if role not in AUDIT_ROLES:
+            raise HTTPException(status_code=400, detail="Unknown role filter")
+        usernames = db.query(User.username).filter(User.school_id == user.school_id, User.role == role)
+        query = query.filter(AuditLog.actor.in_(usernames))
+
+    wanted = [a.strip() for a in (actions or "").split(",") if a.strip()]
+    if wanted:
+        query = query.filter(or_(*[
+            AuditLog.action.like(a.replace("*", "%")) if "*" in a else AuditLog.action == a
+            for a in wanted
+        ]))
+
+    rows = query.order_by(AuditLog.id.desc()).limit(max(1, min(limit, 500))).all()
     return [{"at": r.created_at.isoformat() + "Z", "actor": r.actor, "action": r.action, "target": r.target, "detail": r.detail} for r in rows]

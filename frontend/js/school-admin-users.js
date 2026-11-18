@@ -1,13 +1,5 @@
-// School admin page. The server decides which school this is from the signed-in account, so nothing
-// here sends or trusts a school id.
-function getHeaders() {   // material-table.js uses this for downloads too
-    return { "Authorization": `Bearer ${localStorage.getItem("token")}` };
-}
-
-function esc(v) {
-    return String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
+// School admin page: Teachers & Students (teachers-students.html) - everyone in the school, and the Add Teacher form.
+// Needs school-admin-common.js, modal.js (guardUnsaved) and the users table + #teacherModal markup of that page.
 // --- Teachers & students of this school ---
 let allUsers = [];
 
@@ -33,48 +25,6 @@ async function loadUsers() {
 }
 document.getElementById("roleFilter").addEventListener("change", renderUsers);
 loadUsers();
-
-// --- Files uploaded by this school's teachers ---
-async function loadFiles() {
-    const res = await fetch(`${API}/school-admin/files`, { headers: getHeaders() });
-    if (!res.ok) return;
-    const files = await res.json();
-    document.getElementById("noFiles").style.display = files.length ? "none" : "block";
-    document.getElementById("filesTable").style.display = files.length ? "" : "none";
-    renderMaterialRows(document.querySelector("#filesTable tbody"), files, true, deleteFile, loadFiles);
-}
-
-async function deleteFile(file) {
-    if (!await uiConfirm(`Delete "${file.display_name}"?\n\nThe file and what the AI learned from it are removed. The original is moved to the Archived folder in Google Drive.`, { title: "Delete file", okText: "Delete", danger: true })) return;
-    const res = await fetch(`${API}/school-admin/files/${encodeURIComponent(file.filename)}`, { method: "DELETE", headers: getHeaders() });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) await uiAlert(data.detail || "Couldn't delete the file.", { title: "Delete file" });
-    loadFiles();
-    if (typeof loadAuditLog === "function") loadAuditLog();
-    if (typeof loadAdminOverview === "function") loadAdminOverview();
-}
-loadFiles();
-
-// Rebuild the shared material index; the endpoint accepts school admins via require_staff.
-const reindexUploadsBtn = document.getElementById("reindexUploadsBtn");
-const reindexStatus = document.getElementById("reindexStatus");
-reindexUploadsBtn.addEventListener("click", async () => {
-    reindexUploadsBtn.disabled = true;
-    reindexStatus.className = "status info";
-    reindexStatus.textContent = "Re-indexing the uploaded files…";
-    try {
-        const response = await fetch(`${API}/materials/reindex`, { method: "POST", headers: getHeaders() });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || "Re-index failed.");
-        reindexStatus.className = "status success";
-        reindexStatus.textContent = `Done. The AI now knows ${result.chunks} text chunks from your uploaded files.`;
-    } catch (error) {
-        reindexStatus.className = "status error";
-        reindexStatus.textContent = error.message;
-    } finally {
-        reindexUploadsBtn.disabled = false;
-    }
-});
 
 // --- Add a teacher to this school ---
 const teacherModal = document.getElementById("teacherModal");
@@ -114,3 +64,6 @@ document.getElementById("teacherForm").addEventListener("submit", async (e) => {
         teacherStatus.textContent = err.message;
     }
 });
+
+// "+ Add Teacher" on the other school admin pages links here with #add-teacher
+if (location.hash === "#add-teacher") { teacherGuard.reset(); teacherModal.classList.add("active"); }

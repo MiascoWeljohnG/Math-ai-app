@@ -1,4 +1,4 @@
-// Teacher overview: the four tiles at the top of teacher.html (styles: css/overview.css, helpers: overview.js).
+// Teacher overview: the four tiles on teacher-overview.html (styles: css/overview.css, helpers: overview.js).
 // The numbers come from GET /teacher/overview. Files are only this teacher's own; lessons and students are the school's.
 //   1. Files you uploaded - total, with a pie chart of PDF vs DOCX
 //   2. Lessons to approve - AI drafts waiting for a teacher to approve them
@@ -125,7 +125,7 @@ async function fetchTeacherOverview() {
     }
 }
 
-// Called by teacher.js after the file list or draft list reloads. A short delay merges bursts into one request.
+// Called by teacher-files.js / teacher.js after the file list or draft list reloads (when those are on the page). A short delay merges bursts into one request.
 function loadTeacherOverview() {
     clearTimeout(teacherOverviewTimer);
     teacherOverviewTimer = setTimeout(fetchTeacherOverview, 400);

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>Audit log · School Admin</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/overview.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/mobile.css?v=1">
+    <link rel="stylesheet" href="css/admin-profile.css?v=1">
+</head>
+<body>
+<div class="page">
+    <div class="header" id="staffHeader" data-title="School Admin"></div>
+    <script src="js/staff-header.js"></script>
+
+    <div class="section">
+        <div class="section-head">
+            <h2>Audit log</h2>
+            <p class="hint">What happened in your school, newest first: sign-ups, approvals and rejections, certificates opened, accounts created, files, lessons and subjects deleted. Only your school's events are shown.</p>
+            <button class="btn btn-secondary btn-sm" type="button" id="auditRefresh">Refresh</button>
+        </div>
+        <div class="field-row audit-filters" style="margin-bottom:0.75rem;">
+            <label for="auditWhen" class="label">When</label>
+            <select id="auditWhen" class="branch-select">
+                <option value="all">Any time</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="week">Past week</option>
+                <option value="month">Past month</option>
+                <option value="year">Past year</option>
+            </select>
+            <label for="auditWho" class="label">Who</label>
+            <select id="auditWho" class="branch-select">
+                <option value="all">Everyone</option>
+                <option value="user">Students</option>
+                <option value="teacher">Teachers</option>
+                <option value="school_admin">School admins</option>
+            </select>
+            <label for="auditWhat" class="label">What</label>
+            <select id="auditWhat" class="branch-select">
+                <option value="all">All activity</option>
+                <option value="signups">Student sign-ups</option>
+                <option value="decisions">Students approved / rejected</option>
+                <option value="certificates">Certificates opened</option>
+                <option value="accounts">Accounts created</option>
+                <option value="requests">Deletion requests</option>
+                <option value="verdicts">Deletion requests approved / rejected</option>
+                <option value="deleted">Files and lessons deleted</option>
+                <option value="retakes">Quiz retakes</option>
+                <option value="views">Lists opened</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" type="button" id="auditClear">Clear filters</button>
+            <span id="auditCount" class="hint"></span>
+        </div>
+        <div class="table-wrap file-list">
+            <table id="auditTable">
+                <thead><tr><th>When</th><th>Who</th><th>What</th><th>About</th><th>Note</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <p id="noAudit" class="empty">Nothing has happened yet.</p>
+    </div>
+</div>
+
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/icons.js"></script>
+    <script src="js/material-table.js"></script>
+    <script src="js/school-admin-common.js"></script>
+    <script src="js/school-admin-audit.js"></script>
+    <script src="js/school-admin-bell.js"></script>
+    <script>
+        requireRole("school_admin");
+        initNavDrawer({ staff: true, pages: STAFF_PAGES.school_admin });
+    </script>
+</body>
+</html>

@@ -1,14 +1,9 @@
-// School admin extras: deletion requests (subjects, lessons, modules), the notification bell and the audit log.
-// Needs API, getHeaders(), esc(), formatUploadDate() and the uiAlert / uiConfirm popups.
-function showNotification(title, message, isError = false) {
-    uiAlert(message, { title });
-}
-
-// --- Deletion requests: a teacher asked to delete a subject, a lesson or a module (an uploaded file); the school admin decides ---
+// School admin page: Deletion requests (deletion-request.html) - teachers ask to delete a subject, a lesson or a module; the admin decides.
+// Needs school-admin-common.js, material-table.js (formatUploadDate), modal.js and the #deletionSection markup of that page.
+// A teacher asked to delete a subject, a lesson or a module (an uploaded file); the school admin decides ---
 // One list, three kinds. Each kind has its own endpoint; the page merges them, oldest first, and a dropdown filters by kind.
 const deletionList = document.getElementById("deletionList");
 const deletionFilter = document.getElementById("deletionFilter");
-let announcedDeletions = false;
 
 const DELETION_KINDS = {
     subject: {
@@ -133,15 +128,6 @@ async function loadDeletionRequests() {
         } catch (_) { /* keep the last list */ }
     }));
     renderDeletions();
-
-    // The notification: once per visit, tell this admin if requests still need their answer.
-    const waiting = DELETION_TYPES.map(type => [type, deletionsByType[type].filter(r => DELETION_KINDS[type].needsMe(r)).length]).filter(([, n]) => n);
-    const total = waiting.reduce((sum, [, n]) => sum + n, 0);
-    if (total && !announcedDeletions) {
-        announcedDeletions = true;
-        const parts = waiting.map(([type, n]) => `${n} ${n === 1 ? DELETION_KINDS[type].badge.toLowerCase() : DELETION_KINDS[type].plural}`).join(", ");
-        showNotification("Approval needed", `${total} deletion request${total === 1 ? " is" : "s are"} waiting for your decision (${parts}).`);
-    }
 }
 
 async function decideDeletion(request, approve) {
@@ -167,95 +153,3 @@ async function decideDeletion(request, approve) {
 
 loadDeletionRequests();
 setInterval(loadDeletionRequests, 30000);
-
-
-// --- Notification bell: AI-unsure uploads, teacher uploads, deleted files, deletion requests ---
-const bellBtn = document.getElementById("bellBtn");
-const bellPanel = document.getElementById("bellPanel");
-const bellBadge = document.getElementById("bellBadge");
-const bellList = document.getElementById("bellList");
-const WARN_KINDS = new Set(["needs_topic", "deletion_request", "file_deletion_request", "lesson_deletion_request"]);
-
-function timeAgo(iso) {
-    const seconds = Math.max(0, (Date.now() - new Date(iso)) / 1000);
-    if (seconds < 60) return "just now";
-    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
-    return formatUploadDate(iso);
-}
-
-function bellItem(n) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "bell-item" + (n.read ? "" : " unread") + (WARN_KINDS.has(n.kind) ? " warn" : "");
-    const title = document.createElement("span"); title.className = "b-title"; title.textContent = n.title;
-    const msg = document.createElement("span"); msg.className = "b-msg"; msg.textContent = n.message;
-    const time = document.createElement("span"); time.className = "b-time"; time.textContent = timeAgo(n.created_at);
-    item.append(title, msg, time);
-    item.addEventListener("click", async () => {
-        if (n.read) return;
-        await fetch(`${API}/notifications/${n.id}/read`, { method: "POST", headers: getHeaders() });
-        loadNotifications();
-    });
-    return item;
-}
-
-async function loadNotifications() {
-    try {
-        const res = await fetch(`${API}/notifications`, { headers: getHeaders() });
-        if (!res.ok) return;
-        const { unread, items } = await res.json();
-        bellList.replaceChildren(...items.map(bellItem));
-        document.getElementById("bellEmpty").style.display = items.length ? "none" : "block";
-        bellBadge.textContent = unread > 99 ? "99+" : unread;
-        bellBadge.style.display = unread ? "" : "none";
-    } catch (_) { /* keep what's shown */ }
-}
-
-function setBellOpen(open) {
-    bellPanel.classList.toggle("open", open);
-    bellBtn.setAttribute("aria-expanded", open);
-    if (open) loadNotifications();
-}
-bellBtn.addEventListener("click", (e) => { e.stopPropagation(); setBellOpen(!bellPanel.classList.contains("open")); });
-document.addEventListener("click", (e) => { if (!document.getElementById("bellWrap").contains(e.target)) setBellOpen(false); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") setBellOpen(false); });
-document.getElementById("bellReadAll").addEventListener("click", async () => {
-    await fetch(`${API}/notifications/read-all`, { method: "POST", headers: getHeaders() });
-    loadNotifications();
-});
-document.getElementById("bellClear").addEventListener("click", async () => {
-    if (!await uiConfirm("Remove every notification from your list?", { title: "Clear notifications", okText: "Clear", danger: true })) return;
-    await fetch(`${API}/notifications`, { method: "DELETE", headers: getHeaders() });
-    loadNotifications();
-});
-
-loadNotifications();
-setInterval(loadNotifications, 30000);
-
-// --- Audit log: what happened in this school (the server only returns this school's events) ---
-const AUDIT_LABEL = {
-    "student.register": "Student signed up", "student.resubmit": "Student sent a new certificate",
-    "student.approve": "Approved a student", "student.reject": "Rejected a student", "certificate.view": "Opened a certificate",
-    "teacher.create": "Created a teacher account", "file.delete": "Deleted a file",
-    "subject.delete.request": "Asked to delete a subject", "subject.delete.approve": "Approved a subject deletion",
-    "subject.delete.reject": "Rejected a subject deletion",
-    "file.delete.request": "Asked to delete a module (file)", "file.delete.approve": "Approved a module (file) deletion",
-    "file.delete.reject": "Rejected a module (file) deletion",
-    "lesson.delete": "Deleted a lesson", "lesson.delete.request": "Asked to delete a lesson",
-    "lesson.delete.approve": "Approved a lesson deletion", "lesson.delete.reject": "Rejected a lesson deletion",
-    "quiz.retake.approve": "Approved a quiz retake", "quiz.retake.reject": "Rejected a quiz retake",
-};
-
-async function loadAuditLog() {
-    const res = await fetch(`${API}/school-admin/audit-log?limit=100`, { headers: getHeaders() });
-    if (!res.ok) return;
-    const rows = await res.json();
-    document.getElementById("noAudit").style.display = rows.length ? "none" : "block";
-    document.getElementById("auditTable").style.display = rows.length ? "" : "none";
-    document.querySelector("#auditTable tbody").innerHTML = rows.map(r =>
-        `<tr><td class="nowrap">${esc(formatUploadDate(r.at))}</td><td>${esc(r.actor)}</td><td>${esc(AUDIT_LABEL[r.action] || r.action)}</td><td>${esc(r.target)}</td><td>${esc(r.detail)}</td></tr>`
-    ).join("");
-}
-loadAuditLog();
-document.getElementById("auditRefresh").addEventListener("click", loadAuditLog);

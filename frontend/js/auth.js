@@ -42,7 +42,7 @@ function certificateProblem(file) {
 
 // Where each role lands after login (and where it is sent when it opens a page that isn't its own)
 function homeFor(role) {
-    return { school_admin: "school-admin.html", teacher: "teacher.html" }[role] || "landing.html";
+    return { school_admin: "admin-overview.html", teacher: "teacher-overview.html" }[role] || "landing.html";
 }
 
 // --- SHOW / HIDE PASSWORD (works on any page with <button class="eye" data-target="inputId">) ---
@@ -443,7 +443,7 @@ function requireRole(expectedRole) {
     const role = localStorage.getItem("role");
     const allowedRoles = expectedRole === "admin" ? ["school_admin", "admin"] : [expectedRole];
     if (!allowedRoles.includes(role)) {
-        window.location.replace(({ school_admin: "school-admin.html", teacher: "teacher.html" })[role] || "login.html");
+        window.location.replace(({ school_admin: "admin-overview.html", teacher: "teacher-overview.html" })[role] || "login.html");
         return false;
     }
     return true;

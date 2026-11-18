@@ -3,7 +3,9 @@
 //   lesson_ready / lesson_failed   an AI-written lesson is done, or failed
 //   quiz_violation                 a student's quiz was ended for violations and is now locked
 //   retake_request                 that student sent feedback and asks to retake
-// Needs js/auth.js (API), js/modal.js (uiConfirm), js/material-table.js (formatUploadDate), js/retake-requests.js.
+// (those two open the Quiz retake requests page, or jump to its table when you are already on it)
+// The bell sits in the top bar of every teacher page (markup: staff-header.js).
+// Needs js/auth.js (API), js/modal.js (uiConfirm), js/material-table.js (formatUploadDate). js/retake-requests.js is optional (retake page only).
 (() => {
     const $ = (id) => document.getElementById(id);
     const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("token")}` });
@@ -27,14 +29,16 @@
         const time = document.createElement("span"); time.className = "b-time"; time.textContent = ago(n.created_at);
         el.append(title, msg, time);
         el.addEventListener("click", async () => {
-            if (OPEN_RETAKES.has(n.kind)) {
+            const toRetakes = OPEN_RETAKES.has(n.kind);
+            const onRetakePage = Boolean($("retakeSection"));
+            if (toRetakes && onRetakePage) {
                 setOpen(false);
                 if (typeof loadRetakeRequests === "function") loadRetakeRequests();
                 $("retakeSection").scrollIntoView({ behavior: "smooth", block: "start" });
             }
-            if (n.read) return;
-            await fetch(`${API}/notifications/${n.id}/read`, { method: "POST", headers: auth() });
-            load();
+            if (!n.read) await fetch(`${API}/notifications/${n.id}/read`, { method: "POST", headers: auth() });   // finish before leaving the page
+            if (toRetakes && !onRetakePage) { window.location.href = "retake-requests.html"; return; }
+            if (!n.read) load();
         });
         return el;
     }
