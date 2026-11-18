@@ -401,19 +401,50 @@ function showSessionExpired(replaced = false) {
     btn.focus();
 }
 
+// Render's free plan puts the backend to sleep after ~15 minutes without traffic, and the first request then waits
+// up to a minute for it to wake. Until now the page just sat there, and the "session expired" popup (the server's
+// 401) only appeared after that wait. This notice tells the person what is going on while they wait.
+let wakeNoticeEl = null;
+function showWakeNotice() {
+    if (wakeNoticeEl || !document.body) return;
+    wakeNoticeEl = document.createElement("div");
+    wakeNoticeEl.setAttribute("role", "status");
+    wakeNoticeEl.setAttribute("aria-live", "polite");
+    wakeNoticeEl.textContent = "Connecting to the server… it may have been asleep, so this can take up to a minute.";
+    wakeNoticeEl.style.cssText = "position:fixed;left:50%;bottom:1.2rem;transform:translateX(-50%);z-index:9998;max-width:92%;" +
+        "padding:0.65rem 1rem;border-radius:999px;font:600 0.9rem var(--font-body, sans-serif);text-align:center;" +
+        "background:var(--bg-elevated, #fff);color:var(--text, #1b2a1d);border:1px solid var(--border, #cfd8cf);box-shadow:0 6px 24px rgba(0,0,0,0.25);";
+    document.body.appendChild(wakeNoticeEl);
+}
+function hideWakeNotice() { if (wakeNoticeEl) { wakeNoticeEl.remove(); wakeNoticeEl = null; } }
+
 // Watch every request the page makes. Only a 401 on a call to our own API that carried a login token counts,
 // so a wrong password at sign-in (also a 401, but sent without a token) never triggers it.
 (function watchForExpiredSession() {
     if (window.__sessionWatchInstalled) return;
     window.__sessionWatchInstalled = true;
     const nativeFetch = window.fetch.bind(window);
+
+    // Start waking the backend while the person is still typing their username and password.
+    if (!IS_LOCAL_HOST && (document.getElementById("authForm") || document.getElementById("registerForm"))) {
+        nativeFetch(`${API}/`, { cache: "no-store" }).catch(() => {});
+    }
+
+    let pending = 0, wakeTimer = 0;
     window.fetch = async function (input, init) {
-        const response = await nativeFetch(input, init);
+        const url = typeof input === "string" ? input : (input && input.url) || String(input);
+        const ours = url.startsWith(API);
+        if (ours && ++pending === 1) wakeTimer = setTimeout(showWakeNotice, 4000);
+        let response;
+        try {
+            response = await nativeFetch(input, init);
+        } finally {
+            if (ours && --pending <= 0) { pending = 0; clearTimeout(wakeTimer); hideWakeNotice(); }
+        }
         if (response.status === 401 && localStorage.getItem("token")) {
             try {
-                const url = typeof input === "string" ? input : (input && input.url) || String(input);
                 const headers = new Headers((init && init.headers) || (input instanceof Request ? input.headers : undefined));
-                if (url.startsWith(API) && headers.has("Authorization")) {
+                if (ours && headers.has("Authorization")) {
                     // The server says why when a newer login took the account over; the body is read from a copy so the page still gets its own.
                     let replaced = false;
                     if (typeof response.clone === "function") {
@@ -427,6 +458,43 @@ function showSessionExpired(replaced = false) {
     };
 })();
 
+// The login token is a JWT, and its expiry time is readable in the browser. Checking it here means the "session
+// expired" popup appears straight away (on opening the page, or the moment the hour runs out) instead of only after
+// a request has travelled to a sleeping server and come back 401.
+function tokenExpiresAtMs() {
+    try {
+        const part = (localStorage.getItem("token") || "").split(".")[1];
+        if (!part) return 0;
+        const json = decodeURIComponent(atob(part.replace(/-/g, "+").replace(/_/g, "/")).split("").map(c => "%" + c.charCodeAt(0).toString(16).padStart(2, "0")).join(""));
+        const exp = JSON.parse(json).exp;
+        return typeof exp === "number" ? exp * 1000 : 0;
+    } catch (_) { return 0; }   // not a readable token: leave it to the server to decide
+}
+function tokenIsExpired() {
+    const at = tokenExpiresAtMs();
+    return at > 0 && Date.now() >= at;
+}
+function popupWhenExpired() {
+    if (document.body) showSessionExpired(); else document.addEventListener("DOMContentLoaded", () => showSessionExpired());
+}
+// While a page is open: pop up at the exact expiry time, and re-check when the tab/computer wakes up (timers
+// are paused while a laptop sleeps). Not during a quiz or practice set, so a student is never cut off mid-answer.
+(function watchTokenClock() {
+    if (/(quiz|practice)\.html$/i.test(location.pathname)) return;
+    let timer = 0;
+    function arm() {
+        clearTimeout(timer);
+        const at = tokenExpiresAtMs();
+        if (!at || !localStorage.getItem("role")) return;
+        const wait = at - Date.now();
+        if (wait <= 0) return popupWhenExpired();
+        timer = setTimeout(arm, Math.min(wait + 500, 2147483647));   // setTimeout cannot wait longer than ~24 days
+    }
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) arm(); });
+    window.addEventListener("focus", arm);
+    arm();
+})();
+
 // --- PROTECT PAGES (works on all pages) ---
 function requireAuth() {
     const token = localStorage.getItem("token");
@@ -435,6 +503,7 @@ function requireAuth() {
         window.location.href = "login.html";
         return false;
     }
+    if (tokenIsExpired()) { popupWhenExpired(); return false; }
     return true;
 }
 

@@ -216,6 +216,7 @@ def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: b
         "locked": locked,
         "status": lesson.status,
         "source_name": lesson.source_name or "",
+        "preferred_game": getattr(lesson, "preferred_game", None),
     }
     if include_content:
         result["content"] = lesson.content
@@ -472,6 +473,10 @@ async def draft_lesson(
     topic = req.topic.strip()
     if not topic:
         raise HTTPException(status_code=400, detail="Lesson topic is required")
+    allowed_games = {"hangman", "word-search", "matching", "sorting", "fill-blanks"}
+    preferred_game = (req.preferred_game or "").strip() or None
+    if preferred_game is not None and (preferred_game not in allowed_games or user.role not in ("teacher", "school_admin")):
+        raise HTTPException(status_code=400, detail="Choose a valid game as a teacher")
 
     prompt = (
         f'Write a short structured lesson on "{topic}" for the subject {subject.name}, '
@@ -581,6 +586,7 @@ async def outline_lessons_from_file(
 
 class GenerateLessonRequest(BaseModel):
     topic: str = Field(min_length=1, max_length=160)
+    preferred_game: Optional[str] = Field(default=None, max_length=40)
 
 
 @router.post("/{subject_id}/lessons/generate")
@@ -594,6 +600,10 @@ async def generate_lesson(
     topic = req.topic.strip()
     if not topic:
         raise HTTPException(status_code=400, detail="Lesson topic is required")
+    allowed_games = {"hangman", "word-search", "matching", "sorting", "fill-blanks"}
+    preferred_game = (req.preferred_game or "").strip() or None
+    if preferred_game is not None and (preferred_game not in allowed_games or user.role not in ("teacher", "school_admin")):
+        raise HTTPException(status_code=400, detail="Choose a valid game as a teacher")
     prompt = (
         f'Write a lesson titled "{topic}" for the subject {subject.name}, for a student new to it. '
         "Use markdown with 2-4 sections (## headers), plain-language explanations, at least one "
@@ -606,7 +616,12 @@ async def generate_lesson(
         raise _lesson_failed(db, user, topic, f"Lesson generation failed: {exc}")
     if not content:
         raise _lesson_failed(db, user, topic, "The model returned an empty lesson")
-    return _serialize_lesson(_save_generated_lesson(db, subject, user, topic, content))
+    lesson = _save_generated_lesson(db, subject, user, topic, content)
+    if preferred_game:
+        lesson.preferred_game = preferred_game
+        db.commit()
+        db.refresh(lesson)
+    return _serialize_lesson(lesson)
 
 
 def _save_generated_lesson(db: Session, subject: Subject, user: User, topic: str, content: str,

@@ -25,9 +25,12 @@ def world(rag, db):
     app = FastAPI()
     app.include_router(subjects_routes.router)
     app.include_router(learning_routes.router)
+    from routes import games_routes
+    app.include_router(games_routes.router)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[auth.get_current_user] = lambda: who["user"]
     app.dependency_overrides[auth.require_staff] = lambda: teacher
+    app.dependency_overrides[games_routes.require_staff] = lambda: who["user"] if who["user"].role in ("teacher", "school_admin") else (_ for _ in ()).throw(__import__("fastapi").HTTPException(status_code=403, detail="Staff only"))
     client = TestClient(app)
     client.as_teacher = lambda: who.update(user=teacher)
     client.as_student = lambda: who.update(user=student)
@@ -72,3 +75,42 @@ def test_a_teachers_generated_lesson_waits_as_a_draft(world, rag):
     assert made.json()["status"] == "draft"
     assert world.get(f"/subjects/{world.shared.id}/lessons").json() == []
     assert [lesson["title"] for lesson in world.get(f"/subjects/{world.shared.id}/lessons/drafts").json()] == ["Fractions"]
+
+
+def test_teacher_can_assign_preferred_game_and_students_see_it(world, rag):
+    lesson = add(world, "published")
+    response = world.put(
+        f"/subjects/{world.shared.id}/lessons/{lesson.id}/preferred-game",
+        json={"game_id": "matching"},
+    )
+    assert response.status_code == 403  # Test fixture runs as the student until explicitly switched.
+    world.as_teacher()
+    response = world.put(
+        f"/subjects/{world.shared.id}/lessons/{lesson.id}/preferred-game",
+        json={"game_id": "matching"},
+    )
+    assert response.status_code == 200
+    assert response.json()["preferred_game"] == "matching"
+    world.as_student()
+    visible = world.get(f"/subjects/{world.shared.id}/lessons/{lesson.id}")
+    assert visible.status_code == 200
+    assert visible.json()["preferred_game"] == "matching"
+
+
+def test_student_cannot_assign_preferred_game(world):
+    lesson = add(world, "published")
+    response = world.put(
+        f"/subjects/{world.shared.id}/lessons/{lesson.id}/preferred-game",
+        json={"game_id": "matching"},
+    )
+    assert response.status_code == 403
+
+
+def test_invalid_preferred_game_is_rejected(world):
+    world.as_teacher()
+    lesson = add(world, "published")
+    response = world.put(
+        f"/subjects/{world.shared.id}/lessons/{lesson.id}/preferred-game",
+        json={"game_id": "not-a-game"},
+    )
+    assert response.status_code == 400

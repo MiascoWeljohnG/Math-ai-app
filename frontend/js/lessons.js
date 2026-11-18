@@ -265,7 +265,8 @@ async function selectLesson(lessonId) {
         // Protect the math brackets before rendering
         renderFinalMessage(body, protectMath(lesson.content));
 
-        lessonContent.replaceChildren(heading, meta, body, buildCompleteFooter(subjectId, lesson));
+        const gamePanel = buildLessonGamePanel(subjectId, lesson);
+        lessonContent.replaceChildren(heading, meta, body, ...(gamePanel ? [gamePanel] : []), buildCompleteFooter(subjectId, lesson));
 
         typesetMath(lessonContent);
 
@@ -274,6 +275,50 @@ async function selectLesson(lessonId) {
             lessonContent.textContent = error.message;
         }
     }
+}
+
+const LESSON_GAMES = [
+    ["hangman", "Math Hangman"], ["word-search", "Word Search"], ["matching", "Matching"],
+    ["sorting", "Sorting Challenge"], ["fill-blanks", "Fill in the Blanks"],
+];
+function buildLessonGamePanel(subjectId, lesson) {
+    const teacher = ["teacher", "school_admin"].includes(localStorage.getItem("role"));
+    if (!teacher && !lesson.preferred_game) return null;
+    const panel = document.createElement("section");
+    panel.className = "lesson-game-panel";
+    const title = document.createElement("h2"); title.textContent = "Lesson game"; panel.append(title);
+    const select = document.createElement("select"); select.setAttribute("aria-label", "Choose a game for this lesson");
+    select.add(new Option("Choose a game", ""));
+    LESSON_GAMES.forEach(([id, label]) => select.add(new Option(label, id)));
+    select.value = lesson.preferred_game || "";
+    const status = document.createElement("p"); status.className = "lesson-meta";
+    if (teacher) {
+        const save = document.createElement("button"); save.type = "button"; save.textContent = "Save game";
+        save.addEventListener("click", async () => {
+            if (!select.value) { status.textContent = "Choose a game first."; return; }
+            save.disabled = true;
+            try {
+                const response = await fetch(`${API}/subjects/${subjectId}/lessons/${lesson.id}/preferred-game`, {
+                    method: "PUT", headers: { ...lessonAuthHeaders(), "Content-Type": "application/json" },
+                    body: JSON.stringify({ game_id: select.value }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.detail || "Couldn't save the game.");
+                lesson.preferred_game = data.preferred_game; status.textContent = "Game saved for this lesson."; drawPlayLink();
+            } catch (error) { status.textContent = error.message; }
+            finally { save.disabled = false; }
+        });
+        panel.append(select, save);
+    }
+    function drawPlayLink() {
+        const old = panel.querySelector("a"); if (old) old.remove();
+        if (!lesson.preferred_game) return;
+        const link = document.createElement("a");
+        link.href = `games.html?subject=${encodeURIComponent(subjectId)}&lesson=${encodeURIComponent(lesson.id)}&game=${encodeURIComponent(lesson.preferred_game)}`;
+        link.textContent = `Play ${LESSON_GAMES.find(([id]) => id === lesson.preferred_game)?.[1] || "lesson game"}`;
+        panel.append(link);
+    }
+    drawPlayLink(); panel.append(status); return panel;
 }
 
 const quizUrl = (subjectId, lessonId) => `quiz.html?subject=${subjectId}&lesson=${lessonId}`;
@@ -326,7 +371,7 @@ loadSubjects();
 
 // Typed topic -> /generate (as before). With a file -> /generate-from-file, which first checks the
 // file is about this subject and answers {status: "mismatch"} if not.
-async function postGenerate(subjectId, topic, file, force) {
+async function postGenerate(subjectId, topic, file, force, preferredGame) {
     let response;
     if (file) {
         const data = new FormData();
@@ -340,7 +385,7 @@ async function postGenerate(subjectId, topic, file, force) {
         response = await fetch(`${API}/subjects/${subjectId}/lessons/generate`, {
             method: "POST",
             headers: { ...lessonAuthHeaders(), "Content-Type": "application/json" },
-            body: JSON.stringify({ topic }),
+            body: JSON.stringify({ topic, preferred_game: preferredGame || null }),
         });
     }
     const result = await response.json();
@@ -365,6 +410,7 @@ function askMismatch(result) {
 generateBtn.addEventListener("click", async () => {
     const topic = generateTopic.value.trim();
     const file = generateFile.files[0];
+    const preferredGame = document.getElementById("generatePreferredGame")?.value || "";
     if (!topic && !file) return;
     const subjectId = activeSubjectId;
 
@@ -373,7 +419,7 @@ generateBtn.addEventListener("click", async () => {
         : "Writing your lesson… this can take a minute.";
 
     await withButtonLoading(generateBtn, async () => {
-        let result = await postGenerate(subjectId, topic, file, false);
+        let result = await postGenerate(subjectId, topic, file, false, preferredGame);
         if (result.status === "mismatch") {
             generateStatus.textContent = "";
             if (!(await askMismatch(result))) {
@@ -381,8 +427,16 @@ generateBtn.addEventListener("click", async () => {
                 return;
             }
             generateStatus.textContent = "Writing your lesson… this can take a minute.";
-            result = await postGenerate(subjectId, topic, file, true);
+            result = await postGenerate(subjectId, topic, file, true, preferredGame);
         }
+        if (file && preferredGame && result.id) {
+            const assigned = await fetch(`${API}/subjects/${subjectId}/lessons/${result.id}/preferred-game`, {
+                method: "PUT", headers: { ...lessonAuthHeaders(), "Content-Type": "application/json" },
+                body: JSON.stringify({ game_id: preferredGame }),
+            });
+            if (!assigned.ok) throw new Error("Lesson generated, but its game could not be saved.");
+        }
+        document.getElementById("generatePreferredGame").value = "";
         generateTopic.value = "";
         generateFile.value = "";
         generateStatus.textContent = "";

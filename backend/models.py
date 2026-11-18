@@ -183,6 +183,7 @@ class Lesson(Base):
     created_by = Column(String, nullable=False)
     status = Column(String, nullable=False, default="published", index=True)  # draft | published
     source_name = Column(String, nullable=True)   # the module/file the AI used to write this lesson (with pages), or None
+    preferred_game = Column(String, nullable=True)  # teacher-selected practice game
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
