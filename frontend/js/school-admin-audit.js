@@ -60,6 +60,13 @@ function auditQuery() {
     return params;
 }
 
+function markActiveFilters() {
+    ["auditWhen", "auditWho", "auditWhat"].forEach(id => {
+        const el = document.getElementById(id);
+        el.classList.toggle("is-active", el.value !== "all");
+    });
+}
+
 function auditFiltered() {
     return ["auditWhen", "auditWho", "auditWhat"].some(id => document.getElementById(id).value !== "all");
 }
@@ -69,10 +76,11 @@ async function loadAuditLog() {
     if (!res.ok) return;
     const rows = await res.json();
     const filtered = auditFiltered();
+    markActiveFilters();
     const empty = document.getElementById("noAudit");
     empty.textContent = filtered ? "No events match these filters." : "Nothing has happened yet.";
     empty.style.display = rows.length ? "none" : "block";
-    document.getElementById("auditTable").style.display = rows.length ? "" : "none";
+    // the table stays visible even with no rows, because its header holds the filters
     document.getElementById("auditClear").style.display = filtered ? "" : "none";
     document.getElementById("auditCount").textContent = !rows.length ? ""
         : rows.length >= AUDIT_LIMIT ? `Showing the latest ${rows.length} events`

@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="css/nav-drawer.css">
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/overview.css">
-    <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/pages.css?v=2">
     <link rel="stylesheet" href="css/mobile.css?v=1">
     <link rel="stylesheet" href="css/admin-profile.css?v=1">
 </head>
@@ -27,41 +27,46 @@
             <button class="btn btn-secondary btn-sm" type="button" id="auditRefresh">Refresh</button>
         </div>
         <div class="field-row audit-filters" style="margin-bottom:0.75rem;">
-            <label for="auditWhen" class="label">When</label>
-            <select id="auditWhen" class="branch-select">
-                <option value="all">Any time</option>
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="week">Past week</option>
-                <option value="month">Past month</option>
-                <option value="year">Past year</option>
-            </select>
-            <label for="auditWho" class="label">Who</label>
-            <select id="auditWho" class="branch-select">
-                <option value="all">Everyone</option>
-                <option value="user">Students</option>
-                <option value="teacher">Teachers</option>
-                <option value="school_admin">School admins</option>
-            </select>
-            <label for="auditWhat" class="label">What</label>
-            <select id="auditWhat" class="branch-select">
-                <option value="all">All activity</option>
-                <option value="signups">Student sign-ups</option>
-                <option value="decisions">Students approved / rejected</option>
-                <option value="certificates">Certificates opened</option>
-                <option value="accounts">Accounts created</option>
-                <option value="requests">Deletion requests</option>
-                <option value="verdicts">Deletion requests approved / rejected</option>
-                <option value="deleted">Files and lessons deleted</option>
-                <option value="retakes">Quiz retakes</option>
-                <option value="views">Lists opened</option>
-            </select>
-            <button class="btn btn-secondary btn-sm" type="button" id="auditClear">Clear filters</button>
             <span id="auditCount" class="hint"></span>
+            <button class="btn btn-secondary btn-sm" type="button" id="auditClear">Clear filters</button>
         </div>
         <div class="table-wrap file-list">
             <table id="auditTable">
-                <thead><tr><th>When</th><th>Who</th><th>What</th><th>About</th><th>Note</th></tr></thead>
+                <thead><tr>
+                    <th class="audit-th">
+                        <select id="auditWhen" class="audit-th-select" aria-label="Filter by when">
+                            <option value="all">When: any time</option>
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="week">Past week</option>
+                            <option value="month">Past month</option>
+                            <option value="year">Past year</option>
+                        </select>
+                    </th>
+                    <th class="audit-th">
+                        <select id="auditWho" class="audit-th-select" aria-label="Filter by who">
+                            <option value="all">Who: everyone</option>
+                            <option value="user">Students</option>
+                            <option value="teacher">Teachers</option>
+                            <option value="school_admin">School admins</option>
+                        </select>
+                    </th>
+                    <th class="audit-th">
+                        <select id="auditWhat" class="audit-th-select" aria-label="Filter by what">
+                            <option value="all">What: all activity</option>
+                            <option value="signups">Student sign-ups</option>
+                            <option value="decisions">Students approved / rejected</option>
+                            <option value="certificates">Certificates opened</option>
+                            <option value="accounts">Accounts created</option>
+                            <option value="requests">Deletion requests</option>
+                            <option value="verdicts">Deletion requests approved / rejected</option>
+                            <option value="deleted">Files and lessons deleted</option>
+                            <option value="retakes">Quiz retakes</option>
+                            <option value="views">Lists opened</option>
+                        </select>
+                    </th>
+                    <th>About</th><th>Note</th>
+                </tr></thead>
                 <tbody></tbody>
             </table>
         </div>

@@ -68,3 +68,17 @@ main { padding-left: clamp(1rem, 3vw, 2.5rem) !important; padding-right: clamp(1
 
 /* dashboard pages keep a visible gap below the last card */
 body > .page { padding-bottom: 4rem; }
+
+/* audit log: the When / Who / What column headers are the filters */
+.audit-th { position: sticky; padding: 0 !important; }
+.audit-th::after { content: ""; position: absolute; right: 0.75rem; top: 50%; width: 0.4rem; height: 0.4rem; margin-top: -0.35rem;
+                   border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg);
+                   color: var(--text-muted); pointer-events: none; }
+.audit-th-select { appearance: none; -webkit-appearance: none; display: block; width: 100%; min-width: 9rem; border: 0; border-radius: 0;
+                   background: transparent; color: var(--text-muted); font: inherit; font-weight: 600; font-size: 0.85rem;
+                   padding: 0.55rem 1.8rem 0.55rem 0.7rem; cursor: pointer; text-overflow: ellipsis; }
+.audit-th-select:hover { background: var(--hover-bg); color: var(--text); }
+.audit-th-select:focus-visible { outline: 3px solid var(--sun); outline-offset: -3px; }
+.audit-th-select.is-active { color: var(--accent); background: var(--nav-active-bg); }
+.audit-th:has(.is-active)::after { color: var(--accent); }
+.audit-th-select option { color: var(--text); background: var(--bg-elevated); font-weight: 400; }
