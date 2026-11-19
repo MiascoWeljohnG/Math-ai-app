@@ -123,3 +123,28 @@ def test_teacher_existing_lesson_has_game_selector_and_save_action():
     assert 'Choose a game for this lesson' in source
     assert 'Save game' in source
     assert 'preferred-game' in source
+
+
+def test_teacher_can_clear_a_lesson_game(world):
+    world.as_teacher()
+    lesson = add(world, "published")
+    url = f"/subjects/{world.shared.id}/lessons/{lesson.id}/preferred-game"
+    assert world.put(url, json={"game_id": "hangman"}).json()["preferred_game"] == "hangman"
+    cleared = world.put(url, json={"game_id": ""})
+    assert cleared.status_code == 200
+    assert cleared.json()["preferred_game"] is None
+
+
+def test_manage_lessons_page_has_game_picker_wired():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2] / "frontend"
+    html = (root / "manage-lessons.html").read_text()
+    script = (root / "js/teacher.js").read_text()
+    assert 'id="lessonGameSelect"' in html
+    assert "saveLessonGame" in script and "preferred-game" in script
+
+
+def test_games_page_deep_link_can_see_subjects():
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[2] / "frontend/js/games.js").read_text()
+    assert "let subjects = [];" in source   # was a const inside the try block: the deep link threw a ReferenceError

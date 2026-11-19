@@ -39,10 +39,17 @@ function paintCards() {
 function setStatus(text, kind = "") { const el = $g("gmPackStatus"); el.textContent = text; el.className = `gm-note ${kind}`; }
 function setError(text) { const el = $g("gmPickerError"); el.textContent = text || ""; el.hidden = !text; }
 
+const lessonOptions = (lessons) => [new Option("General math words", ""), ...lessons.map(l => {
+    const option = new Option(l.locked ? `${l.title} (locked)` : l.title, l.id);
+    option.disabled = !!l.locked;
+    return option;
+})];
+
 async function initPicker() {
     const subjectSelect = $g("gmSubject"), lessonSelect = $g("gmLesson");
+    let subjects = [];   // declared out here: the deep link below needs it after the try block has ended
     try {
-        const subjects = await gameSubjects();
+        subjects = await gameSubjects();
         subjectSelect.replaceChildren(new Option("Choose a subject", ""), ...subjects.map(s => new Option(s.name, s.id)));
     } catch (error) { setError(error.message); }
 
@@ -51,12 +58,7 @@ async function initPicker() {
         useGeneral();
         if (!subjectSelect.value) return;
         try {
-            const lessons = await gameLessons(subjectSelect.value);
-            lessonSelect.replaceChildren(new Option("General math words", ""), ...lessons.map(l => {
-                const option = new Option(l.locked ? `${l.title} (locked)` : l.title, l.id);
-                option.disabled = !!l.locked;
-                return option;
-            }));
+            lessonSelect.replaceChildren(...lessonOptions(await gameLessons(subjectSelect.value)));
         } catch (error) { setError(error.message); }
     });
 
@@ -89,8 +91,8 @@ async function initPicker() {
         subjectSelect.value = requestedSubject;
         try {
             const lessons = await gameLessons(requestedSubject);
-            lessonSelect.replaceChildren(new Option("General math words", ""), ...lessons.map(l => new Option(l.title, l.id)));
-            if (requestedLesson && lessons.some(l => String(l.id) === requestedLesson)) {
+            lessonSelect.replaceChildren(...lessonOptions(lessons));
+            if (requestedLesson && lessons.some(l => String(l.id) === requestedLesson && !l.locked)) {
                 lessonSelect.value = requestedLesson;
                 const loaded = await loadPack(requestedSubject, requestedLesson);
                 currentPack = loaded.pack; currentLabel = loaded.title;

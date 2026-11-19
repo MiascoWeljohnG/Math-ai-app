@@ -311,6 +311,23 @@ class QuizRetakeRequest(Base):
     decided_by = Column(String, nullable=True)
 
 
+class QuizSession(Base):
+    """A student's quiz attempt in progress, kept by the server. The quiz page counts violations in the browser, where a
+    refresh wipes them; the page reports each one here too, so they survive a reload (see retakes.py).
+    in_page: a quiz page is open on this attempt. Opening the quiz while this is true means the old page was reloaded
+    or closed mid-quiz, which counts as a violation. finished: the attempt was submitted or ended."""
+    __tablename__ = "quiz_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True, nullable=False)
+    lesson_id = Column(Integer, ForeignKey("lessons.id"), index=True, nullable=False)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    time_limit = Column(Integer, nullable=False, default=0)   # seconds allowed for the attempt
+    violations = Column(Integer, nullable=False, default=0)
+    in_page = Column(Boolean, nullable=False, default=True)
+    finished = Column(Boolean, nullable=False, default=False, index=True)
+
+
 class PracticeSet(Base):
     """The adaptive practice set a student was given for a lesson: easier after a weak quiz, harder after a
     strong one. `questions` has the same shape as LessonQuiz.questions. `attempt_id` is the quiz attempt it was

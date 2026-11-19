@@ -125,6 +125,20 @@
                 <p class="hint" id="lessonDescriptionHint">The AI writes the full lesson from this.</p>
             </div>
     
+            <div class="lf-group" id="lessonGameField">
+                <label for="lessonGameSelect" class="label">Lesson game <span class="opt">(optional)</span></label>
+                <select id="lessonGameSelect" class="branch-select">
+                    <option value="">No game</option>
+                    <option value="hangman">Math Hangman</option>
+                    <option value="word-search">Word Search</option>
+                    <option value="matching">Matching</option>
+                    <option value="sorting">Sorting Challenge</option>
+                    <option value="fill-blanks">Fill in the Blanks</option>
+                </select>
+                <p class="hint" id="lessonGameHint">Students get a Play button on this lesson. The AI builds the game's words and questions from the lesson text.</p>
+                <a id="lessonGameTryLink" class="hint" href="#" target="_blank" rel="noopener" hidden>Try this game</a>
+            </div>
+
             <div class="lf-group" id="lessonContentField" hidden>
                 <div class="content-head">
                     <span class="label">Lesson content <span class="opt">(written by the AI)</span></span>

@@ -163,7 +163,7 @@ async def lesson_game_pack(
 
 
 class LessonGameRequest(BaseModel):
-    game_id: str = Field(min_length=1, max_length=40)
+    game_id: str = Field(default="", max_length=40)   # empty clears the lesson's game
 
 
 _ALLOWED_GAMES = {"hangman", "word-search", "matching", "sorting", "fill-blanks"}
@@ -178,8 +178,9 @@ def set_preferred_game(
     lesson = db.query(Lesson).filter(Lesson.id == lesson_id, Lesson.subject_id == subject_id).first()
     if lesson is None:
         raise HTTPException(status_code=404, detail="Lesson not found")
-    if req.game_id not in _ALLOWED_GAMES:
+    game_id = req.game_id.strip()
+    if game_id and game_id not in _ALLOWED_GAMES:
         raise HTTPException(status_code=400, detail="Choose a valid game")
-    lesson.preferred_game = req.game_id
+    lesson.preferred_game = game_id or None
     db.commit()
     return {"lesson_id": lesson.id, "preferred_game": lesson.preferred_game}

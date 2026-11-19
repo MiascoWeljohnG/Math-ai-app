@@ -114,6 +114,11 @@ function showStart() {
     $("bannerMaxViolations").textContent = quiz.max_violations;
     $("regenBtn").hidden = !meta.can_regenerate;
     $("retakeNote").hidden = !meta.retake_approved;
+    const resumeNote = $("resumeNote");
+    resumeNote.hidden = !meta.resume;
+    if (meta.resume) {
+        resumeNote.textContent = `You left the quiz page before finishing, and reloading counts as a violation. You are at ${meta.resume.violations} / ${quiz.max_violations}, and the clock kept running: ${describeTime(meta.resume.seconds_left)} left.`;
+    }
     show("screenStart");
 }
 $("startBtn").addEventListener("click", startQuiz);
@@ -122,21 +127,33 @@ $("regenBtn").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------- the quiz
-function startQuiz() {
+async function startQuiz() {
     if (isWindowTooSmall()) {
         const m = windowSizes();
         uiAlert(`Your browser window is too small. Please maximize it (use the full screen) and press Start again.\n\nIf it is already maximized, reset the page zoom to 100% (Ctrl + 0) and try again. (Window ${m.w}\u00d7${m.h}, screen ${m.availW}\u00d7${m.availH}.)`, { title: "Maximize your window" });
         return;
     }
+    // The server notes the attempt. After a reload it hands back the violations and the time that are left.
+    const startBtn = $("startBtn");
+    startBtn.disabled = true;
+    let session;
+    try {
+        session = await api("/start", { method: "POST" });
+    } catch (error) {
+        startBtn.disabled = false;
+        uiAlert(error.message, { title: "The quiz could not start" });
+        return;
+    }
+    startBtn.disabled = false;
     smallWindow = false;
     away = false;
     phase = "quiz";
     index = 0;
     answers = {};
-    violations = 0;
+    violations = session.violations;
     warnPending = false;
-    startedAt = Date.now();
-    deadline = Date.now() + quiz.time_limit * 1000;
+    startedAt = Date.now() - (quiz.time_limit - session.seconds_left) * 1000;
+    deadline = Date.now() + session.seconds_left * 1000;
     $("panelTitle").textContent = `QUIZ #${meta.lesson_number}`;
     $("panelSubject").textContent = meta.subject;
     $("panelSubject").title = meta.subject;
@@ -252,10 +269,19 @@ function showWarning(kind) {
 
 // Leaving the quiz: another tab, minimizing, or another window/app taking focus (even one that only
 // covers part of the quiz, which the browser does not report as "hidden"). One absence counts once.
+// Tells the server about a violation right away, so reloading the page cannot erase it.
+function reportViolation() {
+    fetch(`${base}/violation`, {
+        method: "POST", keepalive: true,
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    }).catch(() => {});
+}
+
 function leave(kind) {
     if (phase !== "quiz" || away) return;
     away = true;
     violations++;
+    reportViolation();
     pendingKind = kind;
     warnPending = true;        // the popup can only be seen once they are back
     renderViolations();
@@ -311,6 +337,7 @@ window.addEventListener("resize", () => {
         if (smallWindow) return;                           // still the same shrink, do not count it twice
         smallWindow = true;
         violations++;
+        reportViolation();
         renderViolations();
         if (violations >= quiz.max_violations) return submit("violations");
         showWarning("resize");

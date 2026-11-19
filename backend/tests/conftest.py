@@ -16,7 +16,7 @@ fake_rag.reply = ""            # what the "model" answers next (str, Exception, 
 fake_rag.ingested = []         # (branch, [file names]) for every ingest call
 
 
-async def generate_text(system, prompt, branch, query):
+async def generate_text(system, prompt, branch, query, school_id=None):
     reply = fake_rag.reply.pop(0) if isinstance(fake_rag.reply, list) else fake_rag.reply   # a list = one reply per call
     if isinstance(reply, Exception):
         raise reply

@@ -16,7 +16,7 @@ import config
 import retakes
 from auth import get_current_user, require_staff
 from database import get_db
-from models import AuditLog, Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, QuizRetakeRequest, Subject, User
+from models import AuditLog, Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, QuizRetakeRequest, QuizSession, Subject, User
 from classifier import (
     check_relevance, choose_subject, document_text, parse_page_range, read_upload, relevant_text, sample_text,
     summarize_document,
@@ -152,6 +152,7 @@ def _delete_lesson_children(db: Session, lesson_ids: list[int]) -> None:
         db.query(LessonQuiz).filter(LessonQuiz.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
         db.query(PracticeSet).filter(PracticeSet.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
         db.query(QuizRetakeRequest).filter(QuizRetakeRequest.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
+        db.query(QuizSession).filter(QuizSession.lesson_id.in_(lesson_ids)).delete(synchronize_session=False)
 
 
 def delete_lesson_cascade(db: Session, lesson: Lesson) -> None:
@@ -998,7 +999,7 @@ async def compose_lesson(
 # ---------------------------------------------------------------------------
 
 QUIZ_LENGTH = 10
-MAX_VIOLATIONS = 3   # violations (leaving the tab, minimizing, shrinking the window) allowed before the page ends the quiz
+MAX_VIOLATIONS = retakes.MAX_VIOLATIONS   # violations (leaving the tab, minimizing, shrinking the window, reloading) allowed before the quiz ends
 PASS_PERCENT = 80    # score needed to move on to the next lesson
 SECONDS_PER_QUESTION = {1: 30, 2: 45, 3: 60, 4: 75, 5: 90}   # by difficulty; edit to taste
 QUIZ_TYPES = {"MCQ": "mcq", "TF": "tf", "ID": "id", "NUM": "num"}
@@ -1183,6 +1184,7 @@ def _quiz_payload(db: Session, subject: Subject, lesson: Lesson, user: User, qui
         "quiz": None,
         "lock": None,              # set when a teacher must approve a retake first (see retakes.py)
         "retake_approved": False,  # the teacher approved a retake: this attempt is the one they allowed
+        "resume": None,          # an attempt that was reloaded mid-quiz: { violations, seconds_left } carry over
     }
     lock = retakes.blocking_lock(db, user, lesson.id)
     if lock is not None:
@@ -1191,6 +1193,9 @@ def _quiz_payload(db: Session, subject: Subject, lesson: Lesson, user: User, qui
     if user.role == "user":
         row = retakes.open_row(db, user.id, lesson.id)
         payload["retake_approved"] = row is not None and row.status == retakes.APPROVED
+        session = retakes.open_session(db, user.id, lesson.id) if subject.owner_user_id is None else None
+        if session is not None:
+            payload["resume"] = {"violations": session.violations, "seconds_left": retakes.seconds_left(session)}
     if quiz:
         stored = json.loads(quiz.questions)
         shown = []
@@ -1221,8 +1226,63 @@ def get_quiz(
     subject = _visible_subject_or_404(db, subject_id, user)
     lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
     _require_unlocked(db, subject, lesson, user)
+    _settle_quiz_page(db, subject, lesson, user)
     quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
     return _quiz_payload(db, subject, lesson, user, quiz)
+
+
+def _tracked(subject: Subject, user: User) -> bool:
+    """Only a student's attempt on a shared subject is tracked: a teacher previewing is not recorded, and a student's own
+    personal subject has no teacher to approve anything."""
+    return user.role == "user" and subject.owner_user_id is None
+
+
+def _settle_quiz_page(db: Session, subject: Subject, lesson: Lesson, user: User) -> None:
+    """Opening the quiz while an earlier attempt is still running means that page was reloaded or closed: count it."""
+    if _tracked(subject, user):
+        retakes.settle_left_page(db, user, lesson, subject)
+        db.commit()
+
+
+def _time_limit(quiz: LessonQuiz) -> int:
+    return len(json.loads(quiz.questions)) * SECONDS_PER_QUESTION[quiz.difficulty or 3]
+
+
+@router.post("/{subject_id}/lessons/{lesson_id}/quiz/start")
+def start_quiz(
+    subject_id: int, lesson_id: int,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """The student pressed Start. The server notes the attempt, so violations and the clock survive a page reload."""
+    subject = _visible_subject_or_404(db, subject_id, user)
+    lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
+    _require_unlocked(db, subject, lesson, user)
+    quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
+    if quiz is None:
+        raise HTTPException(status_code=404, detail="This lesson has no quiz yet")
+    if retakes.blocking_lock(db, user, lesson_id) is not None:
+        raise HTTPException(status_code=403, detail="This quiz is locked until your teacher approves a retake.")
+    limit = _time_limit(quiz)
+    if not _tracked(subject, user):
+        return {"violations": 0, "seconds_left": limit}
+    session = retakes.start_session(db, user, lesson, limit)
+    db.commit()
+    return {"violations": session.violations, "seconds_left": retakes.seconds_left(session)}
+
+
+@router.post("/{subject_id}/lessons/{lesson_id}/quiz/violation")
+def report_quiz_violation(
+    subject_id: int, lesson_id: int,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """The quiz page reports each violation as it happens, so the server's count does not depend on the page surviving."""
+    subject = _visible_subject_or_404(db, subject_id, user)
+    lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
+    if not _tracked(subject, user):
+        return {"violations": 0}
+    session = retakes.record_violation(db, user, lesson)
+    db.commit()
+    return {"violations": session.violations if session is not None else 0}
 
 
 @router.post("/{subject_id}/lessons/{lesson_id}/quiz/generate")
@@ -1237,6 +1297,7 @@ async def generate_quiz(
     subject = _visible_subject_or_404(db, subject_id, user)
     lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
     _require_unlocked(db, subject, lesson, user)
+    _settle_quiz_page(db, subject, lesson, user)
     can_replace = subject.owner_user_id is not None or user.role in ("teacher", "school_admin")
     quiz = db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).first()
     if (quiz and not can_replace) or retakes.blocking_lock(db, user, lesson_id) is not None:
@@ -1281,8 +1342,8 @@ class SubmitQuizRequest(BaseModel):
     # question id -> mcq: choice index, tf: true/false, id/num: the typed text
     answers: dict[str, Optional[Union[bool, int, str]]] = Field(default_factory=dict)
     seconds: Optional[int] = Field(default=None, ge=0, le=86_400)   # how long the student took (browser clock)
-    # how many times the page caught them leaving the quiz. ponytail: counted in the browser, so a student who talks to the
-    # API directly can under-report it. Upgrade: heartbeat pings from the quiz page, so the server can count absences itself.
+    # how many times the page caught them leaving the quiz. The server also keeps its own count (QuizSession); the
+    # higher of the two is used, so under-reporting here does not help.
     violations: int = Field(default=0, ge=0, le=100)
 
 
@@ -1316,6 +1377,8 @@ def submit_quiz(
     lock = None
     if recorded:
         limit = len(results) * SECONDS_PER_QUESTION[quiz.difficulty or 3]
+        session = retakes.open_session(db, user.id, lesson_id)
+        violations = max(req.violations, session.violations if session is not None else 0)
         db.add(QuizAttempt(
             user_id=user.id, lesson_id=lesson_id, score=score, total=len(results), passed=passed,
             # ponytail: the time comes from the browser, so it is only clamped, not proven. Upgrade: stamp the start server-side.
@@ -1326,11 +1389,11 @@ def submit_quiz(
             db.add(LessonCompletion(user_id=user.id, lesson_id=lesson.id))
         # Ended for violations: lock it for this student and tell the teachers. (A student's own personal subject has no
         # teacher to approve anything, so it is never locked.) Any other submit spends an approved retake.
-        if req.violations >= MAX_VIOLATIONS and subject.owner_user_id is None:
-            # Less punishing than a lock: it counts as a try, and the teachers get a "may be struggling" hint.
-            retakes.flag_struggling(db, user, lesson, subject, req.violations, round(score * 100 / max(len(results), 1)))
+        if violations >= MAX_VIOLATIONS and subject.owner_user_id is None:
+            lock = retakes.lock_for_violations(db, user, lesson, subject, violations, round(score * 100 / max(len(results), 1)))
         else:
             retakes.consume_approval(db, user, lesson_id)
+        retakes.finish_session(db, user.id, lesson_id)
         db.commit()
     return {
         "score": score,

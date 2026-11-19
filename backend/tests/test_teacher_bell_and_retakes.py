@@ -1,6 +1,6 @@
-"""The teacher's bell (upload and lesson results, quiz violations) and the quiz lock: a student who used up their practice
-tries cannot retake the quiz until a teacher approves their feedback. A quiz ended for violations does not lock: it only
-tells the teachers the student may be struggling."""
+"""The teacher's bell (upload and lesson results, quiz violations) and the quiz lock: a student whose quiz was ended for
+violations, or who used up their practice tries, cannot retake the quiz until a teacher approves their feedback. The server
+keeps its own violation count (QuizSession), so reloading the quiz page cannot reset it."""
 import json
 import types
 
@@ -13,7 +13,7 @@ import indexing
 import retakes
 from auth import get_current_user
 from database import get_db
-from models import Lesson, LessonQuiz, Material, Notification, QuizAttempt, QuizRetakeRequest, Subject, User
+from models import Lesson, LessonQuiz, Material, Notification, QuizAttempt, QuizRetakeRequest, QuizSession, Subject, User
 from routes import notification_routes, retake_routes, subjects_routes as sr
 
 QUESTIONS = [
@@ -74,23 +74,94 @@ def finish_quiz(w, violations=0, base=None):
 
 
 def lock_student(w):
-    """The lock a student gets after using all their practice tries (violations no longer lock)."""
+    """The lock a student gets after using all their practice tries."""
     retakes.lock_for_tries(w.db, w.student, w.lesson, w.shared)
     w.db.commit()
 
 
-# ---------------------------------------------------------------- violations are a hint, not a lock
-def test_ending_a_quiz_for_violations_does_not_lock_but_hints_the_teachers_that_the_student_struggles(world):
+# ---------------------------------------------------------------- violations lock the quiz
+def test_ending_a_quiz_for_violations_locks_it_and_tells_the_teachers(world):
     result = finish_quiz(world, violations=3).json()
-    assert result["lock"] is None                               # less punishing: no lock
+    assert result["lock"]["status"] == "locked" and result["lock"]["violations"] == 3
     assert result["recorded"] is True                           # the attempt still counts, as a try
-    assert world.db.query(QuizRetakeRequest).count() == 0
+    row = world.db.query(QuizRetakeRequest).one()
+    assert row.status == "locked" and row.violations == 3
     assert kinds_for(world, "teach") == ["quiz_violation"]
     assert kinds_for(world, "teach2") == ["quiz_violation"]     # every teacher of the school hears about it
     assert kinds_for(world, "far") == [] and kinds_for(world, "boss") == []   # not another school, not the admin
     note = world.db.query(Notification).filter(Notification.admin_username == "teach").one()
-    assert "Stu" in note.message and "struggling" in note.message
-    assert world.client.get(world.quiz).json()["quiz"] is not None   # the student can open the quiz again
+    assert "Stu" in note.message and "unless you approve" in note.message
+    page = world.client.get(world.quiz).json()
+    assert page["quiz"] is None and page["lock"]["status"] == "locked"   # no questions until a teacher approves
+    assert finish_quiz(world).status_code == 403
+
+
+def start(w):
+    return w.client.post(w.quiz + "/start")
+
+
+def violate(w, times=1):
+    for _ in range(times):
+        w.client.post(w.quiz + "/violation")
+
+
+def test_violations_are_counted_by_the_server_so_a_refresh_cannot_erase_them(world):
+    assert start(world).json() == {"violations": 0, "seconds_left": 2 * 60}   # 2 questions x 60 s (difficulty 3)
+    violate(world, 2)                                    # two violations, then the student refreshes the page
+    page = world.client.get(world.quiz).json()           # the reload: leaving the page counts as the third
+    assert page["lock"]["status"] == "locked" and page["lock"]["violations"] == 3 and page["quiz"] is None
+    assert kinds_for(world, "teach") == ["quiz_violation"]
+    assert "reloaded or closed" in world.db.query(Notification).filter(Notification.admin_username == "teach").one().message
+    assert start(world).status_code == 403               # and Start is refused
+    assert world.db.query(QuizAttempt).count() == 0      # nothing was submitted
+
+
+def test_reloading_after_one_violation_resumes_with_the_violations_and_the_clock(world):
+    start(world)
+    violate(world)
+    page = world.client.get(world.quiz).json()           # reload: 1 + 1 for leaving the page
+    assert page["lock"] is None and page["resume"]["violations"] == 2 and page["resume"]["seconds_left"] > 0
+    assert kinds_for(world, "teach") == []               # not locked yet, so no bell
+    world.client.get(world.quiz)                         # reloading the start screen again is not counted twice
+    assert world.client.get(world.quiz).json()["resume"]["violations"] == 2
+    resumed = start(world).json()
+    assert resumed["violations"] == 2 and resumed["seconds_left"] <= 2 * 60
+    violate(world)                                       # the next violation ends it
+    assert finish_quiz(world).json()["lock"]["status"] == "locked"   # even though the page sent violations=0
+
+
+def test_a_server_side_count_is_used_when_the_page_under_reports(world):
+    start(world)
+    violate(world, 3)
+    result = finish_quiz(world, violations=0).json()
+    assert result["lock"]["status"] == "locked" and result["lock"]["violations"] == 3
+
+
+def test_a_clean_attempt_leaves_nothing_open(world):
+    start(world)
+    assert finish_quiz(world).json()["lock"] is None
+    assert world.db.query(QuizSession).one().finished is True
+    page = world.client.get(world.quiz).json()
+    assert page["resume"] is None and page["quiz"] is not None
+
+
+def test_closing_the_page_and_coming_back_after_the_time_is_up_locks_the_quiz(world):
+    from datetime import datetime, timedelta
+    start(world)
+    world.db.query(QuizSession).one().started_at = datetime.utcnow() - timedelta(hours=1)
+    world.db.commit()
+    page = world.client.get(world.quiz).json()
+    assert page["lock"]["status"] == "locked" and kinds_for(world, "teach") == ["quiz_violation"]
+
+
+def test_teachers_and_personal_subjects_are_not_tracked(world):
+    assert world.client.post(world.own_quiz + "/start").json()["violations"] == 0
+    world.client.post(world.own_quiz + "/violation")
+    assert world.db.query(QuizSession).count() == 0
+    as_user(world, world.teacher)
+    assert start(world).status_code == 200
+    violate(world, 5)
+    assert world.db.query(QuizSession).count() == 0
 
 
 def test_using_all_practice_tries_locks_the_quiz_and_tells_the_teachers(world):
@@ -174,13 +245,14 @@ def test_rejected_student_stays_locked_sees_the_note_and_may_ask_again(world):
     assert again.json()["lock"]["status"] == "pending" and again.json()["lock"]["teacher_note"] == ""
 
 
-def test_violating_on_the_approved_retake_spends_it_and_hints_the_teacher_without_locking_again(world):
+def test_violating_on_the_approved_retake_spends_it_and_locks_again(world):
     lock_student(world)
     world.client.post(world.quiz + "/retake-request", json={"feedback": FEEDBACK})
     world.db.query(QuizRetakeRequest).one().status = "approved"
     world.db.commit()
-    assert finish_quiz(world, violations=3).json()["lock"] is None
-    assert [r.status for r in world.db.query(QuizRetakeRequest)] == ["used"]
+    assert finish_quiz(world, violations=3).json()["lock"]["status"] == "locked"
+    assert sorted(r.status for r in world.db.query(QuizRetakeRequest)) == ["locked", "used"]
+    assert world.client.get(world.quiz).json()["quiz"] is None
 
 
 def test_feedback_rules(world):

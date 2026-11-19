@@ -17,6 +17,9 @@ let lessonBusy = false;   // true while lessons are being written: the dialog ca
 
 let activeLessonSubjectId = null;
 let editingLessonId = null;
+const lessonGameSelect = document.getElementById("lessonGameSelect");
+const lessonGameTryLink = document.getElementById("lessonGameTryLink");
+let editingLessonGame = "";   // the game the open lesson had when it was loaded, so Save only calls the API when it changed
 
 function showLessonStatus(message, kind) {
     const target = lessonDialog.open ? lessonStatus : lessonListStatus;
@@ -346,6 +349,8 @@ function startNewLesson() {
     lessonTitlesInput.value = "";
     lessonDescriptionInput.value = "";
     lessonContentInput.value = "";
+    lessonGameSelect.value = "";
+    editingLessonGame = "";
     setLessonSource("");
     setContentView("preview");
     lessonStatus.textContent = "";
@@ -366,6 +371,8 @@ async function editLesson(lessonId) {
         lessonTitleInput.value = lesson.title;
         lessonDescriptionInput.value = lesson.description || "";
         lessonContentInput.value = lesson.content;
+        editingLessonGame = lesson.preferred_game || "";
+        lessonGameSelect.value = editingLessonGame;
         setLessonSource(lesson.source_name);
         lessonStatus.textContent = "";
         lessonStatus.className = "status";
@@ -606,10 +613,38 @@ function refreshLessonForm() {
             ? `Describe what the ${count} lessons should cover together. The AI writes each one.`
             : "The AI writes the full lesson from this.";
     document.getElementById("titleSingleHint").hidden = editing;
+    document.getElementById("lessonGameHint").textContent = editing
+        ? "Students get a Play button on this lesson. Pick No game to remove it. Press Save changes to apply."
+        : multi
+            ? "The same game is set on every lesson written here. You can change it per lesson later."
+            : "Students get a Play button on this lesson. The AI builds the game's words and questions from the lesson text.";
+    refreshLessonGameLink();
     sourceUploadRow.hidden = sourceMode() !== "upload";
     sourceLibraryRow.hidden = sourceMode() !== "library";
     pageRangeRow.hidden = sourceMode() === "none";   // a page range only makes sense with a file
     if (materialsLoaded && sourceMode() === "library") renderMaterialOptions();
+}
+
+// "Try this game" opens the Games page on this lesson and game, so the teacher can see what students will get.
+function refreshLessonGameLink() {
+    const show = editingLessonId !== null && !!lessonGameSelect.value && activeLessonSubjectId !== null;
+    lessonGameTryLink.hidden = !show;
+    if (show) {
+        lessonGameTryLink.href = `games.html?subject=${encodeURIComponent(activeLessonSubjectId)}&lesson=${encodeURIComponent(editingLessonId)}&game=${encodeURIComponent(lessonGameSelect.value)}`;
+    }
+}
+lessonGameSelect.addEventListener("change", refreshLessonGameLink);
+
+// Sets (or, with "", clears) the game students see on a lesson.
+async function saveLessonGame(lessonId, gameId) {
+    const response = await fetch(lessonsUrl(`/${lessonId}/preferred-game`), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...getHeaders() },
+        body: JSON.stringify({ game_id: gameId }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.detail || "Couldn't save the game.");
+    return result;
 }
 
 // Going from 1 lesson to several (or back) carries the typed title over.
@@ -876,8 +911,9 @@ async function generateLessons() {
     const count = selectedCount();
     const description = lessonDescriptionInput.value.trim();
     const withQuiz = document.getElementById("withQuizInput").checked;
+    const game = lessonGameSelect.value;
     const typed = typedTitles();
-    let titles = typed, saved = [], quizFailures = 0, finished = false;
+    let titles = typed, saved = [], quizFailures = 0, gameFailures = 0, finished = false;
 
     lessonSubjectSelect.disabled = true;
     lessonBusy = true;
@@ -891,20 +927,25 @@ async function generateLessons() {
             const lesson = await postForm(lessonsUrl("/compose"),
                 lessonRequest(source, { title: titles[i], description, series: titles.join("\n"), save: "true" }));
             saved.push(lesson);
+            if (game) {
+                try { await saveLessonGame(lesson.id, game); } catch (_) { gameFailures++; }
+            }
             await loadLessonList();
             if (withQuiz) {
                 showLessonStatus(`Writing the quiz for lesson ${i + 1} of ${titles.length}: ${titles[i]}…`, "info");
                 try { await lessonPost(`${lesson.id}/quiz/generate`); } catch (_) { quizFailures++; }
             }
         }
-        const quizNote = quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "";
+        const quizNote = (quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "")
+            + (gameFailures ? ` The game could not be set on ${gameFailures} lesson(s); open them and choose it again.` : "");
+        const hadProblems = quizFailures + gameFailures > 0;
         if (saved.length === 1) {
             await editLesson(saved[0].id);   // open it so the teacher can read what the AI wrote
-            showLessonStatus(`Lesson saved as a draft. Read it here and edit anything you like, then press Approve under "Drafts to review" so students can see it.${quizNote}`, quizFailures ? "error" : "success");
+            showLessonStatus(`Lesson saved as a draft. Read it here and edit anything you like, then press Approve under "Drafts to review" so students can see it.${quizNote}`, hadProblems ? "error" : "success");
         } else {
             startNewLesson();
             lessonDialog.close();   // not closeLessonDialog(): lessonBusy is still set until the finally below
-            showLessonStatus(`Done. ${saved.length} lessons saved as drafts.${quizNote} Review them under "Drafts to review" and press Approve so students can see them.`, quizFailures ? "error" : "success");
+            showLessonStatus(`Done. ${saved.length} lessons saved as drafts.${quizNote} Review them under "Drafts to review" and press Approve so students can see them.`, hadProblems ? "error" : "success");
         }
         if (typeof loadStudents === "function") loadStudents();
         finished = true;
@@ -952,6 +993,7 @@ async function saveLesson() {
     const content = lessonContentInput.value.trim();
     if (!title) return showLessonStatus("A lesson title is required.", "error");
     if (!content) return showLessonStatus("The content is empty. Press Rewrite content with AI first.", "error");
+    const lessonId = editingLessonId, game = lessonGameSelect.value, gameChanged = game !== editingLessonGame;
     await withButtonLoading(saveBtn, async () => {
         const response = await fetch(lessonsUrl(`/${editingLessonId}`), {
             method: "PUT",
@@ -960,6 +1002,10 @@ async function saveLesson() {
         });
         const result = await response.json();
         if (!response.ok) throw new Error(result.detail || "Couldn't save this lesson.");
+        if (gameChanged) {
+            try { await saveLessonGame(lessonId, game); }
+            catch (error) { await loadLessonList(); throw new Error(`The lesson was saved, but its game was not: ${error.message}`); }
+        }
         startNewLesson();
         lessonDialog.close();
         showLessonStatus("Lesson saved.", "success");
