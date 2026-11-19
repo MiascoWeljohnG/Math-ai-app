@@ -17,6 +17,15 @@ function protectMath(text) {
         .replace(/\\\(/g, '\\\\(')         .replace(/\\\)/g, '\\\\)');
 }
 
+// MathJax is loaded with <script async>, so it may not be ready yet (slow phone connection) or may be blocked; until it
+// is, window.MathJax is only the config object from materials.html and has no typesetPromise. Calling it unguarded threw
+// inside addAskMessage, so the question never appeared and the Ask button looked dead.
+function typesetMath(el) {
+    if (window.MathJax && typeof window.MathJax.typesetPromise === "function") {
+        window.MathJax.typesetPromise([el]).catch((err) => console.log(err));
+    }
+}
+
 let currentFilename = null;
 let readingConversationId = null;
 
@@ -149,7 +158,220 @@ async function loadFiles() {
 }
 loadFiles();
 
+// ---------------------------------------------------------------------------------------------
+// PDF preview.
+// Desktop browsers show a PDF inside an <iframe> just fine. Phones and tablets do not: Android Chrome / Brave
+// replace the iframe with a grey "PDF - Open" placeholder whose button does nothing (it points at a blob: URL),
+// and iOS Safari only shows page 1. So on those devices the pages are drawn with pdf.js instead, which works
+// in every browser. pdf.js is loaded only when a PDF is opened on such a device.
+// ---------------------------------------------------------------------------------------------
+const PDFJS_BASE = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+let pdfjsPromise = null;
+let selectSeq = 0;           // bumps on every file pick, so a slow download can't overwrite a newer pick
+let currentBlobUrl = null;
+let pdfViewerCleanup = null;
+
+function prefersPdfJs() {
+    const ua = navigator.userAgent || "";
+    const phoneOrTablet = /Android|iPhone|iPad|iPod/i.test(ua) || (/Mac/i.test(navigator.platform || "") && navigator.maxTouchPoints > 1);
+    return phoneOrTablet || window.matchMedia("(max-width: 820px)").matches;   // 820px = the breakpoint in css/mobile.css
+}
+
+function loadPdfJs() {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (!pdfjsPromise) {
+        pdfjsPromise = new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = PDFJS_BASE + "pdf.min.js";
+            script.onload = () => {
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_BASE + "pdf.worker.min.js";
+                resolve(window.pdfjsLib);
+            };
+            script.onerror = () => { pdfjsPromise = null; reject(new Error("pdf.js could not be loaded")); };
+            document.head.appendChild(script);
+        });
+    }
+    return pdfjsPromise;
+}
+
+function teardownPdfViewer() {
+    if (pdfViewerCleanup) { pdfViewerCleanup(); pdfViewerCleanup = null; }
+}
+
+// Last resort when the preview can't be drawn: a working download link (blob: links need no login header).
+function showPdfFallback(url, displayName) {
+    const holder = document.createElement("div");
+    holder.className = "pdf-placeholder";
+    holder.dataset.pdfUrl = url;
+    holder.dataset.pdfName = displayName;
+    holder.innerHTML = `<div>Couldn't show a preview here.<br><a href="${url}" download="${escapeHtml(displayName)}" style="color:#93c5fd; margin-top:0.5rem; display:inline-block;">Download ${escapeHtml(displayName)}</a></div>`;
+    pdfPane.replaceChildren(holder);
+}
+
+async function renderPdfJs(blob, url, displayName, seq) {
+    const pdfjsLib = await loadPdfJs();
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+    if (seq !== selectSeq) { pdf.destroy(); return; }
+    const first = await pdf.getPage(1);
+    if (seq !== selectSeq) { pdf.destroy(); return; }
+    const base = first.getViewport({ scale: 1 });
+    const total = pdf.numPages;
+
+    const wrap = document.createElement("div");
+    wrap.className = "pdfjs-wrap";
+    wrap.dataset.pdfUrl = url;                 // css/mobile.js reads these for the "Download" button in the top bar
+    wrap.dataset.pdfName = displayName;
+    wrap.innerHTML = `
+        <div class="pdfjs-scroll"><div class="pdfjs-pages"></div></div>
+        <div class="pdfjs-bar">
+            <button type="button" class="pdfjs-zoom-out" aria-label="Zoom out">&minus;</button>
+            <span class="pdfjs-pageno" aria-live="polite"></span>
+            <button type="button" class="pdfjs-zoom-in" aria-label="Zoom in">+</button>
+        </div>`;
+    pdfPane.replaceChildren(wrap);
+
+    const scroller = wrap.querySelector(".pdfjs-scroll");
+    const pagesEl = wrap.querySelector(".pdfjs-pages");
+    const pageNoEl = wrap.querySelector(".pdfjs-pageno");
+    const zoomOutBtn = wrap.querySelector(".pdfjs-zoom-out");
+    const zoomInBtn = wrap.querySelector(".pdfjs-zoom-in");
+
+    const pageEls = [];
+    let io = null;
+    let zoom = 1;
+    let scale = 1;
+    let laidOutWidth = 0;
+
+    // Pages are only drawn while near the screen (a module can be 300+ pages) and cleared again when far away.
+    const unrender = (el) => {
+        el._wanted = false;
+        if (el._task) { try { el._task.cancel(); } catch (_) { /* already finished */ } el._task = null; }
+        el._rendered = false;
+        el.replaceChildren();
+    };
+
+    async function renderPage(el) {
+        if (el._busy || el._rendered) return;
+        el._busy = true;
+        const forScale = scale;
+        try {
+            const page = await pdf.getPage(Number(el.dataset.n));
+            if (!el._wanted || !el.isConnected || forScale !== scale) return;
+            const vp = page.getViewport({ scale: forScale });
+            const ratio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2, 2600 / vp.width));   // sharp, but bounded for phone memory
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.floor(vp.width * ratio);
+            canvas.height = Math.floor(vp.height * ratio);
+            canvas.style.width = "100%";
+            canvas.style.height = "100%";
+            const task = page.render({
+                canvasContext: canvas.getContext("2d"),
+                viewport: vp,
+                transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : null,
+            });
+            el._task = task;
+            await task.promise;
+            el._task = null;
+            if (!el._wanted || !el.isConnected || forScale !== scale) return;
+            el.style.width = `${vp.width}px`;
+            el.style.height = `${vp.height}px`;
+            el.replaceChildren(canvas);
+            el._rendered = true;
+        } catch (_) { /* render cancelled because the page scrolled away, or this one page is unreadable */ }
+        finally { el._busy = false; }
+    }
+
+    function updatePageNo() {
+        const mid = scroller.scrollTop + scroller.clientHeight * 0.35;
+        let lo = 0, hi = pageEls.length - 1;
+        while (lo < hi) {
+            const m = (lo + hi) >> 1;
+            if (pageEls[m].offsetTop + pageEls[m].offsetHeight < mid) lo = m + 1; else hi = m;
+        }
+        pageNoEl.textContent = `Page ${lo + 1} of ${total}`;
+    }
+
+    function layout() {
+        const available = scroller.clientWidth || wrap.clientWidth;
+        if (!available) return;   // the Read tab is hidden right now; the ResizeObserver calls this again when it shows
+        const cssWidth = Math.max(160, available - 16) * zoom;
+        if (pageEls.length && Math.abs(cssWidth - laidOutWidth) < 4) return;
+        const keep = scroller.scrollHeight > 0 ? scroller.scrollTop / scroller.scrollHeight : 0;
+        laidOutWidth = cssWidth;
+        scale = cssWidth / base.width;
+        if (io) io.disconnect();
+        pageEls.forEach(unrender);
+        pagesEl.replaceChildren();
+        pageEls.length = 0;
+        const height = Math.round(cssWidth * base.height / base.width);
+        for (let n = 1; n <= total; n++) {
+            const el = document.createElement("div");
+            el.className = "pdfjs-page";
+            el.dataset.n = String(n);
+            el.style.width = `${Math.round(cssWidth)}px`;
+            el.style.height = `${height}px`;
+            pagesEl.appendChild(el);
+            pageEls.push(el);
+        }
+        io = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                entry.target._wanted = entry.isIntersecting;
+                if (entry.isIntersecting) renderPage(entry.target); else unrender(entry.target);
+            }
+        }, { root: scroller, rootMargin: "900px 0px" });
+        pageEls.forEach(el => io.observe(el));
+        scroller.scrollTop = keep * scroller.scrollHeight;
+        updatePageNo();
+        zoomOutBtn.disabled = zoom <= 1;
+        zoomInBtn.disabled = zoom >= 3;
+    }
+
+    const setZoom = (next) => { zoom = Math.min(3, Math.max(1, next)); layout(); };
+    zoomOutBtn.addEventListener("click", () => setZoom(zoom - 0.5));
+    zoomInBtn.addEventListener("click", () => setZoom(zoom + 0.5));
+
+    let ticking = false;
+    scroller.addEventListener("scroll", () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { ticking = false; updatePageNo(); });
+    }, { passive: true });
+
+    const resizeObserver = new ResizeObserver(() => layout());   // rotation, or the Read tab becoming visible
+    resizeObserver.observe(scroller);
+    layout();
+
+    pdfViewerCleanup = () => {
+        resizeObserver.disconnect();
+        if (io) io.disconnect();
+        pageEls.forEach(unrender);
+        try { pdf.destroy(); } catch (_) { /* already gone */ }
+    };
+}
+
+// The file endpoint wants the login token in a header, which a plain <a href> can't send, so downloads go through fetch.
+async function downloadMaterial(filename, displayName, btn) {
+    const label = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "Downloading..."; }
+    try {
+        const res = await fetch(`${API}/materials/${encodeURIComponent(filename)}/file`, { headers: authHeaders() });
+        if (!res.ok) throw new Error();
+        const url = URL.createObjectURL(await res.blob());
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = displayName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 15000);
+        if (btn) { btn.disabled = false; btn.textContent = label; }
+    } catch (_) {
+        if (btn) { btn.disabled = false; btn.textContent = "Failed - tap to retry"; }
+    }
+}
+
 async function selectFile(filename, displayName, btnEl) {
+    const seq = ++selectSeq;
     document.querySelectorAll(".file-item").forEach(b => b.classList.remove("active"));
     btnEl.classList.add("active");
     currentFilename = filename;
@@ -170,6 +392,7 @@ async function selectFile(filename, displayName, btnEl) {
             const res = await fetch(`${API}/conversations/${readingConversationId}/messages`, { headers: authHeaders() });
             if (res.ok) {
                 const messages = await res.json();
+                if (seq !== selectSeq) return;
                 for (const m of messages) {
                     addAskMessage(m.content, m.role === "user" ? "user" : "bot");
                 }
@@ -182,15 +405,19 @@ async function selectFile(filename, displayName, btnEl) {
     }
     
     viewerHeader.textContent = displayName;
-    pdfPane.innerHTML = `<div class="pdf-placeholder">Loading ${displayName}...</div>`;
+    teardownPdfViewer();
+    pdfPane.innerHTML = `<div class="pdf-placeholder">Loading ${escapeHtml(displayName)}...</div>`;
 
     const isPptx = displayName.toLowerCase().endsWith(".pptx");
+    const isPdf = displayName.toLowerCase().endsWith(".pdf");
 
     try {
         if (isPptx) {
             const res = await fetch(`${API}/materials/${encodeURIComponent(filename)}/slides`, { headers: authHeaders() });
+            if (seq !== selectSeq) return;
             if (res.ok) {
                 const data = await res.json();
+                if (seq !== selectSeq) return;
                 renderPptxViewer(data, filename, displayName);
                 return;
             }
@@ -199,22 +426,35 @@ async function selectFile(filename, displayName, btnEl) {
         const res = await fetch(`${API}/materials/${encodeURIComponent(filename)}/file`, { headers: authHeaders() });
         if (!res.ok) throw new Error();
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
+        if (seq !== selectSeq) return;   // another file was picked while this one downloaded
+        if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
+        const url = currentBlobUrl = URL.createObjectURL(blob);
+        const safeName = escapeHtml(displayName);
 
-        if (blob.type === "application/pdf" || displayName.toLowerCase().endsWith(".pdf")) {
-            pdfPane.innerHTML = `<iframe src="${url}" title="${displayName}"></iframe>`;
+        if (blob.type === "application/pdf" || isPdf) {
+            if (prefersPdfJs()) {
+                try {
+                    await renderPdfJs(blob, url, displayName, seq);
+                } catch (err) {
+                    console.warn("PDF preview failed:", err);
+                    if (seq === selectSeq) showPdfFallback(url, displayName);
+                }
+                return;
+            }
+            pdfPane.innerHTML = `<iframe src="${url}" title="${safeName}"></iframe>`;
         } else {
-            pdfPane.innerHTML = `<div class="pdf-placeholder">Preview isn't available for this file type.<br><a href="${url}" download="${displayName}" style="color:#93c5fd; margin-top:0.5rem; display:inline-block;">Download ${displayName}</a></div>`;
+            pdfPane.innerHTML = `<div class="pdf-placeholder">Preview isn't available for this file type.<br><a href="${url}" download="${safeName}" style="color:#93c5fd; margin-top:0.5rem; display:inline-block;">Download ${safeName}</a></div>`;
         }
     } catch (_) {
-        pdfPane.innerHTML = `<div class="pdf-placeholder">Couldn't load this file.</div>`;
+        if (seq === selectSeq) pdfPane.innerHTML = `<div class="pdf-placeholder">Couldn't load this file.</div>`;
     }
 }
 
 function renderPptxViewer(data, filename, displayName) {
     const slides = data.slides || [];
     if (slides.length === 0) {
-        pdfPane.innerHTML = `<div class="pdf-placeholder">Presentation is empty or contains no readable slides.<br><a href="${API}/materials/${encodeURIComponent(filename)}/file" download="${displayName}" style="color:#93c5fd; margin-top:0.5rem; display:inline-block;">Download ${displayName}</a></div>`;
+        pdfPane.innerHTML = `<div class="pdf-placeholder"><div>Presentation is empty or contains no readable slides.<br><button type="button" class="pptx-action-btn" id="pptxDownloadBtn" style="margin-top:0.75rem;">Download ${escapeHtml(displayName)}</button></div></div>`;
+        pdfPane.querySelector("#pptxDownloadBtn").addEventListener("click", (e) => downloadMaterial(filename, displayName, e.currentTarget));
         return;
     }
 
@@ -275,7 +515,7 @@ function renderPptxViewer(data, filename, displayName) {
                     <button class="pptx-nav-btn" id="pptxNextBtn">Next ▶</button>
                 </div>
                 <div class="pptx-actions">
-                    <a class="pptx-action-btn" href="${API}/materials/${encodeURIComponent(filename)}/file" download="${displayName}">Download PPTX</a>
+                    <button type="button" class="pptx-action-btn" id="pptxDownloadBtn">Download PPTX</button>
                 </div>
             </div>
             <div class="pptx-stage"></div>
@@ -288,6 +528,8 @@ function renderPptxViewer(data, filename, displayName) {
             update();
         }
     });
+
+    pdfPane.querySelector("#pptxDownloadBtn").addEventListener("click", (e) => downloadMaterial(filename, displayName, e.currentTarget));
 
     pdfPane.querySelector("#pptxNextBtn").addEventListener("click", () => {
         if (currentSlideIdx < slides.length - 1) {
@@ -315,9 +557,7 @@ function addAskMessage(text, role) {
     
     // Parse Markdown and Math
     div.innerHTML = typeof marked !== "undefined" ? marked.parse(protectMath(text)) : text;
-    if (typeof MathJax !== "undefined") {
-        MathJax.typesetPromise([div]).catch((err) => console.log(err));
-    }
+    typesetMath(div);
     
     askLog.appendChild(div);
     askLog.scrollTop = askLog.scrollHeight;
@@ -363,9 +603,7 @@ async function sendAskQuestion() {
                 },
                 onDone: (event) => {
                     // Render math fractions once the stream finishes
-                    if (typeof MathJax !== "undefined") {
-                        MathJax.typesetPromise([thinkingDiv]).catch((err) => console.log(err));
-                    }
+                    typesetMath(thinkingDiv);
                 },
                 onError: (detail) => {
                     thinkingDiv.textContent = detail || "Error";

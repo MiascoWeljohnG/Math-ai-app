@@ -201,6 +201,9 @@ button, a, summary, label.opt, .tile, .file-item, .convo-item { touch-action: ma
     .materials-page[data-tab="ask"] .m-tabs [data-tab="ask"] { color: var(--text); border-bottom-color: var(--accent); }
     .m-open { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.8rem; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; font-size: 0.85rem; text-decoration: none; }
     .m-open[hidden] { display: none !important; }
+    .pptx-nav-btn, .pptx-action-btn { min-height: 44px; }
+    .pptx-stage { padding: 0.75rem; }
+    .pptx-card { padding: 1.1rem; }
     .m-back { min-height: 44px; padding: 0 0.8rem; border: 1px solid var(--field-border); border-radius: 8px; background: var(--bg-elevated); color: var(--text); font-weight: 600; font-size: 0.85rem; font-family: inherit; cursor: pointer; }
 }
 .m-tabs, .m-bar { display: none; }

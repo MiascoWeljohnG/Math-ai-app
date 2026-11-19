@@ -6,7 +6,6 @@ XP and streaks live in the browser (see frontend/js/games-core.js).
 
 The page works without this route (it falls back to words it finds in the lesson text), so a model error is harmless.
 """
-import hashlib
 import json
 import re
 
@@ -18,7 +17,9 @@ from database import get_db
 from models import Lesson, User
 from pydantic import BaseModel, Field
 from rag import generate_text
-from routes.subjects_routes import _lesson_in_subject_or_404, _require_unlocked, _visible_subject_or_404, _shared_subject_or_404
+from routes.subjects_routes import (
+    _lesson_in_subject_or_404, _require_unlocked, _shared_subject_or_404, _visible_subject_or_404, lesson_game_key,
+)
 
 router = APIRouter(prefix="/subjects", tags=["games"])
 
@@ -136,12 +137,28 @@ async def lesson_game_pack(
         raise HTTPException(status_code=404, detail="Lesson not found")
     _require_unlocked(db, subject, lesson, user)   # the same lock as the lesson itself
 
-    content = (lesson.content or "")[:6000]
-    key = hashlib.sha1(f"{lesson.id}:{content}".encode("utf-8")).hexdigest()
+    key = lesson_game_key(lesson)
+    if lesson.game_pack and lesson.game_pack_key == key:   # the version the teacher generated and can review
+        try:
+            return json.loads(lesson.game_pack)
+        except ValueError:
+            pass   # a damaged row: write a fresh pack below
     if key in _CACHE:
         return _CACHE[key]
+    pack = await _write_pack(subject, lesson)
+    _remember(key, pack)
+    return pack
 
-    prompt = GAME_PROMPT.format(title=lesson.title, subject=subject.name, content=content)
+
+def _remember(key: str, pack: dict) -> None:
+    if len(_CACHE) >= _CACHE_MAX:
+        _CACHE.pop(next(iter(_CACHE)))
+    _CACHE[key] = pack
+
+
+async def _write_pack(subject, lesson: Lesson) -> dict:
+    """Asks the model for the lesson's game content. Raises a 502 when nothing usable comes back."""
+    prompt = GAME_PROMPT.format(title=lesson.title, subject=subject.name, content=(lesson.content or "")[:6000])
     pack: dict = {}
     for _ in range(2):   # small local models sometimes break the format; try once more
         try:
@@ -155,11 +172,28 @@ async def lesson_game_pack(
             break
     if not pack:
         raise HTTPException(status_code=502, detail="The model's game content could not be read. Please try again.")
-
-    if len(_CACHE) >= _CACHE_MAX:
-        _CACHE.pop(next(iter(_CACHE)))
-    _CACHE[key] = pack
     return pack
+
+
+@router.post("/{subject_id}/lessons/{lesson_id}/games/generate")
+async def generate_lesson_game(
+    subject_id: int, lesson_id: int,
+    user: User = Depends(require_staff), db: Session = Depends(get_db),
+):
+    """A teacher writes (or rewrites) the game content for a lesson and keeps it with the lesson. Students then play
+    exactly this version instead of waiting for the model. It goes stale when the lesson text changes."""
+    subject = _shared_subject_or_404(db, subject_id, user)
+    lesson = db.query(Lesson).filter(Lesson.id == lesson_id, Lesson.subject_id == subject_id).first()
+    if lesson is None:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    if not (lesson.content or "").strip():
+        raise HTTPException(status_code=400, detail="Write the lesson first, then generate its game.")
+    pack = await _write_pack(subject, lesson)
+    key = lesson_game_key(lesson)
+    lesson.game_pack, lesson.game_pack_key = json.dumps(pack), key
+    db.commit()
+    _remember(key, pack)
+    return {"pack": pack, "game_status": "ready"}
 
 
 class LessonGameRequest(BaseModel):

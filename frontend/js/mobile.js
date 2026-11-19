@@ -54,7 +54,7 @@
             '<div class="m-tabs" role="tablist">' +
             '<button type="button" role="tab" data-tab="read">Read</button>' +
             '<button type="button" role="tab" data-tab="ask">Ask AI</button></div>' +
-            '<a class="m-open" target="_blank" rel="noopener" hidden>Open PDF</a>';
+            '<a class="m-open" rel="noopener" hidden>Download</a>';
         mainPane.insertBefore(bar, mainPane.firstChild);
 
         const setTab = (tab) => {
@@ -75,18 +75,26 @@
                 document.body.classList.add("viewing");
             }
         });
-        window.addEventListener("resize", () => { if (!isMobile()) document.body.classList.remove("viewing"); });
+        // ("viewing" is deliberately kept on resize: its CSS only applies on phones, so it does nothing on a wide screen,
+        // and rotating a phone to landscape and back no longer throws the reader away.)
 
-        // Phones are poor at showing a PDF inside an <iframe> (Android Chrome often shows nothing, iOS
-        // Safari only page 1), so offer the file in the phone's own PDF viewer. materials.js swaps the
-        // iframe in and out of #pdfPane, so watch for it.
+        // Phones are poor at showing a PDF inside an <iframe> (Android Chrome shows a dead "Open" card, iOS
+        // Safari only page 1), so materials.js draws the pages itself on phones and marks the viewer with
+        // data-pdf-url / data-pdf-name. This button saves that file so it can be opened in the phone's own PDF
+        // app. materials.js swaps the viewer in and out of #pdfPane, so watch for it.
         const openLink = bar.querySelector(".m-open");
         const pdfPane = document.getElementById("pdfPane");
         if (pdfPane) {
             const sync = () => {
+                const holder = pdfPane.querySelector("[data-pdf-url]");
                 const frame = pdfPane.querySelector("iframe");
-                openLink.hidden = !frame;
-                if (frame) openLink.href = frame.src;
+                const url = holder ? holder.dataset.pdfUrl : (frame ? frame.src : "");
+                const name = holder ? holder.dataset.pdfName : "";
+                openLink.hidden = !url;
+                if (!url) return;
+                openLink.href = url;
+                if (name) { openLink.setAttribute("download", name); openLink.removeAttribute("target"); }
+                else { openLink.removeAttribute("download"); openLink.target = "_blank"; }
             };
             new MutationObserver(sync).observe(pdfPane, { childList: true });
             sync();

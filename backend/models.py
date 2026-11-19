@@ -184,6 +184,10 @@ class Lesson(Base):
     status = Column(String, nullable=False, default="published", index=True)  # draft | published
     source_name = Column(String, nullable=True)   # the module/file the AI used to write this lesson (with pages), or None
     preferred_game = Column(String, nullable=True)  # teacher-selected practice game
+    # The game content the teacher generated for this lesson (JSON, see routes/games_routes.py), so every student plays the
+    # same reviewed version. game_pack_key says which lesson text it was written from: when the text changes it goes stale.
+    game_pack = Column(Text, nullable=True)
+    game_pack_key = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

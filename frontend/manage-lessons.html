@@ -137,6 +137,14 @@
                 </select>
                 <p class="hint" id="lessonGameHint">Students get a Play button on this lesson. The AI builds the game's words and questions from the lesson text.</p>
                 <a id="lessonGameTryLink" class="hint" href="#" target="_blank" rel="noopener" hidden>Try this game</a>
+                <div id="lessonGameGenerateRow" hidden>
+                    <button class="btn btn-secondary btn-sm" type="button" id="lessonGameGenerateBtn">Generate game content</button>
+                    <p class="hint" id="lessonGamePackStatus" role="status" aria-live="polite"></p>
+                    <details id="lessonGamePreview" hidden>
+                        <summary>Look over the generated game content</summary>
+                        <div id="lessonGamePreviewBody"></div>
+                    </details>
+                </div>
             </div>
 
             <div class="lf-group" id="lessonContentField" hidden>
@@ -154,6 +162,7 @@
             </div>
     
             <label class="check" id="withQuizField"><input type="checkbox" id="withQuizInput" checked> Also create a quiz for each lesson</label>
+            <label class="check" id="withGameField" hidden><input type="checkbox" id="withGameInput" checked> Also generate the game content for each lesson, so students don't wait for it</label>
     
             <div class="status" id="lessonStatus" role="status" aria-live="polite"></div>
             <div class="dialog-actions">

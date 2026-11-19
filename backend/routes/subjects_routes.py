@@ -1,3 +1,4 @@
+import hashlib
 import json
 import random
 import re
@@ -206,6 +207,18 @@ def _require_unlocked(db: Session, subject: Subject, lesson: Lesson, user: User)
         raise HTTPException(status_code=403, detail="Pass the previous lesson's quiz to unlock this one.")
 
 
+def lesson_game_key(lesson: Lesson) -> str:
+    """Identifies the lesson text a game pack was written from (the games route and the lesson list share it)."""
+    return hashlib.sha1(f"{lesson.id}:{(lesson.content or '')[:6000]}".encode("utf-8")).hexdigest()
+
+
+def _game_status(lesson: Lesson) -> str:
+    """none: no game content generated yet. ready: students play it. stale: the lesson text changed since."""
+    if not getattr(lesson, "game_pack", None):
+        return "none"
+    return "ready" if lesson.game_pack_key == lesson_game_key(lesson) else "stale"
+
+
 def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: bool = False, locked: bool = False) -> dict:
     result = {
         "id": lesson.id,
@@ -218,6 +231,7 @@ def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: b
         "status": lesson.status,
         "source_name": lesson.source_name or "",
         "preferred_game": getattr(lesson, "preferred_game", None),
+        "game_status": _game_status(lesson),
     }
     if include_content:
         result["content"] = lesson.content

@@ -148,3 +148,78 @@ def test_games_page_deep_link_can_see_subjects():
     from pathlib import Path
     source = (Path(__file__).resolve().parents[2] / "frontend/js/games.js").read_text()
     assert "let subjects = [];" in source   # was a const inside the try block: the deep link threw a ReferenceError
+
+
+# ---------------------------------------------------------------- generated game content
+PACK = {"terms": [{"word": "SQUARE", "clue": "A number times itself"}] * 4}
+
+
+@pytest.fixture
+def pack_model(monkeypatch):
+    """Stands in for the AI: counts how often it is asked and returns PACK as JSON."""
+    import json
+    from routes import games_routes
+    calls = []
+
+    async def fake(system, prompt, branch, query, school_id=None):
+        calls.append(prompt)
+        return json.dumps({"terms": [{"word": "SQUARE", "clue": "A number times itself"},
+                                     {"word": "CUBES", "clue": "Three equal factors"},
+                                     {"word": "ROOTS", "clue": "Undo a power"},
+                                     {"word": "POWER", "clue": "The little raised number"}]})
+
+    monkeypatch.setattr(games_routes, "generate_text", fake)
+    games_routes._CACHE.clear()
+    return calls
+
+
+def test_teacher_generates_game_content_and_students_get_that_same_version(world, pack_model):
+    lesson = add(world, "published")
+    url = f"/subjects/{world.shared.id}/lessons/{lesson.id}"
+    world.as_teacher()
+    assert world.get(url).json()["game_status"] == "none"
+    made = world.post(url + "/games/generate")
+    assert made.status_code == 200 and made.json()["game_status"] == "ready"
+    assert [t["word"] for t in made.json()["pack"]["terms"]] == ["SQUARE", "CUBES", "ROOTS", "POWER"]
+    assert world.get(url).json()["game_status"] == "ready"
+
+    from routes import games_routes
+    games_routes._CACHE.clear()          # even after a restart (empty cache) ...
+    calls_before = len(pack_model)
+    world.as_student()
+    assert world.post(url + "/games").json() == made.json()["pack"]
+    assert len(pack_model) == calls_before   # ... the student is served from the lesson, not by asking the AI again
+
+
+def test_changing_the_lesson_text_makes_the_game_content_stale(world, pack_model):
+    lesson = add(world, "published")
+    url = f"/subjects/{world.shared.id}/lessons/{lesson.id}"
+    world.as_teacher()
+    world.post(url + "/games/generate")
+    lesson.content = "A different lesson now."
+    world.db.commit()
+    assert world.get(url).json()["game_status"] == "stale"
+    asked = len(pack_model)
+    world.as_student()
+    world.post(url + "/games")              # a stale pack is not served: the page gets one for the new text
+    assert len(pack_model) > asked           # the model was asked again (it retries when a pack is thin)
+
+
+def test_only_staff_generate_game_content_and_an_empty_lesson_is_refused(world, pack_model):
+    lesson = add(world, "published")
+    url = f"/subjects/{world.shared.id}/lessons/{lesson.id}/games/generate"
+    world.as_student()
+    assert world.post(url).status_code == 403
+    world.as_teacher()
+    lesson.content = "  "
+    world.db.commit()
+    assert world.post(url).status_code == 400
+    assert pack_model == []
+
+
+def test_manage_lessons_has_the_generate_game_button():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2] / "frontend"
+    assert 'id="lessonGameGenerateBtn"' in (root / "manage-lessons.html").read_text()
+    script = (root / "js/teacher.js").read_text()
+    assert "games/generate" in script and "renderGamePack" in script

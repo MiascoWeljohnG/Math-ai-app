@@ -19,6 +19,12 @@ let activeLessonSubjectId = null;
 let editingLessonId = null;
 const lessonGameSelect = document.getElementById("lessonGameSelect");
 const lessonGameTryLink = document.getElementById("lessonGameTryLink");
+const gameGenerateRow = document.getElementById("lessonGameGenerateRow");
+const gameGenerateBtn = document.getElementById("lessonGameGenerateBtn");
+const gamePackStatus = document.getElementById("lessonGamePackStatus");
+const gamePreview = document.getElementById("lessonGamePreview");
+const gamePreviewBody = document.getElementById("lessonGamePreviewBody");
+let editingGameStatus = "none";   // none | ready | stale: whether the open lesson has generated game content
 let editingLessonGame = "";   // the game the open lesson had when it was loaded, so Save only calls the API when it changed
 
 function showLessonStatus(message, kind) {
@@ -351,6 +357,8 @@ function startNewLesson() {
     lessonContentInput.value = "";
     lessonGameSelect.value = "";
     editingLessonGame = "";
+    editingGameStatus = "none";
+    gamePreview.hidden = true;
     setLessonSource("");
     setContentView("preview");
     lessonStatus.textContent = "";
@@ -373,6 +381,8 @@ async function editLesson(lessonId) {
         lessonContentInput.value = lesson.content;
         editingLessonGame = lesson.preferred_game || "";
         lessonGameSelect.value = editingLessonGame;
+        editingGameStatus = lesson.game_status || "none";
+        gamePreview.hidden = true;
         setLessonSource(lesson.source_name);
         lessonStatus.textContent = "";
         lessonStatus.className = "status";
@@ -601,6 +611,9 @@ function refreshLessonForm() {
     document.getElementById("titleMultiField").hidden = !multi;
     document.getElementById("lessonContentField").hidden = !editing;
     document.getElementById("withQuizField").hidden = editing;
+    document.getElementById("withGameField").hidden = editing || !lessonGameSelect.value;
+    gameGenerateRow.hidden = !editing;
+    refreshGamePackUi();
     generateBtn.hidden = editing;
     saveBtn.hidden = regenBtn.hidden = !editing;
     document.getElementById("downloadPdfBtn").hidden = !editing;   // Cancel is always shown: it just closes the modal
@@ -633,7 +646,65 @@ function refreshLessonGameLink() {
         lessonGameTryLink.href = `games.html?subject=${encodeURIComponent(activeLessonSubjectId)}&lesson=${encodeURIComponent(editingLessonId)}&game=${encodeURIComponent(lessonGameSelect.value)}`;
     }
 }
-lessonGameSelect.addEventListener("change", refreshLessonGameLink);
+lessonGameSelect.addEventListener("change", () => {
+    refreshLessonGameLink();
+    if (editingLessonId === null) document.getElementById("withGameField").hidden = !lessonGameSelect.value;   // new lessons only
+});
+
+// What the Generate game content button and the line under it say, from the open lesson's game_status.
+function refreshGamePackUi() {
+    gameGenerateBtn.textContent = editingGameStatus === "none" ? "Generate game content" : "Regenerate game content";
+    gamePackStatus.className = "hint";
+    gamePackStatus.textContent = {
+        none: "No game content yet. Until you generate it, the game builds its words from the lesson text, which can be rougher. Uses the saved lesson text, so press Save changes first if you edited it.",
+        ready: "Game content is ready. Students play this version. Look it over below, or regenerate it for a different set.",
+        stale: "The lesson text changed after this game was generated. Generate it again so the game matches the lesson.",
+    }[editingGameStatus] || "";
+}
+
+// Shows what the AI wrote so the teacher can check it. Plain DOM text only: nothing from the model is read as HTML.
+function renderGamePack(pack) {
+    const section = (title, rows) => {
+        const heading = document.createElement("h4");
+        heading.textContent = title;
+        const list = document.createElement("ul");
+        list.append(...rows.map(text => { const li = document.createElement("li"); li.textContent = text; return li; }));
+        return [heading, list];
+    };
+    const parts = [];
+    if (pack.terms) parts.push(...section(`Words for Hangman and Word Search (${pack.terms.length})`, pack.terms.map(t => `${t.word}: ${t.clue}`)));
+    if (pack.match) parts.push(...section(`Matching pairs (${pack.match.length})`, pack.match.map(m => `${m.a} = ${m.b}`)));
+    if (pack.sort) {
+        parts.push(...section(`Sorting: ${pack.sort.left} or ${pack.sort.right}`,
+            pack.sort.items.map(i => `${i.text} (${i.side === "left" ? pack.sort.left : pack.sort.right})`)));
+    }
+    if (pack.blanks) parts.push(...section(`Fill in the blanks (${pack.blanks.length})`, pack.blanks.map(b => `${b.sentence} Answer: ${b.answer}`)));
+    gamePreviewBody.replaceChildren(...parts);
+    gamePreview.hidden = parts.length === 0;
+}
+
+gameGenerateBtn.addEventListener("click", async () => {
+    if (editingLessonId === null || lessonBusy) return;
+    const lessonId = editingLessonId;
+    gameGenerateBtn.disabled = true;
+    gamePackStatus.className = "hint";
+    gamePackStatus.textContent = "The AI is writing the game content. This can take a minute.";
+    try {
+        const result = await lessonPost(`${lessonId}/games/generate`);
+        if (editingLessonId !== lessonId) return;   // the dialog moved on to another lesson meanwhile
+        editingGameStatus = result.game_status;
+        refreshGamePackUi();
+        renderGamePack(result.pack);
+        gamePreview.open = true;
+        if (!lessonGameSelect.value) gamePackStatus.textContent += " Pick a game above and press Save changes so students get a Play button.";
+    } catch (error) {
+        if (editingLessonId !== lessonId) return;
+        gamePackStatus.className = "hint error";
+        gamePackStatus.textContent = `${error.message} The game still works without it, using words from the lesson text.`;
+    } finally {
+        gameGenerateBtn.disabled = false;
+    }
+});
 
 // Sets (or, with "", clears) the game students see on a lesson.
 async function saveLessonGame(lessonId, gameId) {
@@ -912,8 +983,9 @@ async function generateLessons() {
     const description = lessonDescriptionInput.value.trim();
     const withQuiz = document.getElementById("withQuizInput").checked;
     const game = lessonGameSelect.value;
+    const withGameContent = !!game && document.getElementById("withGameInput").checked;
     const typed = typedTitles();
-    let titles = typed, saved = [], quizFailures = 0, gameFailures = 0, finished = false;
+    let titles = typed, saved = [], quizFailures = 0, gameFailures = 0, packFailures = 0, finished = false;
 
     lessonSubjectSelect.disabled = true;
     lessonBusy = true;
@@ -935,10 +1007,15 @@ async function generateLessons() {
                 showLessonStatus(`Writing the quiz for lesson ${i + 1} of ${titles.length}: ${titles[i]}…`, "info");
                 try { await lessonPost(`${lesson.id}/quiz/generate`); } catch (_) { quizFailures++; }
             }
+            if (withGameContent) {
+                showLessonStatus(`Writing the game for lesson ${i + 1} of ${titles.length}: ${titles[i]}…`, "info");
+                try { await lessonPost(`${lesson.id}/games/generate`); } catch (_) { packFailures++; }
+            }
         }
         const quizNote = (quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "")
-            + (gameFailures ? ` The game could not be set on ${gameFailures} lesson(s); open them and choose it again.` : "");
-        const hadProblems = quizFailures + gameFailures > 0;
+            + (gameFailures ? ` The game could not be set on ${gameFailures} lesson(s); open them and choose it again.` : "")
+            + (packFailures ? ` The game content failed for ${packFailures} lesson(s); open them and press Generate game content.` : "");
+        const hadProblems = quizFailures + gameFailures + packFailures > 0;
         if (saved.length === 1) {
             await editLesson(saved[0].id);   // open it so the teacher can read what the AI wrote
             showLessonStatus(`Lesson saved as a draft. Read it here and edit anything you like, then press Approve under "Drafts to review" so students can see it.${quizNote}`, hadProblems ? "error" : "success");
