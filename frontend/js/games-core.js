@@ -55,8 +55,8 @@ const GameStore = {
     load() {
         try {
             const data = JSON.parse(localStorage.getItem(this.key()) || "{}");
-            return { xp: 0, streak: 0, lastDay: "", played: 0, best: {}, ...data };
-        } catch { return { xp: 0, streak: 0, lastDay: "", played: 0, best: {} }; }
+            return { xp: 0, streak: 0, lastDay: "", played: 0, best: {}, earned: {}, ...data };
+        } catch { return { xp: 0, streak: 0, lastDay: "", played: 0, best: {}, earned: {} }; }
     },
     save(data) { try { localStorage.setItem(this.key(), JSON.stringify(data)); } catch { /* storage full or blocked: skip */ } },
     level(xp) { return Math.floor(xp / XP_PER_LEVEL) + 1; },
@@ -65,10 +65,16 @@ const GameStore = {
         return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
     },
     // Record a finished round. Returns what the result screen shows.
-    record(gameId, stars) {
+    // XP is paid once per lesson + game: a replay only earns the XP for stars not earned before there, so spamming one
+    // game from one lesson stops paying (the most a pair can ever give is the 3-star amount).
+    record(gameId, stars, lessonId = "") {
         const data = this.load();
         const before = this.level(data.xp);
-        const gained = GAME_XP_PER_STAR[Math.max(0, Math.min(3, stars))];
+        const tier = Math.max(0, Math.min(3, stars));
+        const pairKey = `${lessonId || "general"}:${gameId}`;
+        const alreadyEarned = data.earned[pairKey] || 0;   // XP already paid for this lesson + game
+        const gained = Math.max(0, GAME_XP_PER_STAR[tier] - alreadyEarned);
+        data.earned[pairKey] = alreadyEarned + gained;
         data.xp += gained;
         data.played += 1;
         data.best[gameId] = Math.max(data.best[gameId] || 0, stars);
@@ -78,7 +84,7 @@ const GameStore = {
             data.lastDay = today;
         }
         this.save(data);
-        return { gained, data, levelUp: this.level(data.xp) > before, level: this.level(data.xp) };
+        return { gained, repeat: gained === 0, data, levelUp: this.level(data.xp) > before, level: this.level(data.xp) };
     },
     // A streak only counts while it is still alive (played today or yesterday).
     liveStreak(data) {

@@ -8,6 +8,7 @@ const starRow = (count, cls = "") => h("span", { class: `gm-stars ${cls}`, "aria
 
 let currentPack = BUILTIN_PACK;
 let currentLabel = "General math words";
+let currentLessonId = "";   // "" while playing general words; XP is tracked per lesson + game
 let cleanup = null;
 let playing = null;       // the game being played
 let packToken = 0;        // so a slow AI reply for an old lesson never replaces the pack of a newer pick
@@ -70,7 +71,7 @@ async function initPicker() {
         try {
             const loaded = await loadPack(subjectSelect.value, lessonSelect.value);
             if (token !== packToken) return;
-            currentPack = loaded.pack; currentLabel = loaded.title;
+            currentPack = loaded.pack; currentLabel = loaded.title; currentLessonId = lessonSelect.value;
             setStatus(`Games from “${loaded.title}”. Making smarter questions with AI…`, "busy");
             loaded.upgrade.then(better => {
                 if (token !== packToken) return;
@@ -95,7 +96,7 @@ async function initPicker() {
             if (requestedLesson && lessons.some(l => String(l.id) === requestedLesson && !l.locked)) {
                 lessonSelect.value = requestedLesson;
                 const loaded = await loadPack(requestedSubject, requestedLesson);
-                currentPack = loaded.pack; currentLabel = loaded.title;
+                currentPack = loaded.pack; currentLabel = loaded.title; currentLessonId = requestedLesson;
                 loaded.upgrade.then(better => { if (better) currentPack = better; });
                 const requestedGame = query.get("game");
                 const game = GAMES.find(item => item.id === requestedGame);
@@ -104,7 +105,7 @@ async function initPicker() {
         } catch (error) { setError(error.message); }
     }
 }
-function useGeneral() { packToken++; currentPack = BUILTIN_PACK; currentLabel = "General math words"; setStatus("Playing with general math words. Pick a lesson to play with its words."); }
+function useGeneral() { packToken++; currentPack = BUILTIN_PACK; currentLabel = "General math words"; currentLessonId = ""; setStatus("Playing with general math words. Pick a lesson to play with its words."); }
 
 // ---------- player ----------
 function showHub() {
@@ -136,13 +137,14 @@ const MESSAGES = ["Not this time. Try again!", "Good start. You can beat it!", "
 
 function finish(game, stars, summary) {
     if (cleanup) { cleanup(); cleanup = null; }
-    const result = GameStore.record(game.id, stars);
+    const result = GameStore.record(game.id, stars, currentLessonId);
     const streak = GameStore.liveStreak(result.data);
     $g("gmStageHost").replaceChildren(h("div", { class: "gm-result" },
         starRow(stars, "big"),
         h("h2", {}, MESSAGES[stars]),
         summary ? h("p", { class: "gm-note" }, summary) : null,
         h("p", { class: "gm-gain" }, `+${result.gained} XP`),
+        result.repeat ? h("p", { class: "gm-note" }, "You already earned the XP for this game in this lesson. Try another game or lesson to keep leveling up.") : null,
         result.levelUp ? h("p", { class: "gm-levelup" }, `Level up! You are now level ${result.level}.`) : null,
         h("p", { class: "gm-note" }, streak > 1 ? `${streak}-day streak. Come back tomorrow to keep it going.` : "Play again tomorrow to start a streak."),
         h("div", { class: "gm-actions" },
