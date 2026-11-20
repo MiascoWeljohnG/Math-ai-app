@@ -5,6 +5,7 @@ const wkSubject = document.getElementById("weeklySubject");
 const wkBody = document.getElementById("weeklyBody");
 const wkStatus = document.getElementById("weeklyStatus");
 let wkState = null;   // what the server last said about the chosen subject
+const wkPending = {}; // lesson id -> the week picked in its dropdown but not saved yet (null = "Not in the plan")
 
 function wkSay(message, kind = "success") {
     wkStatus.textContent = message;
@@ -86,13 +87,20 @@ function wkRow(lesson, now, topWeek) {
     const row = document.createElement("div");
     row.className = `plan-row pace-${wkPace(lesson, now)}`;
     const dates = lesson.week_start ? ` · ${wkDay(lesson.week_start)} – ${wkDay(lesson.week_end)}` : "";
+    const shown = lesson.id in wkPending ? wkPending[lesson.id] : lesson.week_number;
     const options = ['<option value="">Not in the plan</option>']
-        .concat(Array.from({ length: topWeek }, (_, i) => `<option value="${i + 1}"${lesson.week_number === i + 1 ? " selected" : ""}>Week ${i + 1}</option>`));
+        .concat(Array.from({ length: topWeek }, (_, i) => `<option value="${i + 1}"${shown === i + 1 ? " selected" : ""}>Week ${i + 1}</option>`));
     row.innerHTML = `
         <span class="plan-title">${esc(lesson.title)}<small>${lesson.week_number ? `Week ${lesson.week_number}${esc(dates)}` : "Gray for students"}</small></span>
         <span class="plan-stat">${lesson.completed} of ${wkState.students} students finished</span>
         ${lesson.behind ? `<span class="plan-stat bad">${lesson.behind} behind</span>` : ""}
-        <select class="branch-select" aria-label="Week for ${esc(lesson.title)}" data-lesson="${lesson.id}">${options.join("")}</select>`;
+        <select class="branch-select" aria-label="Week for ${esc(lesson.title)}" data-lesson="${lesson.id}">${options.join("")}</select>
+        <div class="plan-actions" hidden>
+            <span class="plan-pending"></span>
+            <button class="btn btn-secondary btn-sm" type="button" data-act="cancel" data-lesson="${lesson.id}">Cancel</button>
+            <button class="btn btn-primary btn-sm" type="button" data-act="save" data-lesson="${lesson.id}">Save</button>
+        </div>`;
+    wkShowPending(row, lesson);
     return row;
 }
 
@@ -148,13 +156,71 @@ document.getElementById("wkAuto").addEventListener("click", async (event) => {
     wkRun(event.currentTarget, () => wkCall("POST", `/${wkId()}/auto-assign`, body), "Weeks assigned in course order.");
 });
 
+const wkWeekText = (week) => (week ? `Week ${week}` : "Not in the plan");
+
+// Show or hide the Save / Cancel bar under a row, depending on whether its dropdown differs from what is saved.
+function wkShowPending(row, lesson) {
+    const changed = lesson.id in wkPending;
+    row.classList.toggle("changed", changed);
+    const bar = row.querySelector(".plan-actions");
+    bar.hidden = !changed;
+    if (changed) bar.querySelector(".plan-pending").textContent = `${wkWeekText(lesson.week_number)} → ${wkWeekText(wkPending[lesson.id])}`;
+}
+
+// What the students will see once the change is saved, in plain words (for the confirmation).
+function wkEffect(week) {
+    const sc = wkState.schedule;
+    if (!week) return "Students will see it as gray and won't be able to open it.";
+    if (!sc || !sc.enabled) return "Weekly pacing is off for this subject, so it won't affect students until you turn it on.";
+    const now = sc.current_week || 0;
+    if (week === now) return "It becomes this week's task: blue for students who haven't finished it.";
+    if (week < now) return "That week has already passed: students who haven't finished it will see it as red (behind).";
+    return "That week hasn't started: it stays gray for students until then.";
+}
+
 document.getElementById("wkPlanList").addEventListener("change", (event) => {
     const select = event.target.closest("select[data-lesson]");
     if (!select) return;
+    const lesson = wkState.lessons.find(item => String(item.id) === select.dataset.lesson);
     const week = select.value ? Number(select.value) : null;
-    wkRun(select, () => wkCall("PUT", `/${wkId()}/lessons/${select.dataset.lesson}`, { week_number: week }),
-        week ? `Lesson set for week ${week}.` : "Lesson taken out of the weekly plan.");
+    if (week === lesson.week_number) delete wkPending[lesson.id];   // picked the saved value again: nothing to save
+    else wkPending[lesson.id] = week;
+    wkShowPending(select.closest(".plan-row"), lesson);
+    wkSay("");
 });
 
-wkSubject.addEventListener("change", () => { wkSay(""); wkLoadSubject(wkSubject.value); });
+document.getElementById("wkPlanList").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-act]");
+    if (!button) return;
+    const lesson = wkState.lessons.find(item => String(item.id) === button.dataset.lesson);
+    if (!lesson || !(lesson.id in wkPending)) return;
+    const week = wkPending[lesson.id];
+
+    if (button.dataset.act === "cancel") {
+        const discard = await uiConfirm(
+            `Discard the change to "${lesson.title}"?\n\nIt stays as it is now: ${wkWeekText(lesson.week_number)}.`,
+            { title: "Discard change?", okText: "Discard", cancelText: "Keep editing", danger: true });
+        if (!discard) return;
+        delete wkPending[lesson.id];
+        wkRender();   // draws the dropdown back at the saved week
+        wkSay("Change discarded.");
+        return;
+    }
+
+    const confirmed = await uiConfirm(
+        `${week ? `Set "${lesson.title}" as the task for week ${week}?` : `Take "${lesson.title}" out of the weekly plan?`}\n\n${wkEffect(week)}`,
+        { title: "Save this change?", okText: "Save", cancelText: "Cancel" });
+    if (!confirmed) return;
+    wkRun(button, async () => {
+        const state = await wkCall("PUT", `/${wkId()}/lessons/${lesson.id}`, { week_number: week });
+        delete wkPending[lesson.id];
+        return state;
+    }, week ? `"${lesson.title}" is now the task for week ${week}.` : `"${lesson.title}" was taken out of the weekly plan.`);
+});
+
+wkSubject.addEventListener("change", () => {
+    for (const id of Object.keys(wkPending)) delete wkPending[id];
+    wkSay("");
+    wkLoadSubject(wkSubject.value);
+});
 wkLoadSubjects();

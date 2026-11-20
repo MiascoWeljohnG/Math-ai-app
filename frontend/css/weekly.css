@@ -53,3 +53,9 @@
 .plan-row select { min-width: 8.5rem; }
 .plan-stat { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
 .plan-stat.bad { color: var(--danger); font-weight: 700; }
+
+/* a week picked in the dropdown is not saved until the admin confirms it */
+.plan-row.changed { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.plan-actions { flex: 1 0 100%; display: flex; align-items: center; justify-content: flex-end; gap: 0.6rem; flex-wrap: wrap; padding-top: 0.6rem; border-top: 1px dashed var(--border); }
+.plan-actions[hidden] { display: none; }
+.plan-pending { margin-right: auto; font-size: 0.82rem; font-weight: 600; color: var(--accent); }
