@@ -1,4 +1,5 @@
 import asyncio
+import gc
 import hashlib
 import logging
 import threading
@@ -411,6 +412,13 @@ def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[in
                             ocr_missing = 1
                 if text or tables:
                     pages.append((i, text, tables))
+                # pdfplumber keeps every parsed page object in memory until told otherwise; on a long PDF that is
+                # what runs a small Render instance out of RAM. Release each page as soon as it is read.
+                page.flush_cache()
+                if hasattr(page, "close"):
+                    page.close()
+                if i % 10 == 0:
+                    gc.collect()
         if ocr_missing and not pages:
             raise ValueError("This PDF has no text layer (it is a scan) and OCR is not available on the server, so it can't be read.")
         return pages
