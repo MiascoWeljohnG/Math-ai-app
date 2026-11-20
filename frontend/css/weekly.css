@@ -1,0 +1,55 @@
+/* Weekly pacing. Used by lessons.html (what students see) and weekly-schedule.html (what the school admin sets).
+   One colour per state, same card look as the quiz breakdown: a tinted card, a thick coloured left edge, an outlined pill.
+     blue  = this week's task        red  = behind the pace        green = completed        gray = the school has not opened it yet */
+.pace-current { --pace: var(--accent); }
+.pace-behind  { --pace: var(--danger); }
+.pace-done    { --pace: var(--ok); }
+.pace-closed  { --pace: #8A91B4; }
+
+.pace-pill {
+    display: inline-flex; align-items: center; gap: 0.3rem; flex: none;
+    padding: 0.2rem 0.65rem; border-radius: 999px; border: 1px solid var(--pace, var(--border));
+    background: var(--bg-elevated); color: var(--pace, var(--text-muted));
+    font: 700 0.7rem/1.2 var(--font-body); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
+}
+.pace-pill .icon { width: 0.85rem; height: 0.85rem; stroke-width: 2.4; }
+.pace-closed .pace-pill, .pace-pill.pace-closed { color: var(--text-muted); }
+
+/* --- the lesson list (a card per lesson) --- */
+.lesson-row.paced {
+    align-items: center; padding: 0.85rem 1rem; border: 1px solid var(--border); border-left: 5px solid var(--pace);
+    border-radius: var(--r-md); background: var(--bg-elevated);
+    background: color-mix(in srgb, var(--pace) 7%, var(--bg-elevated));
+}
+.lesson-row.paced:hover { border-color: var(--pace); background: color-mix(in srgb, var(--pace) 12%, var(--bg-elevated)); }
+.lesson-row.paced.active { font-weight: 700; box-shadow: 0 0 0 2px color-mix(in srgb, var(--pace) 35%, transparent); }
+.lesson-row.paced .lesson-badge { background: color-mix(in srgb, var(--pace) 16%, transparent); color: var(--pace); }
+.lesson-row.paced.pace-closed { border-style: solid; border-left-style: solid; cursor: not-allowed; color: var(--text-muted); }
+.lesson-row.paced.pace-closed:hover { background: color-mix(in srgb, var(--pace) 7%, var(--bg-elevated)); border-color: var(--border); border-left-color: var(--pace); }
+.lesson-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.lesson-main .lesson-title { flex: none; }
+.lesson-sub { font-size: 0.78rem; font-weight: 500; color: var(--text-muted); }
+
+.pace-banner { margin: 0 0 0.9rem; padding: 0.6rem 0.85rem; border-radius: var(--r-sm); background: var(--pri2); color: var(--accent); font-size: 0.85rem; font-weight: 600; }
+.pace-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; margin: 0 0 1rem; font-size: 0.75rem; color: var(--text-muted); }
+.pace-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.pace-legend i { width: 0.7rem; height: 0.7rem; border-radius: 3px; background: var(--pace); display: inline-block; }
+.lesson-pace-line { margin: 0 0 0.6rem; }
+
+/* --- the school admin's planner --- */
+.week-now { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 0.4rem 0 1rem; }
+.week-now-num { font: 800 2rem/1 var(--font-display); color: var(--accent); }
+.week-now-sub { color: var(--text-muted); font-size: 0.85rem; }
+.pace-options { display: grid; gap: 0.6rem; margin: 0.6rem 0 1rem; }
+.pace-option { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.7rem 0.9rem; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-input); }
+.pace-option input[type="date"], .pace-option input[type="number"] { padding: 0.4rem 0.6rem; border: 1px solid var(--field-border); border-radius: var(--r-sm); background: var(--bg-elevated); color: var(--text); font: inherit; }
+.pace-option input[type="number"] { width: 5rem; }
+.plan-toolbar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
+.plan-toolbar input[type="number"] { width: 4.5rem; padding: 0.4rem 0.6rem; border: 1px solid var(--field-border); border-radius: var(--r-sm); background: var(--bg-elevated); color: var(--text); font: inherit; }
+.plan-list { display: grid; gap: 0.5rem; }
+.plan-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; padding: 0.75rem 1rem; border: 1px solid var(--border); border-left: 5px solid var(--pace, var(--border)); border-radius: var(--r-md); background: var(--bg-elevated); background: color-mix(in srgb, var(--pace, transparent) 6%, var(--bg-elevated)); }
+.plan-title { flex: 1 1 14rem; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; font-weight: 600; }
+.plan-title small { font-weight: 500; color: var(--text-muted); }
+.plan-row select { min-width: 8.5rem; }
+.plan-stat { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+.plan-stat.bad { color: var(--danger); font-weight: 700; }

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>Weekly schedule · School Admin</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/overview.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/mobile.css?v=1">
+    <link rel="stylesheet" href="css/admin-profile.css?v=1">
+    <link rel="stylesheet" href="css/weekly.css?v=1">
+</head>
+<body>
+<div class="page">
+    <div class="header" id="staffHeader" data-title="School Admin"></div>
+    <script src="js/staff-header.js"></script>
+
+    <div class="section" id="weeklySection">
+        <div class="section-head">
+            <h2>Weekly schedule</h2>
+            <p class="hint">Make lessons the weekly task of your students and decide how the week moves. Students see every lesson of a scheduled subject as a coloured card.</p>
+        </div>
+
+        <div class="pace-legend" aria-label="What students see">
+            <span class="pace-current"><i></i>Blue: this week's task</span>
+            <span class="pace-behind"><i></i>Red: behind the class</span>
+            <span class="pace-done"><i></i>Green: completed</span>
+            <span class="pace-closed"><i></i>Gray: not opened by the school yet (students cannot open it)</span>
+        </div>
+
+        <div class="field-row" style="margin-bottom:1rem;">
+            <label for="weeklySubject" class="label">Subject</label>
+            <select id="weeklySubject" class="branch-select"></select>
+        </div>
+        <p class="empty" id="weeklyNoSubjects" hidden>Your school has no subjects yet. Teachers create them on their Manage Lessons page.</p>
+
+        <div id="weeklyBody" hidden>
+            <div class="panel">
+                <h3>How the week moves</h3>
+                <label class="check" for="wkEnabled" style="display:flex; gap:0.5rem; align-items:flex-start;">
+                    <input type="checkbox" id="wkEnabled">
+                    <span>Run this subject on a weekly schedule. <span class="hint">When off, students unlock lessons one by one by passing each quiz.</span></span>
+                </label>
+
+                <div class="week-now" id="wkNow" hidden>
+                    <span class="week-now-num" id="wkNowNum">Week 1</span>
+                    <span class="week-now-sub" id="wkNowSub"></span>
+                    <button class="btn btn-secondary btn-sm" type="button" id="wkPrev">&larr; Previous week</button>
+                    <button class="btn btn-primary btn-sm" type="button" id="wkNext">Advance to next week &rarr;</button>
+                </div>
+
+                <div class="pace-options" role="radiogroup" aria-label="How the week moves">
+                    <label class="pace-option" for="wkModeAuto">
+                        <input type="radio" name="wkMode" id="wkModeAuto" value="auto">
+                        <span>Advance automatically every 7 days. Week 1 starts on</span>
+                        <input type="date" id="wkStartDate" aria-label="First day of week 1">
+                    </label>
+                    <label class="pace-option" for="wkModeManual">
+                        <input type="radio" name="wkMode" id="wkModeManual" value="manual">
+                        <span>Stay on week</span>
+                        <input type="number" id="wkManualWeek" min="0" max="60" step="1" aria-label="The week to stay on">
+                        <span>until I advance it myself</span>
+                    </label>
+                </div>
+                <button class="btn btn-primary" type="button" id="wkSave">Save</button>
+            </div>
+
+            <div class="panel" id="wkPlanPanel" style="margin-top:1rem;">
+                <h3>Lessons &amp; weeks</h3>
+                <p class="hint">Pick the week each lesson is due, or let the system spread them out for you. A lesson with no week stays gray for students. Only published lessons are listed.</p>
+                <div class="plan-toolbar">
+                    <span>Auto-assign</span>
+                    <input type="number" id="wkPerWeek" min="1" max="10" value="1" aria-label="Lessons per week">
+                    <span>lesson(s) per week, from week</span>
+                    <input type="number" id="wkStartWeek" min="1" max="60" value="1" aria-label="First week to use">
+                    <label class="check" for="wkOverwrite" style="display:inline-flex; gap:0.35rem; align-items:center;">
+                        <input type="checkbox" id="wkOverwrite"> <span>replace weeks already set</span>
+                    </label>
+                    <button class="btn btn-secondary btn-sm" type="button" id="wkAuto">Auto-assign weeks</button>
+                </div>
+                <div class="plan-list" id="wkPlanList"></div>
+                <p class="empty" id="wkNoLessons" hidden>This subject has no published lessons yet.</p>
+            </div>
+        </div>
+        <div class="status" id="weeklyStatus" role="status" aria-live="polite"></div>
+    </div>
+</div>
+
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/icons.js"></script>
+    <script src="js/school-admin-common.js"></script>
+    <script src="js/school-admin-weekly.js"></script>
+    <script src="js/school-admin-bell.js"></script>
+    <script>
+        requireRole("school_admin");
+        initNavDrawer({ staff: true, pages: STAFF_PAGES.school_admin });
+    </script>
+</body>
+</html>

@@ -111,6 +111,7 @@ mjx-container::-webkit-scrollbar-thumb {
 }
     </style>
     <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/weekly.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
 <body>  
@@ -160,6 +161,14 @@ mjx-container::-webkit-scrollbar-thumb {
                 <div class="progress-meta"><span id="subjectProgressLessons"></span><span id="subjectProgressPct"></span></div>
             </div>
             
+            <p id="paceBanner" class="pace-banner" hidden></p>
+            <div id="paceLegend" class="pace-legend" hidden aria-label="What the colours mean">
+                <span class="pace-current"><i></i>This week</span>
+                <span class="pace-behind"><i></i>Behind</span>
+                <span class="pace-done"><i></i>Completed</span>
+                <span class="pace-closed"><i></i>Not open yet</span>
+            </div>
+
             <div id="lessonListContainer" class="lesson-empty">Choose a subject.</div>
             <p id="lockHint" class="lock-hint" role="status" hidden></p>
             

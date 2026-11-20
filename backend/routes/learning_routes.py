@@ -8,12 +8,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+import weekly
 from adaptive import mastery_level, practice_kind
 from auth import get_current_user, require_staff
 from database import get_db
 from models import ACTIVE, Lesson, LessonCompletion, LessonQuiz, QuizAttempt, Reminder, Subject, User
 from school import in_school, shared_subjects, visible_subjects
-from routes.subjects_routes import PASS_PERCENT, QUIZ_LENGTH, SECONDS_PER_QUESTION, _display_name
+from routes.subjects_routes import PASS_PERCENT, QUIZ_LENGTH, SECONDS_PER_QUESTION, STAFF_ROLES, _display_name, _weekly_schedule
 
 router = APIRouter(prefix="/learning", tags=["learning"])
 
@@ -42,6 +43,11 @@ def roadmap(
     for subject in query.order_by(Subject.id.asc()).all():
         lessons = (db.query(Lesson).filter(Lesson.subject_id == subject.id, Lesson.status == "published")   # drafts are hidden from students, so they aren't counted either
                    .order_by(Lesson.order_index.asc(), Lesson.id.asc()).all())
+        # A subject the school runs on a weekly schedule: lessons go in week order and each carries a pace (see weekly.py).
+        schedule = _weekly_schedule(db, subject) if user.role not in STAFF_ROLES else None
+        now_week = weekly.current_week(schedule) if schedule else None
+        if schedule:
+            lessons.sort(key=lambda lesson: lesson.week_number if lesson.week_number is not None else 10**9)   # stable: course order inside a week
         ids = [lesson.id for lesson in lessons]
         read = {i for (i,) in db.query(LessonCompletion.lesson_id)
                 .filter(LessonCompletion.user_id == user.id, LessonCompletion.lesson_id.in_(ids))}
@@ -63,6 +69,10 @@ def roadmap(
             is_done = t["passed"] or (lesson.id in read and lesson.id not in difficulty and t["attempts"] == 0)
             done += is_done
             status = "done" if is_done else ("upcoming" if any(r["status"] == "next" for r in rows) else "next")
+            pace = weekly.pace(lesson.week_number, now_week, is_done) if schedule else None
+            if pace:   # the schedule decides what is "next": everything open and unfinished (this week's and the late ones)
+                status = "done" if pace == weekly.DONE else "upcoming" if pace == weekly.CLOSED else "next"
+            dates = weekly.week_dates(schedule, lesson.week_number) if schedule and lesson.week_number else None
             level = mastery_level(t["attempts"], t["best"], t["passed"])   # see adaptive.py for the rules
             reading = _minutes(len(lesson.content.split()) * 60 / WORDS_PER_MINUTE)
             # Prerequisite & Remediation enhancement
@@ -75,8 +85,10 @@ def roadmap(
                 "attempts": t["attempts"], "best_percent": t["best"],
                 "level": level, "practice": practice_kind(level),
                 "prerequisite_id": lesson.prerequisite_id,
+                "week_number": lesson.week_number if schedule else None, "pace": pace,
+                "week_start": dates[0].isoformat() if dates else None, "week_end": dates[1].isoformat() if dates else None,
             })
-            if not is_done and len(plan) < PLAN_LESSONS:
+            if not is_done and pace != weekly.CLOSED and len(plan) < PLAN_LESSONS:   # never plan a lesson the school has not opened
                 quiz_time = _minutes(QUIZ_LENGTH * SECONDS_PER_QUESTION[difficulty.get(lesson.id) or 3])
                 practice_href = f"practice.html?subject={subject.id}&lesson={lesson.id}"
                 fast_track = level == "new" and lesson.id not in read and previous is not None and previous[1] == "mastered"
@@ -104,6 +116,7 @@ def roadmap(
         result.append({
             "subject_id": subject.id, "branch": subject.name, "is_personal": subject.owner_user_id is not None,
             "completed": done, "total": len(lessons), "percent": round(done * 100 / len(lessons)) if lessons else 0,
+            "weekly": schedule is not None, "current_week": now_week,
             "lessons": rows, "study_plan": plan,
         })
     return {"subjects": result}

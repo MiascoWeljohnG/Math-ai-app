@@ -188,7 +188,28 @@ class Lesson(Base):
     # same reviewed version. game_pack_key says which lesson text it was written from: when the text changes it goes stale.
     game_pack = Column(Text, nullable=True)
     game_pack_key = Column(String, nullable=True)
+    # Weekly pacing (see weekly.py): the week of the school's schedule this lesson is the task of. NULL = the school has not
+    # put it in the weekly plan, so students see it as "not open yet" in a subject that runs on a schedule.
+    week_number = Column(Integer, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class WeeklySchedule(Base):
+    """How one shared subject is paced week by week. Only exists once the school admin turns weekly pacing on for the subject.
+    mode "auto": week 1 starts on `start_date` and the week moves forward by itself every 7 days.
+    mode "manual" (the week "stays"): the current week is `manual_week` until the admin moves it.
+    enabled False keeps the schedule but puts the subject back on plain lesson-by-lesson unlocking."""
+    __tablename__ = "weekly_schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), unique=True, index=True, nullable=False)
+    school_id = Column(Integer, nullable=True, index=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    mode = Column(String, nullable=False, default="auto")        # auto | manual
+    start_date = Column(Date, nullable=True)                      # first day of week 1 (auto mode)
+    manual_week = Column(Integer, nullable=False, default=1)      # the current week while the mode is manual
+    updated_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow)
 
 
 class LessonCompletion(Base):

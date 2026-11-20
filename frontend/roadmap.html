@@ -46,8 +46,19 @@
         .plan-lesson { margin: 0 0 0.8rem; }
         .plan-lesson ul { margin: 0.3rem 0 0; padding-left: 1.3rem; line-height: 1.7; }
         .error { color: var(--danger); }
+        /* weekly plan: each lesson is a coloured card (css/weekly.css has the colours) */
+        .lesson.paced { padding: 0.75rem 1rem; margin-bottom: 0.5rem; border: 1px solid var(--border); border-left: 5px solid var(--pace); border-radius: 12px;
+            background: var(--bg-elevated); background: color-mix(in srgb, var(--pace) 7%, var(--bg-elevated)); }
+        .lesson.paced:last-child { border-bottom: 1px solid var(--border); margin-bottom: 0; }
+        .lesson.paced .num { border-color: var(--pace); color: var(--pace); }
+        .lesson.paced.pace-done .num { background: var(--pace); color: #fff; }
+        .lesson.paced .lesson-main a, .lesson.paced .lesson-main .closed { color: var(--text); }
+        .lesson.paced.pace-closed .lesson-main .closed { color: var(--text-muted); }
+        .lesson.paced .lesson-main .closed { font-weight: 500; overflow-wrap: anywhere; }
+        .pace-legend { margin: 0.2rem 0 0.8rem; }
     </style>
     <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/weekly.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
 </head>
 <body>

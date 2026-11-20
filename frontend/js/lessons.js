@@ -1,5 +1,38 @@
 const ICON_CHECK = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 const ICON_LOCK = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+const ICON_ALERT = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
+const ICON_CLOCK = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+
+// Weekly pacing (the school admin's weekly plan). The server sends each lesson a `pace`: current (blue, this week's task),
+// behind (red), done (green) or closed (gray, the school has not opened it). `pace` is null when the subject has no plan.
+const PACE = {
+    current: { label: "This week",    icon: ICON_CLOCK },
+    behind:  { label: "Behind",       icon: ICON_ALERT },
+    done:    { label: "Completed",    icon: ICON_CHECK },
+    closed:  { label: "Not open yet", icon: ICON_LOCK },
+};
+function fmtDay(iso) {
+    return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+function paceSub(lesson) {
+    if (lesson.week_number == null) return "Not in your school's weekly plan yet";
+    const parts = [`Week ${lesson.week_number}`];
+    if (lesson.pace === "behind") parts.push(lesson.week_end ? `was due ${fmtDay(lesson.week_end)}` : "you're behind the class");
+    else if (lesson.pace === "closed") parts.push(lesson.week_start ? `opens ${fmtDay(lesson.week_start)}` : "opens later");
+    else if (lesson.week_start) parts.push(`${fmtDay(lesson.week_start)} – ${fmtDay(lesson.week_end)}`);
+    return parts.join(" · ");
+}
+function pacePill(pace) {
+    const pill = document.createElement("span");
+    pill.className = `pace-pill pace-${pace}`;
+    pill.innerHTML = `${PACE[pace].icon}<span>${PACE[pace].label}</span>`;
+    return pill;
+}
+const isPaced = (lessons) => lessons.some(lesson => lesson.pace);
+// Weekly plan order: by week, lessons the school has not put in a week last.
+const byWeek = (lessons) => lessons.map((lesson, i) => [lesson, i])
+    .sort(([a, i], [b, j]) => (a.week_number ?? 1e9) - (b.week_number ?? 1e9) || i - j).map(([lesson]) => lesson);
+
 function lessonAuthHeaders() {
     return { Authorization: `Bearer ${localStorage.getItem("token")}` };
 }
@@ -29,6 +62,8 @@ const subjectProgress = document.getElementById("subjectProgress");
 const subjectProgressFill = document.getElementById("subjectProgressFill");
 const subjectProgressLessons = document.getElementById("subjectProgressLessons");
 const subjectProgressPct = document.getElementById("subjectProgressPct");
+const paceBanner = document.getElementById("paceBanner");
+const paceLegend = document.getElementById("paceLegend");
 
 // Modal Elements
 const lessonModal = document.getElementById("lessonModal");
@@ -96,7 +131,8 @@ function updateLessonButton() {
     const completed = activeLessons.filter(lesson => lesson.completed).length;
     const current = activeLessons.find(lesson => lesson.id === activeLessonId);
     openLessonsTitle.textContent = current ? current.title : (total ? "Choose a lesson" : "No lessons yet");
-    openLessonsSub.textContent = total ? `${completed} of ${total} complete` : "";
+    const week = activeLessons.find(lesson => lesson.current_week != null)?.current_week;
+    openLessonsSub.textContent = total ? `${completed} of ${total} complete${isPaced(activeLessons) && week ? ` · Week ${week}` : ""}` : "";
     openLessons.disabled = activeSubjectId === null;
 }
 
@@ -116,6 +152,7 @@ async function selectSubject(subjectId, { openList = true } = {}) {
     activeLessons = [];
     subjectProgress.hidden = true;
     lockHint.hidden = true;
+    paceBanner.hidden = paceLegend.hidden = true;
     lessonListContainer.textContent = "Loading lessons…";
     updateLessonButton();
     showPlaceholder("Subject selected. Pick a lesson to begin.");
@@ -146,8 +183,22 @@ async function refreshLessons() {
     updateSubjectProgress();
 }
 
+function updatePaceBanner() {
+    const paced = isPaced(activeLessons);
+    paceLegend.hidden = !paced;
+    paceBanner.hidden = !paced;
+    if (!paced) return;
+    const week = activeLessons.find(lesson => lesson.current_week != null)?.current_week || 0;
+    const behind = activeLessons.filter(lesson => lesson.pace === "behind").length;
+    const thisWeek = activeLessons.filter(lesson => lesson.pace === "current").length;
+    paceBanner.textContent = week
+        ? `Your school is on week ${week}. ${thisWeek} lesson${thisWeek === 1 ? "" : "s"} to do this week${behind ? `, ${behind} behind` : ""}.`
+        : "Your school has not started the weekly plan yet.";
+}
+
 function updateSubjectProgress() {
     updateLessonButton();
+    updatePaceBanner();
     const total = activeLessons.length;
     if (total === 0) {
         subjectProgress.hidden = true;
@@ -161,7 +212,14 @@ function updateSubjectProgress() {
     subjectProgress.hidden = false;
 }
 
-function showLockHint() {
+function showLockHint(clicked) {
+    if (clicked && clicked.pace === "closed") {
+        lockHint.textContent = clicked.week_number == null
+            ? "Your school hasn't opened this lesson yet. It will unlock once your school adds it to the weekly plan."
+            : "Your school hasn't opened this lesson yet. It unlocks when its week starts.";
+        lockHint.hidden = false;
+        return;
+    }
     const blocker = activeLessons.find(lesson => !lesson.completed);
     lockHint.textContent = blocker
         ? `Finish "${blocker.title}" first. Pass its quiz (80% or higher) to unlock the next lesson.`
@@ -174,10 +232,13 @@ function renderLessonList(lessons) {
         lessonListContainer.textContent = "No lessons here yet.";
         return;
     }
-    const upNext = lessons.findIndex(lesson => !lesson.completed && !lesson.locked);
+    const paced = isPaced(lessons);
+    if (paced) lessons = byWeek(lessons);
+    const upNext = paced ? -1 : lessons.findIndex(lesson => !lesson.completed && !lesson.locked);
     const rows = lessons.map((lesson, index) => {
         const button = document.createElement("button");
         button.type = "button";
+        if (lesson.pace) return renderPacedRow(button, lesson, index);
         button.className = ["lesson-row",
             lesson.id === activeLessonId ? "active" : "",
             lesson.completed ? "done" : "",
@@ -220,10 +281,38 @@ function renderLessonList(lessons) {
     typesetMath(lessonListContainer);
 }
 
+// One card of the weekly plan: a coloured edge and pill say whether it is this week's, behind, completed or not open yet.
+function renderPacedRow(button, lesson, index) {
+    button.className = ["lesson-row", "paced", `pace-${lesson.pace}`, lesson.id === activeLessonId ? "active" : ""].filter(Boolean).join(" ");
+    button.setAttribute("aria-label", `${lesson.title} (${PACE[lesson.pace].label.toLowerCase()})`);
+    if (lesson.locked) button.setAttribute("aria-disabled", "true");
+
+    const badge = document.createElement("span");
+    badge.className = "lesson-badge";
+    badge.setAttribute("aria-hidden", "true");
+    badge.innerHTML = lesson.pace === "closed" ? ICON_LOCK : lesson.pace === "done" ? ICON_CHECK : String(index + 1);
+    const main = document.createElement("span");
+    main.className = "lesson-main";
+    const title = document.createElement("span");
+    title.className = "lesson-title";
+    title.textContent = lesson.title;
+    const sub = document.createElement("span");
+    sub.className = "lesson-sub";
+    sub.textContent = paceSub(lesson);
+    main.append(title, sub);
+    button.append(badge, main, pacePill(lesson.pace));
+
+    button.addEventListener("click", () => {
+        if (lesson.locked) showLockHint(lesson);
+        else selectLesson(lesson.id);
+    });
+    return button;
+}
+
 async function selectLesson(lessonId) {
     const listed = activeLessons.find(lesson => lesson.id === lessonId);
     if (listed && listed.locked) {   // e.g. a stale ?lesson= link
-        showLockHint();
+        showLockHint(listed);
         if (!lessonModal.open) lessonModal.showModal();
         return;
     }
@@ -244,10 +333,11 @@ async function selectLesson(lessonId) {
             { headers: lessonAuthHeaders() },
         );
         if (response.status === 403) {   // locked on the server: our list was out of date
+            const why = (await response.json().catch(() => ({}))).detail;
             activeLessonId = null;
             await refreshLessons();
-            showPlaceholder("This lesson is locked. Finish the one before it to unlock it.");
-            showLockHint();
+            showPlaceholder(typeof why === "string" && why ? why : "This lesson is locked. Finish the one before it to unlock it.");
+            showLockHint(activeLessons.find(lesson => lesson.id === lessonId));
             if (!lessonModal.open) lessonModal.showModal();
             return;
         }
@@ -261,12 +351,14 @@ async function selectLesson(lessonId) {
         meta.className = "lesson-meta";
         meta.textContent = `By ${lesson.created_by}`;
         const body = document.createElement("div");
+        const paceLine = lesson.pace ? document.createElement("p") : null;
+        if (paceLine) { paceLine.className = "lesson-meta lesson-pace-line"; paceLine.append(pacePill(lesson.pace), ` ${paceSub(lesson)}`); }
 
         // Protect the math brackets before rendering
         renderFinalMessage(body, protectMath(lesson.content));
 
         const gamePanel = buildLessonGamePanel(subjectId, lesson);
-        lessonContent.replaceChildren(heading, meta, body, ...(gamePanel ? [gamePanel] : []), buildCompleteFooter(subjectId, lesson));
+        lessonContent.replaceChildren(heading, meta, ...(paceLine ? [paceLine] : []), body, ...(gamePanel ? [gamePanel] : []), buildCompleteFooter(subjectId, lesson));
 
         typesetMath(lessonContent);
 

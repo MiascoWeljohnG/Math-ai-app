@@ -15,9 +15,10 @@ from starlette.concurrency import run_in_threadpool
 
 import config
 import retakes
+import weekly
 from auth import get_current_user, require_staff
 from database import get_db
-from models import AuditLog, Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, QuizRetakeRequest, QuizSession, Subject, User
+from models import AuditLog, Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, QuizRetakeRequest, QuizSession, Subject, User, WeeklySchedule
 from classifier import (
     check_relevance, choose_subject, document_text, parse_page_range, read_upload, relevant_text, sample_text,
     summarize_document,
@@ -192,9 +193,23 @@ def _locked_ids(lessons: list[Lesson], done: set[int]) -> set[int]:
     return locked
 
 
+def _weekly_schedule(db: Session, subject: Subject) -> Optional[WeeklySchedule]:
+    """The subject's weekly schedule when the school admin has turned it on, else None (lessons then unlock one by one)."""
+    if subject.owner_user_id is not None:   # a student's personal subject is never paced by a school
+        return None
+    return db.query(WeeklySchedule).filter(WeeklySchedule.subject_id == subject.id, WeeklySchedule.enabled.is_(True)).first()
+
+
 def _require_unlocked(db: Session, subject: Subject, lesson: Lesson, user: User) -> None:
-    """403 when a student reaches for a lesson (or its quiz) before finishing the one before it."""
+    """403 when a student reaches for a lesson (or its quiz) that is not open to them yet: the school has not opened its
+    week, or (without a weekly schedule) they have not finished the lesson before it."""
     if lesson.status != "published" or not _gated(subject, user):
+        return
+    schedule = _weekly_schedule(db, subject)
+    if schedule is not None:
+        done = lesson.id in _completed_ids(db, user, [lesson.id])
+        if weekly.pace(lesson.week_number, weekly.current_week(schedule), done) == weekly.CLOSED:
+            raise HTTPException(status_code=403, detail="Your school hasn't opened this lesson yet.")
         return
     published = (
         db.query(Lesson)
@@ -219,7 +234,8 @@ def _game_status(lesson: Lesson) -> str:
     return "ready" if lesson.game_pack_key == lesson_game_key(lesson) else "stale"
 
 
-def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: bool = False, locked: bool = False) -> dict:
+def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: bool = False, locked: bool = False,
+                      schedule: Optional[WeeklySchedule] = None, student_view: bool = False) -> dict:
     result = {
         "id": lesson.id,
         "subject_id": lesson.subject_id,
@@ -232,7 +248,19 @@ def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: b
         "source_name": lesson.source_name or "",
         "preferred_game": getattr(lesson, "preferred_game", None),
         "game_status": _game_status(lesson),
+        "week_number": lesson.week_number,
+        # Weekly pacing, only for a student in a subject whose school runs it on a schedule (otherwise pace is null):
+        # done (green) | current (blue) | behind (red) | closed (gray). See weekly.py.
+        "pace": None, "current_week": None, "week_start": None, "week_end": None,
     }
+    if schedule is not None:
+        now_week = weekly.current_week(schedule)
+        result["current_week"] = now_week
+        if student_view:
+            result["pace"] = weekly.pace(lesson.week_number, now_week, completed)
+        dates = weekly.week_dates(schedule, lesson.week_number) if lesson.week_number else None
+        if dates:
+            result["week_start"], result["week_end"] = dates[0].isoformat(), dates[1].isoformat()
     if include_content:
         result["content"] = lesson.content
         result["description"] = lesson.description or ""
@@ -322,9 +350,16 @@ def list_lessons(
         .all()
     )
     done = _completed_ids(db, user, [lesson.id for lesson in lessons])
-    locked = _locked_ids(lessons, done) if _gated(subject, user) else set()
+    gated = _gated(subject, user)
+    schedule = _weekly_schedule(db, subject)
+    if gated and schedule is not None:   # weekly pacing replaces "finish the one before it": gray lessons are the locked ones
+        now_week = weekly.current_week(schedule)
+        locked = {l.id for l in lessons if weekly.pace(l.week_number, now_week, l.id in done) == weekly.CLOSED}
+    else:
+        locked = _locked_ids(lessons, done) if gated else set()
     return [
-        _serialize_lesson(lesson, include_content=False, completed=lesson.id in done, locked=lesson.id in locked)
+        _serialize_lesson(lesson, include_content=False, completed=lesson.id in done, locked=lesson.id in locked,
+                          schedule=schedule, student_view=gated)
         for lesson in lessons
     ]
 
@@ -344,7 +379,8 @@ def get_lesson(
     if lesson is None or (lesson.status != "published" and user.role not in ("teacher", "school_admin")):   # drafts are for staff only
         raise HTTPException(status_code=404, detail="Lesson not found")
     _require_unlocked(db, subject, lesson, user)
-    return _serialize_lesson(lesson, completed=lesson.id in _completed_ids(db, user, [lesson.id]))
+    return _serialize_lesson(lesson, completed=lesson.id in _completed_ids(db, user, [lesson.id]),
+                             schedule=_weekly_schedule(db, subject), student_view=_gated(subject, user))
 
 
 class CompletionRequest(BaseModel):

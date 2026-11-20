@@ -21,6 +21,24 @@ function el(tag, props = {}, ...children) {
 // Student-facing names for the mastery levels (adaptive.py has the rules)
 const LEVEL_LABEL = { struggling: "Needs review", developing: "Almost there", proficient: "Passed", mastered: "Mastered" };
 
+// Weekly plan colours (same states as lessons.js): blue = this week's task, red = behind the class, green = completed,
+// gray = the school has not opened it yet.
+const PACE_LABEL = { current: "● This week", behind: "! Behind", done: "✓ Completed", closed: "🔒 Not open yet" };
+const dayText = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function paceNote(lesson) {
+    if (lesson.week_number == null) return "Not in your school's weekly plan yet";
+    const note = [`Week ${lesson.week_number}`];
+    if (lesson.pace === "behind") note.push(lesson.week_end ? `was due ${dayText(lesson.week_end)}` : "you're behind the class");
+    else if (lesson.pace === "closed") note.push(lesson.week_start ? `opens ${dayText(lesson.week_start)}` : "opens later");
+    else if (lesson.week_start) note.push(`${dayText(lesson.week_start)} – ${dayText(lesson.week_end)}`);
+    return note.join(" · ");
+}
+function paceLegend() {
+    return el("div", { className: "pace-legend" },
+        ...[["current", "This week"], ["behind", "Behind"], ["done", "Completed"], ["closed", "Not open yet"]].map(([pace, text]) =>
+            el("span", { className: `pace-${pace}` }, el("i"), text)));
+}
+
 function renderReminders(reminders) {
     $("reminders").hidden = !reminders.length;
     $("reminderList").replaceChildren(...reminders.map(r => el("li", { className: "reminder" + (r.overdue ? " overdue" : "") },
@@ -42,6 +60,18 @@ function renderSubject(subject) {
         const practice = lesson.practice ? el("a", {
             className: "practice-link", href: `practice.html?subject=${subject.subject_id}&lesson=${lesson.id}`,
         }, lesson.practice === "harder" ? "Challenge set" : "Easy practice") : "";
+        if (lesson.pace) {   // a school-scheduled subject: a coloured card instead of a plain row
+            const closed = lesson.pace === "closed";
+            return el("li", { className: `lesson paced pace-${lesson.pace}` },
+                el("span", { className: "num" }, lesson.pace === "done" ? "✓" : closed ? "🔒" : String(i + 1)),
+                el("span", { className: "lesson-main" },
+                    closed ? el("span", { className: "closed" }, lesson.title)
+                        : el("a", { href: `lessons.html?subject=${subject.subject_id}&lesson=${lesson.id}` }, lesson.title),
+                    el("span", { className: "lesson-sub" }, paceNote(lesson))),
+                el("span", { className: `pace-pill pace-${lesson.pace}` }, PACE_LABEL[lesson.pace]),
+                closed ? "" : levelChip, closed ? "" : practice,
+            );
+        }
         return el("li", { className: `lesson ${lesson.status}` },
             el("span", { className: "num" }, lesson.status === "done" ? "✓" : String(i + 1)),
             el("a", { href: `lessons.html?subject=${subject.subject_id}&lesson=${lesson.id}` }, lesson.title),
@@ -58,11 +88,15 @@ function renderSubject(subject) {
         el("h2", {}, subject.branch + (subject.is_personal ? " (personal)" : "")),
         el("p", { className: "muted" }, `${subject.completed} of ${subject.total} lessons done · ${subject.percent}%`),
         el("div", { className: "bar" }, percent),
-        subject.total ? el("h3", {}, "Lessons in order") : el("p", { className: "muted" }, "No lessons yet."),
+        subject.total ? el("h3", {}, subject.weekly ? `Weekly plan${subject.current_week ? ` · your school is on week ${subject.current_week}` : " · not started yet"}` : "Lessons in order") : el("p", { className: "muted" }, "No lessons yet."),
+        subject.weekly && subject.total ? paceLegend() : "",
         el("ol", { className: "plain" }, ...lessons),
         plan.length ? el("h3", {}, "Your study plan") : "",
         ...plan,
-        subject.total && !plan.length ? el("p", { className: "muted" }, "Every lesson here is done. Nice work!") : "",
+        subject.total && !plan.length
+            ? el("p", { className: "muted" }, subject.weekly && lessons.some(li => li.classList.contains("pace-closed")) && subject.completed < subject.total
+                ? "You're all caught up for now. New lessons appear when your school opens them."
+                : "Every lesson here is done. Nice work!") : "",
     );
 }
 
