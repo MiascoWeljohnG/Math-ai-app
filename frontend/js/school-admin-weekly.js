@@ -54,8 +54,9 @@ function wkRender() {
 
     // --- how the week moves
     const on = !!(schedule && schedule.enabled);
-    document.getElementById("wkEnabled").checked = on;
+    document.getElementById("wkEnabled").checked = schedule ? on : true;
     document.getElementById("wkNow").hidden = !schedule;
+    document.getElementById("wkOffBanner").hidden = !schedule || on;   // a schedule that exists but is switched off does nothing for students
     const mode = schedule ? schedule.mode : "auto";
     document.getElementById(mode === "manual" ? "wkModeManual" : "wkModeAuto").checked = true;
     document.getElementById("wkStartDate").value = (schedule && schedule.start_date) || wkState.today;
@@ -67,7 +68,13 @@ function wkRender() {
             : schedule.mode === "manual" ? "Staying here until you advance it."
             : week ? "Moves on by itself every 7 days." : `Starts on ${wkDay(schedule.start_date)}.`;
     }
-    document.getElementById("wkPrev").disabled = !schedule || (schedule.current_week || 0) <= 0;
+    // moving the week does nothing for students while pacing is off, so those buttons wait until it is on
+    const offHint = "Turn on weekly pacing first";
+    for (const [id, blocked] of [["wkPrev", !schedule || !on || (schedule.current_week || 0) <= 0], ["wkNext", !schedule || !on]]) {
+        const button = document.getElementById(id);
+        button.disabled = blocked;
+        button.title = schedule && !on ? offHint : "";
+    }
 
     // --- lessons & weeks
     document.getElementById("wkNoLessons").hidden = lessons.length > 0;
@@ -108,10 +115,9 @@ function wkRow(lesson, now, topWeek) {
 async function wkRun(button, work, okMessage) {
     wkSay("");
     try {
-        await withButtonLoading(button, async () => {
-            wkState = await work();
-            wkRender();
-        });
+        const act = async () => { wkState = await work(); wkRender(); };
+        if (button) await withButtonLoading(button, act);   // withButtonLoading quietly does nothing without a button, so never rely on it alone
+        else await act();
         wkSay(okMessage);
         wkRefreshSubjectNames();
     } catch (error) {
@@ -140,12 +146,25 @@ document.getElementById("wkSave").addEventListener("click", (event) => {
     wkRun(event.currentTarget, () => wkCall("PUT", `/${wkId()}/schedule`, body), "Saved. Students see the change right away.");
 });
 
+document.getElementById("wkTurnOn").addEventListener("click", async (event) => {
+    const button = event.currentTarget;   // event.currentTarget is gone once we have awaited the confirmation, so keep the button
+    const sc = wkState.schedule;
+    const ok = await uiConfirm(
+        `Turn on weekly pacing for "${wkState.subject.name}"?\n\nStudents will immediately see their lessons as blue, red, green or gray, and lessons you haven't put in a week will be gray and locked.`,
+        { title: "Turn on weekly pacing?", okText: "Turn on", cancelText: "Cancel" });
+    if (!ok) return;
+    const body = { enabled: true, mode: sc.mode };
+    if (sc.mode === "auto") body.start_date = sc.start_date; else body.manual_week = sc.manual_week;
+    wkRun(button, () => wkCall("PUT", `/${wkId()}/schedule`, body), "Weekly pacing is on. Students see the colours now.");
+});
+
 document.getElementById("wkNext").addEventListener("click", (event) =>
     wkRun(event.currentTarget, () => wkCall("POST", `/${wkId()}/week`, { action: "next" }), "Moved to the next week."));
 document.getElementById("wkPrev").addEventListener("click", (event) =>
     wkRun(event.currentTarget, () => wkCall("POST", `/${wkId()}/week`, { action: "previous" }), "Moved back one week."));
 
 document.getElementById("wkAuto").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
     const overwrite = document.getElementById("wkOverwrite").checked;
     if (overwrite && !(await uiConfirm("This replaces the week of every lesson in this subject, including ones you set by hand. Continue?", { title: "Replace all weeks?" }))) return;
     const body = {
@@ -153,7 +172,7 @@ document.getElementById("wkAuto").addEventListener("click", async (event) => {
         start_week: Number(document.getElementById("wkStartWeek").value || 1),
         overwrite,
     };
-    wkRun(event.currentTarget, () => wkCall("POST", `/${wkId()}/auto-assign`, body), "Weeks assigned in course order.");
+    wkRun(button, () => wkCall("POST", `/${wkId()}/auto-assign`, body), "Weeks assigned in course order.");
 });
 
 const wkWeekText = (week) => (week ? `Week ${week}` : "Not in the plan");

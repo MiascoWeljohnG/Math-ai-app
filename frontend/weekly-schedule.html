@@ -43,6 +43,11 @@
         <div id="weeklyBody" hidden>
             <div class="panel">
                 <h3>How the week moves</h3>
+                <div class="pace-warning" id="wkOffBanner" role="alert" hidden>
+                    <strong>Weekly pacing is OFF for this subject.</strong>
+                    <span>Students don't see any colours and still unlock lessons one by one, whatever week is set below.</span>
+                    <button class="btn btn-primary btn-sm" type="button" id="wkTurnOn">Turn on weekly pacing</button>
+                </div>
                 <label class="check" for="wkEnabled" style="display:flex; gap:0.5rem; align-items:flex-start;">
                     <input type="checkbox" id="wkEnabled">
                     <span>Run this subject on a weekly schedule. <span class="hint">When off, students unlock lessons one by one by passing each quiz.</span></span>

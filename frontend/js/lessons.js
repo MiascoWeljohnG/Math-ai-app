@@ -260,10 +260,7 @@ function renderLessonList(lessons) {
             const state = document.createElement("span");
             state.className = `lesson-state${lesson.locked ? "" : " next"}`;
             if (lesson.locked) {
-                state.innerHTML = ICON_LOCK;   // a padlock instead of the word "Locked"
-                state.setAttribute("role", "img");
-                state.setAttribute("aria-label", "Locked");
-                state.title = "Locked";
+                state.textContent = "Locked";
             } else {
                 state.setAttribute("aria-hidden", "true");
                 state.textContent = "Up next";
@@ -375,7 +372,7 @@ const LESSON_GAMES = [
 ];
 function buildLessonGamePanel(subjectId, lesson) {
     const teacher = ["teacher", "school_admin"].includes(localStorage.getItem("role"));
-    if (!teacher && !lesson.preferred_game) return null;
+    if (!teacher) return null;   // students get a "Play" button beside ">" instead (buildCompleteFooter)
     const panel = document.createElement("section");
     panel.className = "lesson-game-panel";
     const title = document.createElement("h2"); title.textContent = "Lesson game"; panel.append(title);
@@ -397,22 +394,18 @@ function buildLessonGamePanel(subjectId, lesson) {
                 });
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.detail || "Couldn't save the game.");
-                lesson.preferred_game = data.preferred_game; status.textContent = "Game saved for this lesson."; drawPlayLink();
+                lesson.preferred_game = data.preferred_game; status.textContent = "Game saved for this lesson.";
+                lessonContent.querySelector(".lesson-footer")?.refreshGame?.();   // the Play button beside ">"
             } catch (error) { status.textContent = error.message; }
             finally { save.disabled = false; }
         });
         panel.append(select, save);
     }
-    function drawPlayLink() {
-        const old = panel.querySelector("a"); if (old) old.remove();
-        if (!lesson.preferred_game) return;
-        const link = document.createElement("a");
-        link.href = `games.html?subject=${encodeURIComponent(subjectId)}&lesson=${encodeURIComponent(lesson.id)}&game=${encodeURIComponent(lesson.preferred_game)}`;
-        link.textContent = `Play ${LESSON_GAMES.find(([id]) => id === lesson.preferred_game)?.[1] || "lesson game"}`;
-        panel.append(link);
-    }
-    drawPlayLink(); panel.append(status); return panel;
+    panel.append(status); return panel;
 }
+
+const ICON_GAME = '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="11" rx="5.5"/><path d="M7 10.5v4M5 12.5h4"/><path d="M16 11.5h.01M18.5 13.5h.01"/></svg>';
+const gameLabel = (id) => LESSON_GAMES.find(([game]) => game === id)?.[1] || "lesson game";
 
 const quizUrl = (subjectId, lessonId) => `quiz.html?subject=${subjectId}&lesson=${lessonId}`;
 
@@ -438,6 +431,20 @@ function buildCompleteFooter(subjectId, lesson) {
     const error = document.createElement("span");
     error.className = "complete-error";
     footer.append(button, error);
+
+    // The lesson's assigned game: one button straight into it, beside ">". Drawn again when a teacher picks another game.
+    const drawGame = () => {
+        footer.querySelector(".game-btn")?.remove();
+        if (!lesson.preferred_game) return;
+        const play = document.createElement("a");
+        play.className = "complete-btn game-btn";
+        play.href = `games.html?subject=${encodeURIComponent(subjectId)}&lesson=${encodeURIComponent(lesson.id)}&game=${encodeURIComponent(lesson.preferred_game)}`;
+        play.innerHTML = ICON_GAME;
+        play.append(` Play ${gameLabel(lesson.preferred_game)}`);
+        button.after(play);
+    };
+    footer.refreshGame = drawGame;
+    drawGame();
 
     const followingLesson = () => {
         const index = activeLessons.findIndex(item => item.id === lesson.id);
