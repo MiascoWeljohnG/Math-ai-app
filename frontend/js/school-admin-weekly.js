@@ -63,8 +63,8 @@ function wkRender() {
     document.getElementById("wkManualWeek").value = schedule ? (schedule.current_week ?? schedule.manual_week) : 1;
     if (schedule) {
         const week = schedule.current_week;
-        document.getElementById("wkNowNum").textContent = week ? `Week ${week}` : "Not started";
-        document.getElementById("wkNowSub").textContent = !on ? "Paused: students unlock lessons one by one."
+        document.getElementById("wkNowNum").textContent = (week ? `Week ${week}` : "Not started") + (on ? "" : " (not applied)");
+        document.getElementById("wkNowSub").textContent = !on ? "Weekly pacing is OFF: students see no colours and unlock lessons one by one."
             : schedule.mode === "manual" ? "Staying here until you advance it."
             : week ? "Moves on by itself every 7 days." : `Starts on ${wkDay(schedule.start_date)}.`;
     }
@@ -143,7 +143,9 @@ document.getElementById("wkSave").addEventListener("click", (event) => {
     const body = { enabled: document.getElementById("wkEnabled").checked, mode };
     if (mode === "auto") body.start_date = document.getElementById("wkStartDate").value || null;
     else body.manual_week = Number(document.getElementById("wkManualWeek").value || 0);
-    wkRun(event.currentTarget, () => wkCall("PUT", `/${wkId()}/schedule`, body), "Saved. Students see the change right away.");
+    wkRun(event.currentTarget, () => wkCall("PUT", `/${wkId()}/schedule`, body),
+        body.enabled ? "Saved. Students see the change right away."
+            : "Saved, but weekly pacing is still OFF, so students do not see weeks or colours. Tick \"Run this subject on a weekly schedule\" and Save again.");
 });
 
 document.getElementById("wkTurnOn").addEventListener("click", async (event) => {

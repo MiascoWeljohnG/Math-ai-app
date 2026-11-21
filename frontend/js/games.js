@@ -56,9 +56,8 @@ function directLaunchFromUrl() {
     const asked = query.get("game");
     const card = LESSON_GAME_TO_CARD[asked] || asked;               // also accepts this page's own ids
     const game = GAMES.find(item => item.id === card);
-    const lessonGame = LESSON_GAME_TO_CARD[asked] ? asked : Object.keys(LESSON_GAME_TO_CARD).find(id => LESSON_GAME_TO_CARD[id] === asked);
     const subject = query.get("subject"), lesson = query.get("lesson");
-    return game && subject && lesson ? { game, lessonGame, subject, lesson } : null;
+    return game && subject && lesson ? { game, subject, lesson } : null;
 }
 
 function showGameLoading(game) {
@@ -120,11 +119,11 @@ async function initPicker() {
             lessonSelect.replaceChildren(...lessonOptions(lessons));
             if (requestedLesson && lessons.some(l => String(l.id) === requestedLesson && !l.locked)) {
                 lessonSelect.value = requestedLesson;
-                const loaded = await loadPack(requestedSubject, requestedLesson, direct && direct.lessonGame);
+                const loaded = await loadPack(requestedSubject, requestedLesson);
                 currentPack = loaded.pack; currentLabel = loaded.title;
                 if (direct) {
-                    // Start the game as soon as its content is here. The server only writes this one game's content, and a
-                    // teacher-made version comes back at once. If it is slow we start with the lesson's own words instead.
+                    // Start the game as soon as its content is here (a version the teacher generated comes back at once). If the AI is
+                    // slow we start with the lesson's own words instead.
                     const better = await Promise.race([loaded.upgrade, new Promise(resolve => setTimeout(() => resolve(null), PACK_WAIT_MS))]);
                     if (better) currentPack = better;
                     else loaded.upgrade.then(late => { if (late) currentPack = late; });   // used by "Play again"

@@ -1081,6 +1081,6 @@ async def generate_text(system: str, prompt: str, branch: str, query: str, schoo
                 return response.json()["choices"][0]["message"]["content"].strip()
                 
         raise RuntimeError(
-            "No AI provider answered. Set GROQ_API_KEY or GEMINI_API_KEY in backend/.env "
-            "(and check the backend terminal for the provider's error message)."
+            "No AI provider answered. The AI provider may be down please contact the administrator"
+            "This happens when the AI provider hit its limit"
         )

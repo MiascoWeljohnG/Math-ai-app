@@ -233,29 +233,11 @@ def lesson_game_key(lesson: Lesson) -> str:
     return hashlib.sha1(f"{lesson.id}:{(lesson.content or '')[:6000]}".encode("utf-8")).hexdigest()
 
 
-# What each lesson game needs from the game content the AI writes. Only the part of the game a lesson is set to is written
-# (see games_routes.py), so changing a lesson's game means writing the part the new game needs.
-GAME_PARTS = {
-    "hangman": ("terms",), "word-search": ("terms",),
-    "matching": ("match",), "sorting": ("sort",), "fill-blanks": ("blanks",),
-}
-
-
 def _game_status(lesson: Lesson) -> str:
-    """none: no game content for this lesson's game yet. ready: students play it. stale: the lesson text changed since."""
+    """none: no game content generated yet. ready: students play it. stale: the lesson text changed since."""
     if not getattr(lesson, "game_pack", None):
         return "none"
-    if lesson.game_pack_key != lesson_game_key(lesson):
-        return "stale"
-    needed = GAME_PARTS.get(getattr(lesson, "preferred_game", None) or "")
-    if needed:   # content written for a different game does not help this one
-        try:
-            pack = json.loads(lesson.game_pack)
-        except ValueError:
-            return "none"
-        if not isinstance(pack, dict) or any(part not in pack for part in needed):
-            return "none"
-    return "ready"
+    return "ready" if lesson.game_pack_key == lesson_game_key(lesson) else "stale"
 
 
 def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: bool = False, locked: bool = False,
