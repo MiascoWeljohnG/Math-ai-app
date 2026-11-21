@@ -13,6 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
+import completion
 import config
 import retakes
 import weekly
@@ -174,12 +175,17 @@ def _completed_ids(db: Session, user: User, lesson_ids: list[int]) -> set[int]:
     return {lesson_id for (lesson_id,) in rows}
 
 
-STAFF_ROLES = ("teacher", "school_admin", "admin")
+STAFF_ROLES = completion.STAFF_ROLES
 
 
 def _gated(subject: Subject, user: User) -> bool:
     """Students work through a shared subject in order. Staff, and a student's own personal subject, are never locked."""
     return subject.owner_user_id is None and user.role not in STAFF_ROLES
+
+
+def _finished_ids(db: Session, user: User, subject: Subject, lesson_ids: list[int]) -> set[int]:
+    """What this student has finished in this subject. The one rule every page uses (see completion.py)."""
+    return completion.finished_ids(db, user, subject, lesson_ids)
 
 
 def _locked_ids(lessons: list[Lesson], done: set[int]) -> set[int]:
@@ -207,7 +213,7 @@ def _require_unlocked(db: Session, subject: Subject, lesson: Lesson, user: User)
         return
     schedule = _weekly_schedule(db, subject)
     if schedule is not None:
-        done = lesson.id in _completed_ids(db, user, [lesson.id])
+        done = lesson.id in _finished_ids(db, user, subject, [lesson.id])
         if weekly.pace(lesson.week_number, weekly.current_week(schedule), done) == weekly.CLOSED:
             raise HTTPException(status_code=403, detail="Your school hasn't opened this lesson yet.")
         return
@@ -217,7 +223,7 @@ def _require_unlocked(db: Session, subject: Subject, lesson: Lesson, user: User)
         .order_by(Lesson.order_index.asc(), Lesson.id.asc())
         .all()
     )
-    done = _completed_ids(db, user, [item.id for item in published])
+    done = _finished_ids(db, user, subject, [item.id for item in published])
     if lesson.id in _locked_ids(published, done):
         raise HTTPException(status_code=403, detail="Pass the previous lesson's quiz to unlock this one.")
 
@@ -227,11 +233,29 @@ def lesson_game_key(lesson: Lesson) -> str:
     return hashlib.sha1(f"{lesson.id}:{(lesson.content or '')[:6000]}".encode("utf-8")).hexdigest()
 
 
+# What each lesson game needs from the game content the AI writes. Only the part of the game a lesson is set to is written
+# (see games_routes.py), so changing a lesson's game means writing the part the new game needs.
+GAME_PARTS = {
+    "hangman": ("terms",), "word-search": ("terms",),
+    "matching": ("match",), "sorting": ("sort",), "fill-blanks": ("blanks",),
+}
+
+
 def _game_status(lesson: Lesson) -> str:
-    """none: no game content generated yet. ready: students play it. stale: the lesson text changed since."""
+    """none: no game content for this lesson's game yet. ready: students play it. stale: the lesson text changed since."""
     if not getattr(lesson, "game_pack", None):
         return "none"
-    return "ready" if lesson.game_pack_key == lesson_game_key(lesson) else "stale"
+    if lesson.game_pack_key != lesson_game_key(lesson):
+        return "stale"
+    needed = GAME_PARTS.get(getattr(lesson, "preferred_game", None) or "")
+    if needed:   # content written for a different game does not help this one
+        try:
+            pack = json.loads(lesson.game_pack)
+        except ValueError:
+            return "none"
+        if not isinstance(pack, dict) or any(part not in pack for part in needed):
+            return "none"
+    return "ready"
 
 
 def _serialize_lesson(lesson: Lesson, include_content: bool = True, completed: bool = False, locked: bool = False,
@@ -349,7 +373,7 @@ def list_lessons(
         .order_by(Lesson.order_index.asc(), Lesson.id.asc())
         .all()
     )
-    done = _completed_ids(db, user, [lesson.id for lesson in lessons])
+    done = _finished_ids(db, user, subject, [lesson.id for lesson in lessons])
     gated = _gated(subject, user)
     schedule = _weekly_schedule(db, subject)
     if gated and schedule is not None:   # weekly pacing replaces "finish the one before it": gray lessons are the locked ones
@@ -379,7 +403,7 @@ def get_lesson(
     if lesson is None or (lesson.status != "published" and user.role not in ("teacher", "school_admin")):   # drafts are for staff only
         raise HTTPException(status_code=404, detail="Lesson not found")
     _require_unlocked(db, subject, lesson, user)
-    return _serialize_lesson(lesson, completed=lesson.id in _completed_ids(db, user, [lesson.id]),
+    return _serialize_lesson(lesson, completed=lesson.id in _finished_ids(db, user, subject, [lesson.id]),
                              schedule=_weekly_schedule(db, subject), student_view=_gated(subject, user))
 
 

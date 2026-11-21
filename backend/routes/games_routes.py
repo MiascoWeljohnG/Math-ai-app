@@ -9,7 +9,9 @@ The page works without this route (it falls back to words it finds in the lesson
 import json
 import re
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from auth import get_current_user, require_staff
@@ -18,7 +20,7 @@ from models import Lesson, User
 from pydantic import BaseModel, Field
 from rag import generate_text
 from routes.subjects_routes import (
-    _lesson_in_subject_or_404, _require_unlocked, _shared_subject_or_404, _visible_subject_or_404, lesson_game_key,
+    GAME_PARTS, _lesson_in_subject_or_404, _require_unlocked, _shared_subject_or_404, _visible_subject_or_404, lesson_game_key,
 )
 
 router = APIRouter(prefix="/subjects", tags=["games"])
@@ -30,31 +32,56 @@ GAME_SYSTEM = (
     "Write fractions as 3/4 and powers as x^2."
 )
 
-GAME_PROMPT = """Lesson title: {title}
-Subject: {subject}
+ALL_PARTS = ("terms", "sort", "blanks", "match")   # everything, for free play on a lesson that has no game of its own
 
-Write game content from the lesson below. Reply with this JSON shape:
+# For each part of the content: its place in the JSON the model returns, and the rules it must follow.
+PART_SPEC = {
+    "terms": (
+        '"terms": [{"word": "NUMERATOR", "clue": "The top number of a fraction"}]',
+        '- "terms": exactly 8 important vocabulary words from the lesson. "word" is ONE word, letters A-Z only, 4 to 10 letters.\n'
+        '  "clue" is a hint under 100 characters that does NOT contain the word itself.',
+    ),
+    "sort": (
+        '"sort": {"left": "Name of group 1", "right": "Name of group 2",\n'
+        '            "items": [{"text": "short item", "side": "left"}, {"text": "short item", "side": "right"}]}',
+        '- "sort": two clearly different groups from the lesson (for example "Even numbers" and "Odd numbers", or "True statements"\n'
+        '  and "False statements"). Exactly 5 items for each group, each item under 40 characters, every item clearly belongs to one group.',
+    ),
+    "blanks": (
+        '"blanks": [{"sentence": "A ___ is a number multiplied by itself.", "answer": "square"}]',
+        '- "blanks": exactly 4 sentences taken or adapted from the lesson. Each has exactly one "___" blank. "answer" is 1 to 3 words\n'
+        '  and is not found anywhere else in the sentence.',
+    ),
+    "match": (
+        '"match": [{"a": "term", "b": "short definition"}]',
+        '- "match": exactly 5 pairs. "a" is a term (under 25 characters), "b" is its definition (under 80 characters).',
+    ),
+}
 
-{{
-  "terms": [{{"word": "NUMERATOR", "clue": "The top number of a fraction"}}],
-  "sort": {{"left": "Name of group 1", "right": "Name of group 2",
-            "items": [{{"text": "short item", "side": "left"}}, {{"text": "short item", "side": "right"}}]}},
-  "blanks": [{{"sentence": "A ___ is a number multiplied by itself.", "answer": "square"}}],
-  "match": [{{"a": "term", "b": "short definition"}}]
-}}
 
-Rules:
-- "terms": exactly 8 important vocabulary words from the lesson. "word" is ONE word, letters A-Z only, 4 to 10 letters.
-  "clue" is a hint under 100 characters that does NOT contain the word itself.
-- "sort": two clearly different groups from the lesson (for example "Even numbers" and "Odd numbers", or "True statements"
-  and "False statements"). Exactly 5 items for each group, each item under 40 characters, every item clearly belongs to one group.
-- "blanks": exactly 4 sentences taken or adapted from the lesson. Each has exactly one "___" blank. "answer" is 1 to 3 words
-  and is not found anywhere else in the sentence.
-- "match": exactly 5 pairs. "a" is a term (under 25 characters), "b" is its definition (under 80 characters).
+def build_prompt(subject, lesson: Lesson, parts) -> str:
+    """The model is only asked for the `parts` of the content that the game being prepared needs."""
+    shape = ",\n  ".join(PART_SPEC[part][0] for part in parts)
+    rules = "\n".join(PART_SPEC[part][1] for part in parts)
+    return (f"Lesson title: {lesson.title}\nSubject: {subject.name}\n\n"
+            "Write game content from the lesson below. Reply with this JSON shape:\n\n"
+            "{\n  " + shape + "\n}\n\nRules:\n" + rules + "\n\nLesson:\n" + (lesson.content or "")[:6000] + "\n")
 
-Lesson:
-{content}
-"""
+
+def _game_or_400(game: Optional[str]) -> Optional[str]:
+    game = (game or "").strip()
+    if game and game not in GAME_PARTS:
+        raise HTTPException(status_code=400, detail="Choose a valid game")
+    return game or None
+
+
+def _game_of(lesson: Lesson, asked: Optional[str]) -> Optional[str]:
+    """The game to write content for: the one asked for, else the lesson's own game, else None (free play: every game)."""
+    asked = _game_or_400(asked)
+    if asked:
+        return asked
+    return lesson.preferred_game if lesson.preferred_game in GAME_PARTS else None
+
 
 _CACHE: dict[str, dict] = {}   # one pack per lesson text; a fresh one is only written when the lesson changes
 _CACHE_MAX = 200
@@ -129,24 +156,32 @@ def clean_pack(data) -> dict:
 @router.post("/{subject_id}/lessons/{lesson_id}/games")
 async def lesson_game_pack(
     subject_id: int, lesson_id: int,
+    game: Optional[str] = Query(default=None, max_length=40),   # a lesson game id; empty means the lesson's own game
     user: User = Depends(get_current_user), db: Session = Depends(get_db),
 ):
+    """The content for one lesson's game. Only the game the lesson is set to is written, never the others. A lesson with
+    no game of its own (free play on the Games page) gets content for every game."""
     subject = _visible_subject_or_404(db, subject_id, user)
     lesson = _lesson_in_subject_or_404(db, subject_id, lesson_id)
     if lesson.status != "published" and user.role not in ("teacher", "school_admin"):
         raise HTTPException(status_code=404, detail="Lesson not found")
     _require_unlocked(db, subject, lesson, user)   # the same lock as the lesson itself
+    game = _game_of(lesson, game)
+    parts = GAME_PARTS[game] if game else ()
 
     key = lesson_game_key(lesson)
     if lesson.game_pack and lesson.game_pack_key == key:   # the version the teacher generated and can review
         try:
-            return json.loads(lesson.game_pack)
+            stored = json.loads(lesson.game_pack)
         except ValueError:
-            pass   # a damaged row: write a fresh pack below
-    if key in _CACHE:
-        return _CACHE[key]
-    pack = await _write_pack(subject, lesson)
-    _remember(key, pack)
+            stored = None   # a damaged row: write a fresh pack below
+        if isinstance(stored, dict) and stored and all(part in stored for part in parts):
+            return stored
+    cache_key = f"{key}:{game or 'all'}"
+    if cache_key in _CACHE:
+        return _CACHE[cache_key]
+    pack = await _write_pack(subject, lesson, game)
+    _remember(cache_key, pack)
     return pack
 
 
@@ -156,51 +191,59 @@ def _remember(key: str, pack: dict) -> None:
     _CACHE[key] = pack
 
 
-async def _write_pack(subject, lesson: Lesson) -> dict:
-    """Asks the model for the lesson's game content. Raises a 502 when nothing usable comes back."""
-    prompt = GAME_PROMPT.format(title=lesson.title, subject=subject.name, content=(lesson.content or "")[:6000])
+async def _write_pack(subject, lesson: Lesson, game: Optional[str] = None) -> dict:
+    """Asks the model for the game content of `game` only (or for every game when `game` is None). Raises a 502 when nothing
+    usable comes back."""
+    parts = GAME_PARTS[game] if game else ALL_PARTS
+    prompt = build_prompt(subject, lesson, parts)
     pack: dict = {}
     for _ in range(2):   # small local models sometimes break the format; try once more
         try:
             text = await generate_text(GAME_SYSTEM, prompt, "", "")
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Couldn't write the games: {exc}")
-        candidate = clean_pack(_extract_json(text))
+        candidate = {part: value for part, value in clean_pack(_extract_json(text)).items() if part in parts}   # never keep extras
         if len(candidate) > len(pack):
             pack = candidate
-        if len(pack) >= 3:
+        if len(pack) >= (len(parts) if game else 3):
             break
     if not pack:
         raise HTTPException(status_code=502, detail="The model's game content could not be read. Please try again.")
     return pack
 
 
+class GenerateGameRequest(BaseModel):
+    game_id: str = Field(default="", max_length=40)   # the game to write content for; empty = the game the lesson is set to
+
+
 @router.post("/{subject_id}/lessons/{lesson_id}/games/generate")
 async def generate_lesson_game(
-    subject_id: int, lesson_id: int,
+    subject_id: int, lesson_id: int, req: Optional[GenerateGameRequest] = None,
     user: User = Depends(require_staff), db: Session = Depends(get_db),
 ):
-    """A teacher writes (or rewrites) the game content for a lesson and keeps it with the lesson. Students then play
-    exactly this version instead of waiting for the model. It goes stale when the lesson text changes."""
+    """A teacher writes (or rewrites) the game content for a lesson's game and keeps it with the lesson. Only that game's
+    content is written, not the other games'. Students then play exactly this version instead of waiting for the model.
+    It goes stale when the lesson text changes."""
     subject = _shared_subject_or_404(db, subject_id, user)
     lesson = db.query(Lesson).filter(Lesson.id == lesson_id, Lesson.subject_id == subject_id).first()
     if lesson is None:
         raise HTTPException(status_code=404, detail="Lesson not found")
     if not (lesson.content or "").strip():
         raise HTTPException(status_code=400, detail="Write the lesson first, then generate its game.")
-    pack = await _write_pack(subject, lesson)
+    game = _game_of(lesson, req.game_id if req else None)
+    pack = await _write_pack(subject, lesson, game)
     key = lesson_game_key(lesson)
     lesson.game_pack, lesson.game_pack_key = json.dumps(pack), key
     db.commit()
-    _remember(key, pack)
-    return {"pack": pack, "game_status": "ready"}
+    _remember(f"{key}:{game or 'all'}", pack)
+    return {"pack": pack, "game_status": "ready", "game": game}
 
 
 class LessonGameRequest(BaseModel):
     game_id: str = Field(default="", max_length=40)   # empty clears the lesson's game
 
 
-_ALLOWED_GAMES = {"hangman", "word-search", "matching", "sorting", "fill-blanks"}
+_ALLOWED_GAMES = set(GAME_PARTS)
 
 
 @router.put("/{subject_id}/lessons/{lesson_id}/preferred-game")

@@ -14,7 +14,7 @@ from auth import get_current_user, require_staff
 from database import get_db
 from models import ACTIVE, Lesson, LessonCompletion, LessonQuiz, QuizAttempt, Reminder, Subject, User
 from school import in_school, shared_subjects, visible_subjects
-from routes.subjects_routes import PASS_PERCENT, QUIZ_LENGTH, SECONDS_PER_QUESTION, STAFF_ROLES, _display_name, _weekly_schedule
+from routes.subjects_routes import PASS_PERCENT, QUIZ_LENGTH, SECONDS_PER_QUESTION, STAFF_ROLES, _display_name, _finished_ids, _weekly_schedule
 
 router = APIRouter(prefix="/learning", tags=["learning"])
 
@@ -35,7 +35,7 @@ def roadmap(
 ):
     """For every subject the student can see: its lessons in order with where they stand, plus a short
     study plan for the next few lessons. Built from real completions and quiz attempts, no model call.
-    A lesson is done once its quiz is passed (or it was marked complete and has no quiz)."""
+    A lesson is done by the rule in completion.py: its quiz is passed (or it has no quiz and was marked complete)."""
     query = db.query(Subject).filter(visible_subjects(user))
     if subject_id is not None:
         query = query.filter(Subject.id == subject_id)
@@ -49,8 +49,9 @@ def roadmap(
         if schedule:
             lessons.sort(key=lambda lesson: lesson.week_number if lesson.week_number is not None else 10**9)   # stable: course order inside a week
         ids = [lesson.id for lesson in lessons]
-        read = {i for (i,) in db.query(LessonCompletion.lesson_id)
+        read = {i for (i,) in db.query(LessonCompletion.lesson_id)    # has a completion record (the "read" flag below); NOT what makes a lesson done
                 .filter(LessonCompletion.user_id == user.id, LessonCompletion.lesson_id.in_(ids))}
+        finished = _finished_ids(db, user, subject, ids)   # what makes it done: the same rule as the lessons page (completion.py)
         difficulty = dict(db.query(LessonQuiz.lesson_id, LessonQuiz.difficulty).filter(LessonQuiz.lesson_id.in_(ids)).all())
         tries: dict[int, dict] = {}   # lesson id -> {attempts, best percent, passed}
         for lesson_id, score, total, passed in (
@@ -66,7 +67,7 @@ def roadmap(
         previous = None   # (lesson, its level, its reading minutes): what the lesson before this one looked like
         for lesson in lessons:
             t = tries.get(lesson.id, {"attempts": 0, "best": None, "passed": False})
-            is_done = t["passed"] or (lesson.id in read and lesson.id not in difficulty and t["attempts"] == 0)
+            is_done = lesson.id in finished
             done += is_done
             status = "done" if is_done else ("upcoming" if any(r["status"] == "next" for r in rows) else "next")
             pace = weekly.pace(lesson.week_number, now_week, is_done) if schedule else None

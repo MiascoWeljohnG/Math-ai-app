@@ -6,9 +6,13 @@ const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6
 const starRow = (count, cls = "") => h("span", { class: `gm-stars ${cls}`, "aria-label": `${count} of 3 stars` },
     [0, 1, 2].map(i => { const s = h("span", { class: i < count ? "is-on" : "" }); s.innerHTML = STAR; return s; }));
 
+// A lesson names its game "sorting", "word-search", "matching" or "fill-blanks"; the cards on this page call them
+// "sort", "wordsearch", "match" and "blanks". Without this the Play link on a lesson found no game and showed the hub.
+const LESSON_GAME_TO_CARD = { hangman: "hangman", "word-search": "wordsearch", matching: "match", sorting: "sort", "fill-blanks": "blanks" };
+const PACK_WAIT_MS = 25000;   // how long a direct launch waits for the lesson's game content before using the words in the lesson text
+
 let currentPack = BUILTIN_PACK;
 let currentLabel = "General math words";
-let currentLessonId = "";   // "" while playing general words; XP is tracked per lesson + game
 let cleanup = null;
 let playing = null;       // the game being played
 let packToken = 0;        // so a slow AI reply for an old lesson never replaces the pack of a newer pick
@@ -46,8 +50,28 @@ const lessonOptions = (lessons) => [new Option("General math words", ""), ...les
     return option;
 })];
 
+// A link from a lesson (?subject=&lesson=&game=) goes straight into that game: the hub never shows while it loads.
+function directLaunchFromUrl() {
+    const query = new URLSearchParams(location.search);
+    const asked = query.get("game");
+    const card = LESSON_GAME_TO_CARD[asked] || asked;               // also accepts this page's own ids
+    const game = GAMES.find(item => item.id === card);
+    const lessonGame = LESSON_GAME_TO_CARD[asked] ? asked : Object.keys(LESSON_GAME_TO_CARD).find(id => LESSON_GAME_TO_CARD[id] === asked);
+    const subject = query.get("subject"), lesson = query.get("lesson");
+    return game && subject && lesson ? { game, lessonGame, subject, lesson } : null;
+}
+
+function showGameLoading(game) {
+    $g("gmHub").hidden = true; $g("gmPlayer").hidden = false;
+    $g("gmPlayerTitle").textContent = game.name;
+    $g("gmPlayerLesson").textContent = "";
+    $g("gmStageHost").replaceChildren(h("p", { class: "gm-note busy", role: "status" }, "Getting your game ready…"));
+}
+
 async function initPicker() {
     const subjectSelect = $g("gmSubject"), lessonSelect = $g("gmLesson");
+    const direct = directLaunchFromUrl();
+    if (direct) showGameLoading(direct.game);
     let subjects = [];   // declared out here: the deep link below needs it after the try block has ended
     try {
         subjects = await gameSubjects();
@@ -71,7 +95,7 @@ async function initPicker() {
         try {
             const loaded = await loadPack(subjectSelect.value, lessonSelect.value);
             if (token !== packToken) return;
-            currentPack = loaded.pack; currentLabel = loaded.title; currentLessonId = lessonSelect.value;
+            currentPack = loaded.pack; currentLabel = loaded.title;
             setStatus(`Games from “${loaded.title}”. Making smarter questions with AI…`, "busy");
             loaded.upgrade.then(better => {
                 if (token !== packToken) return;
@@ -88,6 +112,7 @@ async function initPicker() {
 
     const query = new URLSearchParams(location.search);
     const requestedSubject = query.get("subject"), requestedLesson = query.get("lesson");
+    let launched = false;
     if (requestedSubject && subjects.some(s => String(s.id) === requestedSubject)) {
         subjectSelect.value = requestedSubject;
         try {
@@ -95,17 +120,25 @@ async function initPicker() {
             lessonSelect.replaceChildren(...lessonOptions(lessons));
             if (requestedLesson && lessons.some(l => String(l.id) === requestedLesson && !l.locked)) {
                 lessonSelect.value = requestedLesson;
-                const loaded = await loadPack(requestedSubject, requestedLesson);
-                currentPack = loaded.pack; currentLabel = loaded.title; currentLessonId = requestedLesson;
-                loaded.upgrade.then(better => { if (better) currentPack = better; });
-                const requestedGame = query.get("game");
-                const game = GAMES.find(item => item.id === requestedGame);
-                if (game) play(game);
+                const loaded = await loadPack(requestedSubject, requestedLesson, direct && direct.lessonGame);
+                currentPack = loaded.pack; currentLabel = loaded.title;
+                if (direct) {
+                    // Start the game as soon as its content is here. The server only writes this one game's content, and a
+                    // teacher-made version comes back at once. If it is slow we start with the lesson's own words instead.
+                    const better = await Promise.race([loaded.upgrade, new Promise(resolve => setTimeout(() => resolve(null), PACK_WAIT_MS))]);
+                    if (better) currentPack = better;
+                    else loaded.upgrade.then(late => { if (late) currentPack = late; });   // used by "Play again"
+                    play(direct.game);
+                    launched = true;
+                } else {
+                    loaded.upgrade.then(better => { if (better) currentPack = better; });
+                }
             }
         } catch (error) { setError(error.message); }
     }
+    if (direct && !launched) showHub();   // the lesson could not be opened: show the games with the reason above
 }
-function useGeneral() { packToken++; currentPack = BUILTIN_PACK; currentLabel = "General math words"; currentLessonId = ""; setStatus("Playing with general math words. Pick a lesson to play with its words."); }
+function useGeneral() { packToken++; currentPack = BUILTIN_PACK; currentLabel = "General math words"; setStatus("Playing with general math words. Pick a lesson to play with its words."); }
 
 // ---------- player ----------
 function showHub() {
@@ -137,14 +170,13 @@ const MESSAGES = ["Not this time. Try again!", "Good start. You can beat it!", "
 
 function finish(game, stars, summary) {
     if (cleanup) { cleanup(); cleanup = null; }
-    const result = GameStore.record(game.id, stars, currentLessonId);
+    const result = GameStore.record(game.id, stars);
     const streak = GameStore.liveStreak(result.data);
     $g("gmStageHost").replaceChildren(h("div", { class: "gm-result" },
         starRow(stars, "big"),
         h("h2", {}, MESSAGES[stars]),
         summary ? h("p", { class: "gm-note" }, summary) : null,
         h("p", { class: "gm-gain" }, `+${result.gained} XP`),
-        result.repeat ? h("p", { class: "gm-note" }, "You already earned the XP for this game in this lesson. Try another game or lesson to keep leveling up.") : null,
         result.levelUp ? h("p", { class: "gm-levelup" }, `Level up! You are now level ${result.level}.`) : null,
         h("p", { class: "gm-note" }, streak > 1 ? `${streak}-day streak. Come back tomorrow to keep it going.` : "Play again tomorrow to start a streak."),
         h("div", { class: "gm-actions" },

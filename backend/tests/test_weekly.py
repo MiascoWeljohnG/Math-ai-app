@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 import config
 import weekly
-from models import AuditLog, Lesson, LessonCompletion, School, Subject, User, WeeklySchedule
+from models import AuditLog, Lesson, LessonCompletion, LessonQuiz, QuizAttempt, School, Subject, User, WeeklySchedule
 
 TODAY = date(2026, 11, 19)   # a Thursday
 
@@ -242,3 +242,84 @@ def test_roadmap_carries_the_pace_and_plans_only_open_lessons(world):
     assert [(l["title"], l["pace"]) for l in subject["lessons"]] == [   # week order, unscheduled last
         ("Lesson 3", "behind"), ("Lesson 2", "current"), ("Lesson 4", "closed"), ("Lesson 1", "closed")]
     assert [item["title"] for item in subject["study_plan"]] == ["Lesson 3", "Lesson 2"]   # nothing gray in the plan
+
+
+# ---------------------------------------------------------------- "completed" means the same on every page
+def roadmap_of(world):
+    from routes import learning_routes
+    import auth
+    from database import get_db
+    app = FastAPI()
+    app.include_router(learning_routes.router)
+    app.dependency_overrides[get_db] = lambda: world.db
+    app.dependency_overrides[auth.get_current_user] = lambda: world.student
+    return TestClient(app).get(f"/learning/roadmap?subject_id={world.subject.id}").json()["subjects"][0]
+
+
+def add_quiz(world, lesson, *attempts):
+    world.db.add(LessonQuiz(lesson_id=lesson.id, questions="[]", difficulty=3))
+    for score, passed in attempts:
+        world.db.add(QuizAttempt(user_id=world.student.id, lesson_id=lesson.id, score=score, total=10, passed=passed))
+    world.db.commit()
+
+
+def test_a_completion_record_without_a_passed_quiz_does_not_count(world):
+    """The reported bug: the lessons page showed lesson 1 as completed while the roadmap said 0 of 6 done."""
+    one, two = lessons_for(world, [None, None])
+    world.db.add(LessonCompletion(user_id=world.student.id, lesson_id=one.id))   # a leftover from when a click completed a lesson
+    add_quiz(world, one, (2, False))                                             # ...but the quiz was never passed
+    world.db.commit()
+    lessons = world.get(f"/subjects/{world.subject.id}/lessons").json()
+    assert [(l["title"], l["completed"], l["locked"]) for l in lessons] == [("Lesson 1", False, False), ("Lesson 2", False, True)]
+    roadmap = roadmap_of(world)
+    assert roadmap["completed"] == 0 and [l["status"] for l in roadmap["lessons"]][0] != "done"
+
+
+def test_passing_the_quiz_completes_the_lesson_everywhere(world):
+    one, two = lessons_for(world, [None, None])
+    add_quiz(world, one, (2, False), (9, True))
+    world.db.add(LessonCompletion(user_id=world.student.id, lesson_id=one.id))   # what a real pass records
+    world.db.commit()
+    lessons = world.get(f"/subjects/{world.subject.id}/lessons").json()
+    assert (lessons[0]["completed"], lessons[1]["locked"]) == (True, False)       # lesson 2 opened up
+    assert roadmap_of(world)["completed"] == 1
+
+
+def test_a_lesson_with_no_quiz_still_counts_when_marked_complete(world):
+    one, two = lessons_for(world, [None, None])
+    world.db.add(LessonCompletion(user_id=world.student.id, lesson_id=one.id))
+    world.db.commit()
+    assert world.get(f"/subjects/{world.subject.id}/lessons").json()[0]["completed"] is True
+    assert roadmap_of(world)["completed"] == 1
+
+
+def test_weekly_green_needs_a_passed_quiz_too(world):
+    one, two = lessons_for(world, [1, 1])
+    schedule(world, start_date=date.today())
+    world.db.add(LessonCompletion(user_id=world.student.id, lesson_id=one.id))
+    add_quiz(world, one, (3, False))
+    assert student_view(world)[0] == ("Lesson 1", "current", False)               # blue, not green
+    assert world.get(f"/school-admin/weekly/{world.subject.id}").json()["lessons"][0]["completed"] == 0
+
+
+def test_a_students_own_subject_counts_a_click(world):
+    from progress import progress_for_user
+    mine = Subject(name="My notes", owner_user_id=world.student.id)
+    world.db.add(mine)
+    world.db.commit()
+    lesson = Lesson(subject_id=mine.id, title="Mine", content="c", created_by="stud", status="published", order_index=0)
+    world.db.add(lesson)
+    world.db.commit()
+    world.db.add(LessonCompletion(user_id=world.student.id, lesson_id=lesson.id))
+    add_quiz(world, lesson)                                                        # has a quiz, never taken: a click still counts here
+    row = next(r for r in progress_for_user(world.db, world.student) if r["subject_id"] == mine.id)
+    assert row["completed"] == 1
+
+
+def test_home_progress_agrees_with_the_lessons_page(world):
+    from progress import progress_for_user
+    one, two = lessons_for(world, [None, None])
+    world.db.add(LessonCompletion(user_id=world.student.id, lesson_id=one.id))
+    add_quiz(world, one, (2, False))
+    row = next(r for r in progress_for_user(world.db, world.student) if r["subject_id"] == world.subject.id)
+    assert (row["completed"], row["total"]) == (0, 2)

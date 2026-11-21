@@ -26,6 +26,7 @@ const gamePreview = document.getElementById("lessonGamePreview");
 const gamePreviewBody = document.getElementById("lessonGamePreviewBody");
 let editingGameStatus = "none";   // none | ready | stale: whether the open lesson has generated game content
 let editingLessonGame = "";   // the game the open lesson had when it was loaded, so Save only calls the API when it changed
+let editingGeneratedGame = "";   // the game whose content was generated in this dialog (it may not be saved on the lesson yet)
 
 function showLessonStatus(message, kind) {
     const target = lessonDialog.open ? lessonStatus : lessonListStatus;
@@ -357,6 +358,7 @@ function startNewLesson() {
     lessonContentInput.value = "";
     lessonGameSelect.value = "";
     editingLessonGame = "";
+    editingGeneratedGame = "";
     editingGameStatus = "none";
     gamePreview.hidden = true;
     setLessonSource("");
@@ -382,6 +384,7 @@ async function editLesson(lessonId) {
         editingLessonGame = lesson.preferred_game || "";
         lessonGameSelect.value = editingLessonGame;
         editingGameStatus = lesson.game_status || "none";
+        editingGeneratedGame = "";
         gamePreview.hidden = true;
         setLessonSource(lesson.source_name);
         lessonStatus.textContent = "";
@@ -648,18 +651,26 @@ function refreshLessonGameLink() {
 }
 lessonGameSelect.addEventListener("change", () => {
     refreshLessonGameLink();
+    if (editingLessonId !== null) refreshGamePackUi();
     if (editingLessonId === null) document.getElementById("withGameField").hidden = !lessonGameSelect.value;   // new lessons only
 });
 
-// What the Generate game content button and the line under it say, from the open lesson's game_status.
+// What the Generate game content button and the line under it say. Content is written for the picked game only, so this is
+// about that game: content made for a different game does not count (the server says "none" once the saved game changes).
 function refreshGamePackUi() {
-    gameGenerateBtn.textContent = editingGameStatus === "none" ? "Generate game content" : "Regenerate game content";
+    const game = lessonGameSelect.value;
+    const label = game ? lessonGameSelect.selectedOptions[0].textContent : "";
+    const otherGame = !!game && game !== editingLessonGame && game !== editingGeneratedGame;   // picked, not saved, not generated yet
+    const state = !game ? "nogame" : otherGame && editingGameStatus === "ready" ? "other" : editingGameStatus;
+    gameGenerateBtn.textContent = state === "ready" || state === "stale" ? "Regenerate game content" : "Generate game content";
     gamePackStatus.className = "hint";
     gamePackStatus.textContent = {
-        none: "No game content yet. Until you generate it, the game builds its words from the lesson text, which can be rougher. Uses the saved lesson text, so press Save changes first if you edited it.",
-        ready: "Game content is ready. Students play this version. Look it over below, or regenerate it for a different set.",
+        nogame: "Pick a lesson game above. Only that game's content is written, not the other games'.",
+        none: `No game content for ${label} yet. Until you generate it, the game builds its words from the lesson text, which can be rougher. Uses the saved lesson text, so press Save changes first if you edited it.`,
+        other: `You picked ${label}. Generate its content, then press Save changes. Only ${label} is written, not the other games.`,
+        ready: `Game content for ${label} is ready. Students play this version. Look it over below, or regenerate it for a different set.`,
         stale: "The lesson text changed after this game was generated. Generate it again so the game matches the lesson.",
-    }[editingGameStatus] || "";
+    }[state] || "";
 }
 
 // Shows what the AI wrote so the teacher can check it. Plain DOM text only: nothing from the model is read as HTML.
@@ -686,17 +697,20 @@ function renderGamePack(pack) {
 gameGenerateBtn.addEventListener("click", async () => {
     if (editingLessonId === null || lessonBusy) return;
     const lessonId = editingLessonId;
+    const game = lessonGameSelect.value;
+    if (!game) return refreshGamePackUi();   // nothing to write yet: the line under the button asks for a game
     gameGenerateBtn.disabled = true;
     gamePackStatus.className = "hint";
-    gamePackStatus.textContent = "The AI is writing the game content. This can take a minute.";
+    gamePackStatus.textContent = `The AI is writing the content for ${lessonGameSelect.selectedOptions[0].textContent}. This can take a minute.`;
     try {
-        const result = await lessonPost(`${lessonId}/games/generate`);
+        const result = await lessonPost(`${lessonId}/games/generate`, { game_id: game });
         if (editingLessonId !== lessonId) return;   // the dialog moved on to another lesson meanwhile
         editingGameStatus = result.game_status;
+        editingGeneratedGame = game;
         refreshGamePackUi();
         renderGamePack(result.pack);
         gamePreview.open = true;
-        if (!lessonGameSelect.value) gamePackStatus.textContent += " Pick a game above and press Save changes so students get a Play button.";
+        if (game !== editingLessonGame) gamePackStatus.textContent += " Press Save changes so students get a Play button for this game.";
     } catch (error) {
         if (editingLessonId !== lessonId) return;
         gamePackStatus.className = "hint error";
@@ -1009,7 +1023,7 @@ async function generateLessons() {
             }
             if (withGameContent) {
                 showLessonStatus(`Writing the game for lesson ${i + 1} of ${titles.length}: ${titles[i]}…`, "info");
-                try { await lessonPost(`${lesson.id}/games/generate`); } catch (_) { packFailures++; }
+                try { await lessonPost(`${lesson.id}/games/generate`, { game_id: game }); } catch (_) { packFailures++; }
             }
         }
         const quizNote = (quizFailures ? ` ${quizFailures} quiz(zes) failed; open those lessons and press Generate quiz.` : "")

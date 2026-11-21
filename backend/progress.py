@@ -1,6 +1,7 @@
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import completion
 from models import Lesson, LessonCompletion, Subject, User
 from school import visible_subjects
 
@@ -23,13 +24,11 @@ def progress_for_user(db: Session, user: User) -> list[dict]:
         .all()
     )
     totals = dict(db.query(Lesson.subject_id, func.count(Lesson.id)).group_by(Lesson.subject_id).all())
-    done = dict(
-        db.query(Lesson.subject_id, func.count(LessonCompletion.id))
-        .join(LessonCompletion, LessonCompletion.lesson_id == Lesson.id)
-        .filter(LessonCompletion.user_id == user.id)
-        .group_by(Lesson.subject_id)
-        .all()
-    )
+    lessons_of: dict[int, list[int]] = {}
+    for lesson_id, subject_id in db.query(Lesson.id, Lesson.subject_id).filter(Lesson.subject_id.in_([s.id for s in subjects])):
+        lessons_of.setdefault(subject_id, []).append(lesson_id)
+    # what counts as completed is decided in completion.py (so this agrees with the lessons page and the roadmap)
+    done = {s.id: len(completion.finished_ids(db, user, s, lessons_of.get(s.id, []))) for s in subjects}
     result = []
     for subject in subjects:
         total = totals.get(subject.id, 0)

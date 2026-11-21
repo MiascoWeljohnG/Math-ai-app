@@ -223,3 +223,100 @@ def test_manage_lessons_has_the_generate_game_button():
     assert 'id="lessonGameGenerateBtn"' in (root / "manage-lessons.html").read_text()
     script = (root / "js/teacher.js").read_text()
     assert "games/generate" in script and "renderGamePack" in script
+
+
+# ---------------------------------------------------------------- only the lesson's own game is written
+EVERYTHING = {
+    "terms": [{"word": w, "clue": c} for w, c in [("SQUARE", "A number times itself"), ("CUBES", "Three equal factors"),
+                                                    ("ROOTS", "Undo a power"), ("POWER", "The little raised number")]],
+    "sort": {"left": "Even", "right": "Odd", "items": [{"text": "2", "side": "left"}, {"text": "4", "side": "left"},
+                                                          {"text": "3", "side": "right"}, {"text": "5", "side": "right"}]},
+    "blanks": [{"sentence": f"Fact {i} is ___ here.", "answer": f"word{i}"} for i in range(4)],
+    "match": [{"a": f"term{i}", "b": f"meaning {i}"} for i in range(5)],
+}
+
+
+@pytest.fixture
+def greedy_model(monkeypatch):
+    """A model that always writes content for EVERY game, whatever it was asked. Records each prompt."""
+    import json
+    from routes import games_routes
+    prompts = []
+
+    async def fake(system, prompt, branch, query, school_id=None):
+        prompts.append(prompt)
+        return json.dumps(EVERYTHING)
+
+    monkeypatch.setattr(games_routes, "generate_text", fake)
+    games_routes._CACHE.clear()
+    return prompts
+
+
+def with_game(world, game):
+    lesson = add(world, "published")
+    lesson.preferred_game = game
+    world.db.commit()
+    return lesson, f"/subjects/{world.shared.id}/lessons/{lesson.id}"
+
+
+@pytest.mark.parametrize("game, part, others", [
+    ("sorting", "sort", ("terms", "blanks", "match")),
+    ("matching", "match", ("terms", "sort", "blanks")),
+    ("fill-blanks", "blanks", ("terms", "sort", "match")),
+    ("hangman", "terms", ("sort", "blanks", "match")),
+    ("word-search", "terms", ("sort", "blanks", "match")),
+])
+def test_the_model_is_only_asked_for_the_selected_game_and_only_that_is_kept(world, greedy_model, game, part, others):
+    lesson, url = with_game(world, game)
+    world.as_teacher()
+    made = world.post(url + "/games/generate").json()
+    assert len(greedy_model) == 1                                    # one call, not one per game
+    assert f'"{part}":' in greedy_model[0]                           # it was asked for this game's content...
+    assert all(f'"{other}":' not in greedy_model[0] for other in others)   # ...and nothing else
+    assert list(made["pack"]) == [part] and made["game"] == game     # even though this model wrote everything, only this is kept
+    world.db.refresh(lesson)
+    assert list(__import__("json").loads(lesson.game_pack)) == [part]
+    assert world.get(url).json()["game_status"] == "ready"
+
+
+def test_the_teacher_can_name_the_game_in_the_request(world, greedy_model):
+    lesson, url = with_game(world, "sorting")                        # saved as sorting, but the teacher just picked matching
+    world.as_teacher()
+    made = world.post(url + "/games/generate", json={"game_id": "matching"}).json()
+    assert list(made["pack"]) == ["match"]
+    assert world.post(url + "/games/generate", json={"game_id": "chess"}).status_code == 400
+
+
+def test_changing_the_lessons_game_needs_content_for_the_new_game(world, greedy_model):
+    lesson, url = with_game(world, "sorting")
+    world.as_teacher()
+    world.post(url + "/games/generate")
+    assert world.get(url).json()["game_status"] == "ready"
+    assert world.put(url + "/preferred-game", json={"game_id": "matching"}).status_code == 200
+    assert world.get(url).json()["game_status"] == "none"            # the sorting content does not help matching
+    world.post(url + "/games/generate")
+    assert world.get(url).json()["game_status"] == "ready" and len(greedy_model) == 2
+
+
+def test_a_student_only_triggers_the_assigned_games_content(world, greedy_model):
+    lesson, url = with_game(world, "sorting")
+    world.as_student()
+    pack = world.post(url + "/games").json()
+    assert list(pack) == ["sort"] and len(greedy_model) == 1
+    assert '"terms":' not in greedy_model[0] and '"match":' not in greedy_model[0]
+    assert world.post(url + "/games").json() == pack and len(greedy_model) == 1      # cached: no second call
+    assert world.post(url + "/games?game=hangman").json().keys() == {"terms"}       # a different game is its own request
+    assert world.post(url + "/games?game=chess").status_code == 400
+
+
+def test_free_play_on_a_lesson_with_no_game_still_gets_every_game(world, greedy_model):
+    lesson, url = with_game(world, None)
+    world.as_student()
+    assert set(world.post(url + "/games").json()) == {"terms", "sort", "blanks", "match"}
+    assert all(f'"{part}":' in greedy_model[0] for part in ("terms", "sort", "blanks", "match"))
+
+
+def test_teacher_script_sends_the_selected_game_when_generating():
+    from pathlib import Path
+    script = (Path(__file__).resolve().parents[2] / "frontend/js/teacher.js").read_text()
+    assert "games/generate`, { game_id:" in script

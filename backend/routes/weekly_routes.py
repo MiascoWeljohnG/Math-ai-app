@@ -10,10 +10,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import completion
 import weekly
 from auth import require_school_admin
 from database import get_db
-from models import ACTIVE, AuditLog, Lesson, LessonCompletion, Subject, User, WeeklySchedule
+from models import ACTIVE, AuditLog, Lesson, Subject, User, WeeklySchedule
 from school import in_school, shared_subjects
 
 router = APIRouter(prefix="/school-admin/weekly", tags=["weekly"])
@@ -47,13 +48,10 @@ def _state(db: Session, subject: Subject, user: User) -> dict:
 
     students = db.query(func.count(User.id)).filter(
         User.role == "user", User.status == ACTIVE, in_school(User.school_id, user.school_id)).scalar() or 0
-    finished = dict(
-        db.query(LessonCompletion.lesson_id, func.count(LessonCompletion.id))
-        .join(User, User.id == LessonCompletion.user_id)
-        .filter(LessonCompletion.lesson_id.in_([l.id for l in lessons]), User.role == "user", User.status == ACTIVE,
-                in_school(User.school_id, user.school_id))
-        .group_by(LessonCompletion.lesson_id).all()
-    ) if lessons else {}
+    people = [i for (i,) in db.query(User.id).filter(User.role == "user", User.status == ACTIVE, in_school(User.school_id, user.school_id))]
+    finished: dict[int, int] = {}   # lesson id -> students who finished it (completion.py: passed its quiz, or no quiz and marked complete)
+    for _, lesson_id in completion.finished_pairs(db, [l.id for l in lessons], people):
+        finished[lesson_id] = finished.get(lesson_id, 0) + 1
 
     rows = []
     for lesson in lessons:
