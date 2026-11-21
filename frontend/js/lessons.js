@@ -68,6 +68,7 @@ const paceLegend = document.getElementById("paceLegend");
 // Modal Elements
 const lessonModal = document.getElementById("lessonModal");
 document.getElementById("closeLessonModal").addEventListener("click", () => lessonModal.close());
+lessonModal.addEventListener("click", (event) => { if (event.target === lessonModal) lessonModal.close(); });   // the dialog has no padding, so only the dim backdrop hits it
 openLessons.addEventListener("click", () => { if (!lessonModal.open) lessonModal.showModal(); });
 
 const generateBox = document.getElementById("generateBox");
@@ -99,7 +100,7 @@ async function loadSubjects() {
         const initialSubject = requestedSubject || subjects[0];
         const requestedLesson = Number(new URLSearchParams(window.location.search).get("lesson"));
         if (initialSubject) {
-            await selectSubject(initialSubject.id, { openList: !requestedLesson });
+            await selectSubject(initialSubject.id);
             if (requestedLesson && activeLessons.some(lesson => lesson.id === requestedLesson)) await selectLesson(requestedLesson);
             else if (requestedLesson && !lessonModal.open) lessonModal.showModal();
         }
@@ -136,14 +137,29 @@ function updateLessonButton() {
     openLessons.disabled = activeSubjectId === null;
 }
 
-function showPlaceholder(text) {
-    const placeholder = document.createElement("p");
-    placeholder.className = "lesson-empty";
-    placeholder.textContent = text;
-    lessonContent.replaceChildren(placeholder);
+function showPlaceholder(text, withButton = false) {
+    const box = document.createElement("div");
+    box.className = "lesson-empty-state";
+    const ico = document.createElement("span");
+    ico.className = "lesson-empty-ico";
+    ico.setAttribute("aria-hidden", "true");
+    ico.innerHTML = '<svg class="icon" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5"/><path d="M9 8h6"/></svg>';
+    const message = document.createElement("p");
+    message.className = "lesson-empty";
+    message.textContent = text;
+    box.append(ico, message);
+    if (withButton) {
+        const open = document.createElement("button");
+        open.type = "button";
+        open.className = "complete-btn choose-lesson-btn";
+        open.textContent = "Choose a lesson";
+        open.addEventListener("click", () => { if (!lessonModal.open) lessonModal.showModal(); });
+        box.append(open);
+    }
+    lessonContent.replaceChildren(box);
 }
 
-async function selectSubject(subjectId, { openList = true } = {}) {
+async function selectSubject(subjectId) {
     activeSubjectId = subjectId;
     subjectSelect.value = String(subjectId);
     showPickerError("");
@@ -166,8 +182,8 @@ async function selectSubject(subjectId, { openList = true } = {}) {
         renderLessonList(activeLessons);
         updateSubjectProgress();
 
-        // Automatically pop up the lesson list when a new subject is selected
-        if (openList && !lessonModal.open) lessonModal.showModal();
+        // The list only opens when the student presses the Lesson button (or the button in the empty state).
+        if (!activeLessonId && activeLessons.length) showPlaceholder("Pick a lesson to begin.", true);
     } catch (error) {
         if (activeSubjectId === subjectId) lessonListContainer.textContent = error.message;
     }

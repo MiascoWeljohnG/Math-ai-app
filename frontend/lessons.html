@@ -49,11 +49,31 @@
 
         /* --- Lesson List Modal --- */
         .lesson-modal { margin: auto; padding: 1.5rem; border: 1px solid var(--field-border); border-radius: 12px; background: var(--bg-elevated); color: var(--text); width: 420px; max-width: 90vw; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
-        .lesson-modal::backdrop { background: rgba(0,0,0,0.5); }
+        .lesson-modal:focus { outline: none; }
+        .lesson-modal::backdrop { background: rgba(10,14,35,0.55); backdrop-filter: blur(2px); }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
         .modal-header h2 { font-size: 1.2rem; margin: 0; color: var(--heading); }
-        .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); line-height: 1;}
-        .close-modal:hover { color: var(--danger); }
+        .close-modal { flex: none; display: inline-grid; place-items: center; width: 2.25rem; height: 2.25rem; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); cursor: pointer; }
+        .close-modal .icon { width: 1.15rem; height: 1.15rem; stroke-width: 2.2; }
+        .close-modal:hover { background: var(--hover-bg); color: var(--text); }
+        .close-modal:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+
+        /* The lesson picker: a fixed header, a body that scrolls on its own, and room for a lesson title to sit on one or two lines */
+        .lesson-picker-modal { padding: 0; width: min(580px, 92vw); max-width: none; max-height: min(86vh, 780px); overflow: hidden; }
+        .lesson-picker-modal[open] { display: flex; flex-direction: column; }
+        .lesson-picker-modal .modal-header { flex: none; margin: 0; padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); }
+        .lesson-picker-modal .modal-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 1.1rem 1.25rem 1.4rem; }
+        @media (max-width: 640px) { .lesson-picker-modal { width: 94vw; max-height: 88vh; } .lesson-picker-modal .modal-scroll { padding: 1rem; } }
+
+        /* Nothing picked yet: a centred prompt with a button, since the list no longer opens by itself */
+        .lesson-empty-state { display: grid; justify-items: center; gap: 0.7rem; padding: 2.2rem 1rem; text-align: center; }
+        .lesson-empty-state p { margin: 0; }
+        .lesson-empty-ico { display: grid; place-items: center; width: 3.2rem; height: 3.2rem; border-radius: 16px; background: var(--pri2); color: var(--accent); }
+        .lesson-empty-ico .icon { width: 1.5rem; height: 1.5rem; stroke-width: 1.9; }
+        .complete-btn.choose-lesson-btn { margin-top: 0.3rem; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+        .complete-btn.choose-lesson-btn:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+        .picker-btn { position: relative; padding-right: 2.6rem; }
+        .picker-btn::after { content: ""; position: absolute; right: 1.1rem; top: 50%; width: 0.5rem; height: 0.5rem; border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted); transform: translateY(-70%) rotate(45deg); }
         
         #lessonListContainer { display: grid; gap: 0.5rem; }
         .lesson-row { display: flex; align-items: center; gap: 0.8rem; width: 100%; padding: 0.75rem 0.9rem; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-input); color: var(--text); font: inherit; font-size: 0.95rem; text-align: left; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
@@ -154,11 +174,12 @@ mjx-container::-webkit-scrollbar-thumb {
         </article>
 
         <!-- NEW: Hidden Modal for the Lesson List -->
-        <dialog id="lessonModal" class="lesson-modal">
+        <dialog id="lessonModal" class="lesson-modal lesson-picker-modal" autofocus aria-labelledby="lessonModalTitle">
             <div class="modal-header">
-                <h2>Select a Lesson</h2>
-                <button id="closeLessonModal" class="close-modal" title="Close">&times;</button>
+                <h2 id="lessonModalTitle">Select a Lesson</h2>
+                <button id="closeLessonModal" type="button" class="close-modal" title="Close" aria-label="Close"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
             </div>
+            <div class="modal-scroll">
             <div id="subjectProgress" class="subject-progress" hidden>
                 <div class="progress-track"><div class="progress-fill" id="subjectProgressFill"></div></div>
                 <div class="progress-meta"><span id="subjectProgressLessons"></span><span id="subjectProgressPct"></span></div>
@@ -188,6 +209,7 @@ mjx-container::-webkit-scrollbar-thumb {
                 <button id="generateBtn" type="button" class="complete-btn" style="margin-top:0.5rem; width:100%;"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15v4M17 17h4"/></svg> Generate lesson</button>
                 <p id="generateStatus" class="lesson-empty" style="font-size:0.8rem; margin-top:0.4rem;" aria-live="polite"></p>
             </div>
+        </div>
         </dialog>
 
         <!-- Shown when an uploaded file doesn't seem to match the subject -->

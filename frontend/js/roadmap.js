@@ -33,6 +33,14 @@ const PACE_ICON = {
 };
 const PACE_LABEL = { current: "This week", behind: "Behind", done: "Completed", closed: "Not open yet" };
 function paceIcon(pace) { const span = el("span", { className: "pace-ico" }); span.innerHTML = PACE_ICON[pace]; return span; }
+
+// Study plan icons (inline SVG, currentColor); trusted constants, never user text.
+const ICON_CLOCK = svgIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>');
+const ICON_BOLT = svgIcon('<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>');
+const ICON_TUNE = svgIcon('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>');
+const ICON_PLAN = svgIcon('<path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8"/>');
+function spIcon(svg, className) { const span = el("span", { className }); span.innerHTML = svg; return span; }
+function spTag(kind, text, svg) { const tag = el("span", { className: `sp-tag ${kind}` }); tag.innerHTML = svg; tag.append(text); return tag; }
 const dayText = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 function paceNote(lesson) {
     if (lesson.week_number == null) return "Not in your school's weekly plan yet";
@@ -87,12 +95,26 @@ function renderSubject(subject) {
             chip, levelChip, practice,
         );
     });
-    const plan = subject.study_plan.map(item => el("div", { className: "plan-lesson" },
-        el("strong", {}, `${item.title} · about ${item.minutes} min`
-            + (item.fast_track ? " · fast track" : item.level === "struggling" || item.level === "developing" ? " · adjusted for you" : "")),
-        el("ul", {}, ...item.steps.map(step => el("li", {},
-            step.href ? el("a", { href: step.href }, step.text) : step.text, ` (~${step.minutes} min)`))),
-    ));
+    const plan = subject.study_plan.map((item, n) => {
+        const adjusted = !item.fast_track && (item.level === "struggling" || item.level === "developing");
+        const tags = el("div", { className: "sp-tags" }, spTag("time", `${item.minutes} min`, ICON_CLOCK));
+        if (item.fast_track) tags.append(spTag("fast", "Fast track", ICON_BOLT));
+        else if (adjusted) tags.append(spTag("adjusted", "Adjusted for you", ICON_TUNE));
+        return el("li", { className: `sp-card${item.fast_track ? " fast" : adjusted ? " adjusted" : ""}` },
+            el("div", { className: "sp-card-head" }, el("h4", { className: "sp-title" }, item.title), tags),
+            el("ol", { className: "sp-steps" }, ...item.steps.map((step, i) => el("li", { className: "sp-step" },
+                el("span", { className: "sp-num" }, String(i + 1)),
+                el("div", { className: "sp-body" },
+                    step.href ? el("a", { className: "sp-text", href: step.href }, step.text) : el("span", { className: "sp-text" }, step.text),
+                    el("span", { className: "sp-min" }, `~${step.minutes} min`))))));
+    });
+    const planTotal = subject.study_plan.reduce((sum, item) => sum + (item.minutes || 0), 0);
+    const planBlock = plan.length ? el("section", { className: "sp" },
+        el("div", { className: "sp-head" },
+            spIcon(ICON_PLAN, "sp-head-ico"),
+            el("div", {}, el("h3", {}, "Your study plan"),
+                el("p", {}, `${plan.length} lesson${plan.length === 1 ? "" : "s"} · about ${planTotal} min in total`))),
+        el("ol", { className: "sp-list" }, ...plan)) : "";
     return el("section", { className: "card" },
         el("h2", {}, subject.branch + (subject.is_personal ? " (personal)" : "")),
         el("p", { className: "muted" }, `${subject.completed} of ${subject.total} lessons done · ${subject.percent}%`),
@@ -100,8 +122,7 @@ function renderSubject(subject) {
         subject.total ? el("h3", {}, subject.weekly ? `Weekly plan${subject.current_week ? ` · your school is on week ${subject.current_week}` : " · not started yet"}` : "Lessons in order") : el("p", { className: "muted" }, "No lessons yet."),
         subject.weekly && subject.total ? paceLegend() : "",
         el("ol", { className: "plain" }, ...lessons),
-        plan.length ? el("h3", {}, "Your study plan") : "",
-        ...plan,
+        planBlock,
         subject.total && !plan.length
             ? el("p", { className: "muted" }, subject.weekly && lessons.some(li => li.classList.contains("pace-closed")) && subject.completed < subject.total
                 ? "You're all caught up for now. New lessons appear when your school opens them."

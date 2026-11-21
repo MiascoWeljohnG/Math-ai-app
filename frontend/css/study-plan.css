@@ -1,0 +1,44 @@
+/* Roadmap "Your study plan": a card per lesson, numbered steps joined by a line, minutes as small chips.
+   Only theme variables are used, so it follows light and dark mode. */
+.sp { margin-top: 1.6rem; padding-top: 1.2rem; border-top: 1px solid var(--border); }
+.sp-head { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.9rem; }
+.sp-head-ico { flex: none; width: 2.4rem; height: 2.4rem; display: grid; place-items: center; border-radius: 12px; background: var(--pri2); color: var(--accent); }
+.sp-head-ico .icon { width: 1.25rem; height: 1.25rem; stroke-width: 2; }
+.sp-head h3 { margin: 0; font: 800 1.1rem/1.2 var(--font-display); color: var(--heading); }
+.sp-head p { margin: 0.15rem 0 0; font-size: 0.8rem; color: var(--text-muted); }
+
+.sp-list { display: grid; gap: 0.8rem; margin: 0; padding: 0; list-style: none; }
+.sp-card { padding: 0.9rem 1rem 1rem; border: 1px solid var(--border); border-left: 5px solid var(--accent); border-radius: var(--r-md); background: var(--bg-input); }
+.sp-card.adjusted { border-left-color: #E0A100; }
+.sp-card.fast { border-left-color: var(--ok); }
+
+.sp-card-head { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 0.4rem 0.6rem; margin-bottom: 0.8rem; }
+.sp-title { flex: 1 1 14rem; min-width: 0; margin: 0; font: 700 0.98rem/1.35 var(--font-display); color: var(--heading); overflow-wrap: break-word; }
+.sp-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.sp-tag { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.18rem 0.6rem; border-radius: 999px; border: 1px solid var(--field-border);
+    background: var(--bg-elevated); color: var(--text-muted); font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+.sp-tag .icon { width: 0.8rem; height: 0.8rem; stroke-width: 2.4; }
+.sp-tag.time { color: var(--accent); border-color: var(--accent); }
+.sp-tag.adjusted { color: #B9770E; border-color: #E0A100; }
+.sp-tag.fast { color: var(--ok); border-color: var(--ok); }
+[data-theme="dark"] .sp-tag.adjusted { color: #F2C14E; }
+
+.sp-steps { margin: 0; padding: 0; list-style: none; }
+.sp-step { position: relative; display: flex; align-items: flex-start; gap: 0.75rem; padding: 0 0 0.85rem; }
+.sp-step:last-child { padding-bottom: 0; }
+.sp-step::before { content: ""; position: absolute; left: 0.8rem; top: 1.8rem; bottom: 0.1rem; width: 2px; background: var(--border); }   /* the line joining step circles */
+.sp-step:last-child::before { display: none; }
+.sp-num { position: relative; flex: none; width: 1.7rem; height: 1.7rem; display: grid; place-items: center; border-radius: 50%;
+    background: var(--bg-elevated); border: 2px solid var(--accent); color: var(--accent); font-size: 0.75rem; font-weight: 800; }
+.sp-body { flex: 1; min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 0.3rem 0.8rem; padding-top: 0.1rem; }
+.sp-text { min-width: 0; font-size: 0.92rem; line-height: 1.4; color: var(--text); overflow-wrap: break-word; }
+a.sp-text { color: var(--accent); font-weight: 600; text-decoration: none; }
+a.sp-text:visited { color: var(--accent); }
+a.sp-text:hover { text-decoration: underline; }
+a.sp-text:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; border-radius: 4px; }
+.sp-min { flex: none; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-muted); font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+
+@media (max-width: 600px) {
+    .sp-card { padding: 0.8rem 0.85rem 0.9rem; }
+    .sp-body { flex-direction: column; align-items: flex-start; gap: 0.3rem; }   /* minutes always sit under the step text */
+}
