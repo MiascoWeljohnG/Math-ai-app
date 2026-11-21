@@ -31,6 +31,15 @@ from school import in_school, shared_subjects, visible_subjects
 
 router = APIRouter(prefix="/subjects", tags=["subjects"])
 
+# Which parts of the game pack each lesson game needs (used by games_routes.py)
+GAME_PARTS = {
+    "hangman": ("terms",),
+    "word-search": ("terms",),
+    "matching": ("match",),
+    "sorting": ("sort",),
+    "fill-blanks": ("blanks",),
+}
+
 
 def _serialize_subject(subject: Subject) -> dict:
     return {
@@ -530,7 +539,7 @@ async def draft_lesson(
     topic = req.topic.strip()
     if not topic:
         raise HTTPException(status_code=400, detail="Lesson topic is required")
-    allowed_games = {"hangman", "word-search", "matching", "sorting", "fill-blanks"}
+    allowed_games = set(GAME_PARTS)
     preferred_game = (req.preferred_game or "").strip() or None
     if preferred_game is not None and (preferred_game not in allowed_games or user.role not in ("teacher", "school_admin")):
         raise HTTPException(status_code=400, detail="Choose a valid game as a teacher")
@@ -657,7 +666,7 @@ async def generate_lesson(
     topic = req.topic.strip()
     if not topic:
         raise HTTPException(status_code=400, detail="Lesson topic is required")
-    allowed_games = {"hangman", "word-search", "matching", "sorting", "fill-blanks"}
+    allowed_games = set(GAME_PARTS)
     preferred_game = (req.preferred_game or "").strip() or None
     if preferred_game is not None and (preferred_game not in allowed_games or user.role not in ("teacher", "school_admin")):
         raise HTTPException(status_code=400, detail="Choose a valid game as a teacher")
