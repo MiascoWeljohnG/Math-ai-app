@@ -66,3 +66,23 @@
 .pace-warning[hidden] { display: none; }
 .pace-warning span { flex: 1 1 16rem; color: var(--text-muted); }
 .pace-warning strong { color: var(--danger); }
+
+
+/* --- roadmap weekly cards: SVG icons + phone layout --- */
+.pace-ico { display: inline-flex; align-items: center; }
+.pace-ico .icon { width: 0.95em; height: 0.95em; stroke-width: 2.4; vertical-align: 0; }
+.lesson.paced .num .icon { width: 1rem; height: 1rem; }
+.pace-pill .pace-ico .icon { width: 0.85rem; height: 0.85rem; }
+
+@media (max-width: 600px) {
+    /* The title takes the whole row after the number; the pill and chips drop to a second row under the title
+       (before, they sat in the same row and squeezed the title into a one-word-wide column). */
+    .lesson.paced { flex-wrap: wrap; align-items: flex-start; gap: 0.5rem 0.7rem; padding: 0.75rem 0.85rem; }
+    .lesson.paced .lesson-main { flex: 1 1 calc(100% - 2.5rem); min-width: 0; }
+    .lesson.paced .lesson-main a, .lesson.paced .lesson-main .closed { overflow-wrap: break-word; word-break: normal; line-height: 1.35; }
+    .lesson.paced .lesson-main + * { margin-left: 2.5rem; }   /* line the pill up under the title, past the number circle */
+    .lesson.paced .practice-link { margin-left: 0; }
+    .lesson-row.paced { flex-wrap: wrap; gap: 0.5rem 0.7rem; }
+    .lesson-row.paced .lesson-main { flex: 1 1 calc(100% - 3rem); }
+    .lesson-row.paced .lesson-main + .pace-pill { margin-left: 2.6rem; }
+}

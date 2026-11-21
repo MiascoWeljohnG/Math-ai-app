@@ -23,7 +23,16 @@ const LEVEL_LABEL = { struggling: "Needs review", developing: "Almost there", pr
 
 // Weekly plan colours (same states as lessons.js): blue = this week's task, red = behind the class, green = completed,
 // gray = the school has not opened it yet.
-const PACE_LABEL = { current: "● This week", behind: "! Behind", done: "✓ Completed", closed: "🔒 Not open yet" };
+// Inline SVG icons (drawn with currentColor, so they follow each state's colour); trusted constants, never user text.
+const svgIcon = (inner) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
+const PACE_ICON = {
+    current: svgIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+    behind:  svgIcon('<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>'),
+    done:    svgIcon('<path d="M20 6 9 17l-5-5"/>'),
+    closed:  svgIcon('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
+};
+const PACE_LABEL = { current: "This week", behind: "Behind", done: "Completed", closed: "Not open yet" };
+function paceIcon(pace) { const span = el("span", { className: "pace-ico" }); span.innerHTML = PACE_ICON[pace]; return span; }
 const dayText = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 function paceNote(lesson) {
     if (lesson.week_number == null) return "Not in your school's weekly plan yet";
@@ -63,12 +72,12 @@ function renderSubject(subject) {
         if (lesson.pace) {   // a school-scheduled subject: a coloured card instead of a plain row
             const closed = lesson.pace === "closed";
             return el("li", { className: `lesson paced pace-${lesson.pace}` },
-                el("span", { className: "num" }, lesson.pace === "done" ? "✓" : closed ? "🔒" : String(i + 1)),
+                el("span", { className: "num" }, lesson.pace === "done" || closed ? paceIcon(lesson.pace) : String(i + 1)),
                 el("span", { className: "lesson-main" },
                     closed ? el("span", { className: "closed" }, lesson.title)
                         : el("a", { href: `lessons.html?subject=${subject.subject_id}&lesson=${lesson.id}` }, lesson.title),
                     el("span", { className: "lesson-sub" }, paceNote(lesson))),
-                el("span", { className: `pace-pill pace-${lesson.pace}` }, PACE_LABEL[lesson.pace]),
+                el("span", { className: `pace-pill pace-${lesson.pace}` }, paceIcon(lesson.pace), PACE_LABEL[lesson.pace]),
                 closed ? "" : levelChip, closed ? "" : practice,
             );
         }
