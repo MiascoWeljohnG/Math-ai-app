@@ -119,7 +119,17 @@ PAGE_RANGE_CHARS = int(os.getenv("PAGE_RANGE_CHARS", "14000"))
 # or for lessons, text printed inside a figure is read with OCR, and, if a Groq vision model is set (GROQ_VISION_MODEL),
 # each figure also gets a short description. Both end up in the page's text as "[Figure: ...]".
 FIGURE_OCR = os.getenv("FIGURE_OCR", "1") != "0"
-FIGURE_DESCRIPTIONS = os.getenv("FIGURE_DESCRIPTIONS", "1") != "0"   # only does anything when GROQ_VISION_MODEL is set
+FIGURE_DESCRIPTIONS = os.getenv("FIGURE_DESCRIPTIONS", "1") != "0"   # only does anything when GROQ_VISION_MODEL (or OLLAMA_VISION_MODEL) is set
 FIGURE_MAX_VISION = int(os.getenv("FIGURE_MAX_VISION", "15"))        # vision calls per file (rate limits, speed)
 FIGURE_MAX_OCR = int(os.getenv("FIGURE_MAX_OCR", "60"))              # figures read with OCR per file
 FIGURE_MIN_PX = int(os.getenv("FIGURE_MIN_PX", "120"))               # smaller images (icons, bullets, logos) are skipped
+
+# PDFs are read this many pages at a time; memory is released between batches. Every page is still read.
+PDF_BATCH_PAGES = int(os.getenv("PDF_BATCH_PAGES", "10"))
+
+# Reserve for the Groq vision model: a vision model served by Ollama (for example gemma4:e4b on your own computer, reached
+# through a tunnel). Used when Groq is out of quota / rate limited / failing, or alone when no Groq vision model is set.
+# Off unless OLLAMA_VISION_MODEL is set. OLLAMA_BASE_URL is the address of the Ollama server (no /v1 needed).
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "").strip()
+OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "").strip()
+OLLAMA_VISION_TIMEOUT = int(os.getenv("OLLAMA_VISION_TIMEOUT", "45"))   # seconds to wait for one figure

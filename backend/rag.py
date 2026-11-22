@@ -372,30 +372,28 @@ def extract_text_by_page(file_path: str) -> list[tuple[int, str, list[str]]]:
     path = Path(file_path)
     return extract_text_from_bytes(path.name, path.read_bytes())
 
-def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[int, int] | None = None,
-                            figures_too: bool = False) -> list[tuple[int, str, list[str]]]:
-    """[(page number, text, tables)]. `page_range` = (first, last) makes a PDF read only those pages: on a
-    300-page module that is the difference between seconds and a minute. Other file types ignore it."""
-    suffix = Path(filename).suffix.lower()
-    if suffix in ocr.IMAGE_SUFFIXES:   # a photo or scan of a page: read it with OCR
-        try:
-            text = ocr.ocr_image_bytes(contents).strip()
-        except ocr.OcrUnavailable as exc:
-            raise ValueError(str(exc)) from exc
-        return [(1, text, [])] if text else []
-
-    if suffix == ".pdf":
-        import pdfplumber
-        pages = []
-        scanned = ocr_missing = 0
-        figure_budget = figures.Budget()
+def _pdf_page_batches(contents: bytes, page_range: tuple[int, int] | None = None, figures_too: bool = False):
+    """Read a PDF PDF_BATCH_PAGES pages at a time (10 by default) and yield (pages, pages_done, pages_total) after each
+    batch, where `pages` is [(page number, text, tables)] for that batch. Every page is still read. After each batch the
+    document is closed and its memory handed back before the next batch is opened, so a long module never has more
+    than a few pages' worth of parsed objects and page images alive at once (a small Render instance runs out of RAM
+    otherwise). The caller can put each batch to use (index it) before the next one is read."""
+    import pdfplumber
+    scanned = ocr_missing = 0
+    any_pages = False
+    figure_budget = figures.Budget()
+    with pdfplumber.open(io.BytesIO(contents)) as pdf:
+        total = len(pdf.pages)
+    start = max(page_range[0] if page_range is not None else 1, 1)
+    last = min(page_range[1], total) if page_range is not None else total
+    span = max(last - start + 1, 0)
+    step = max(1, config.PDF_BATCH_PAGES)
+    for batch_first in range(start, last + 1, step):
+        batch_last = min(batch_first + step - 1, last)
+        batch = []
         with pdfplumber.open(io.BytesIO(contents)) as pdf:
-            for i, page in enumerate(pdf.pages, start=1):
-                if page_range is not None:
-                    if i < page_range[0]:
-                        continue
-                    if i > page_range[1]:
-                        break
+            for i in range(batch_first, batch_last + 1):
+                page = pdf.pages[i - 1]
                 text = (page.extract_text() or "").strip()
                 tables = [_table_to_markdown(t) for t in page.extract_tables()]
                 tables = [t for t in tables if t]
@@ -411,17 +409,40 @@ def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[in
                         except ocr.OcrUnavailable:
                             ocr_missing = 1
                 if text or tables:
-                    pages.append((i, text, tables))
-                # pdfplumber keeps every parsed page object in memory until told otherwise; on a long PDF that is
-                # what runs a small Render instance out of RAM. Release each page as soon as it is read.
+                    batch.append((i, text, tables))
                 page.flush_cache()
                 if hasattr(page, "close"):
                     page.close()
-                if i % 10 == 0:
-                    gc.collect()
-        if ocr_missing and not pages:
-            raise ValueError("This PDF has no text layer (it is a scan) and OCR is not available on the server, so it can't be read.")
-        return pages
+        gc.collect()   # the batch's pages and images are released here, before the next ones are opened
+        any_pages = any_pages or bool(batch)
+        yield batch, batch_last - start + 1, span
+    if ocr_missing and not any_pages:
+        raise ValueError("This PDF has no text layer (it is a scan) and OCR is not available on the server, so it can't be read.")
+
+
+def iter_text_batches(filename: str, contents: bytes, figures_too: bool = False):
+    """(pages, pages_done, pages_total) batches of a file's text. A PDF arrives PDF_BATCH_PAGES pages at a time; other
+    types (which have no fixed pages to read in turn) arrive as one batch."""
+    if Path(filename).suffix.lower() == ".pdf":
+        yield from _pdf_page_batches(contents, None, figures_too)
+    else:
+        yield extract_text_from_bytes(filename, contents, figures_too=figures_too), 1, 1
+
+
+def extract_text_from_bytes(filename: str, contents: bytes, page_range: tuple[int, int] | None = None,
+                            figures_too: bool = False) -> list[tuple[int, str, list[str]]]:
+    """[(page number, text, tables)]. `page_range` = (first, last) makes a PDF read only those pages: on a
+    300-page module that is the difference between seconds and a minute. Other file types ignore it."""
+    suffix = Path(filename).suffix.lower()
+    if suffix in ocr.IMAGE_SUFFIXES:   # a photo or scan of a page: read it with OCR
+        try:
+            text = ocr.ocr_image_bytes(contents).strip()
+        except ocr.OcrUnavailable as exc:
+            raise ValueError(str(exc)) from exc
+        return [(1, text, [])] if text else []
+
+    if suffix == ".pdf":
+        return [page for batch, _, _ in _pdf_page_batches(contents, page_range, figures_too) for page in batch]
 
     elif suffix in {".txt", ".md"}:
         return [(0, contents.decode("utf-8-sig"), [])]
@@ -536,35 +557,49 @@ def _index_documents(documents: list[tuple[str, str, str, bytes]], school_id=_UN
         separators=["\n\n", "\n", " ", ""]
     )
 
-    all_chunks = []
-    all_metadatas = []
-    all_ids = []
+    # Each file is handled a few pages at a time (PDF_BATCH_PAGES): read the pages, cut them into chunks, embed them and
+    # store them, then let go of that batch before the next pages are read. So memory stays small however long the
+    # file is, and the chunks show up in the database as the file is worked through. If anything fails part-way,
+    # everything this call stored is removed again, so a file is never left half-indexed (a half-indexed file would
+    # count as "already indexed" and never be retried).
+    stored_ids: list[str] = []
+    total_chunks = 0
+    try:
+        for source, note_branch, file_name, contents in documents:
+            path_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
+            note_type = "uploaded_material"
+            file_school = _school_of_source(source) if school_id is _UNSET else school_id
 
-    for source, note_branch, file_name, contents in documents:
-        path_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()
-        note_type = "uploaded_material"
-        file_school = _school_of_source(source) if school_id is _UNSET else school_id
-        pages = extract_text_from_bytes(file_name, contents, figures_too=True)
+            for pages, pages_done, pages_total in iter_text_batches(file_name, contents, figures_too=True):
+                batch_chunks, batch_metadatas, batch_ids = [], [], []
+                for page_number, page_text, tables in pages:
+                    content = "\n\n".join([page_text, *tables]).strip()
+                    if not content:
+                        continue
+                    for j, chunk in enumerate(splitter.split_text(content)):
+                        batch_chunks.append(chunk)
+                        batch_metadatas.append({
+                            "source": source,
+                            "page": page_number,
+                            "branch": note_branch,
+                            "type": note_type,
+                            "school_id": file_school,
+                        })
+                        batch_ids.append(f"obsidian_{path_hash}_page{page_number}_part{j}")
+                if batch_chunks:
+                    store.upsert(batch_ids, batch_chunks, batch_metadatas, embeddings.embed_documents(batch_chunks))
+                    stored_ids += batch_ids
+                    total_chunks += len(batch_chunks)
+                _report(phase="embedding", done=pages_done, total=pages_total)   # "X of Y sections" on the Uploads page
+    except Exception:
+        if stored_ids:
+            try:
+                store.delete_ids(stored_ids)
+            except Exception:
+                log.warning("Couldn't remove the %d chunks stored before indexing failed", len(stored_ids))
+        raise
 
-        for page_number, page_text, tables in pages:
-            content = "\n\n".join([page_text, *tables]).strip()
-            if not content:
-                continue
-            for j, chunk in enumerate(splitter.split_text(content)):
-                all_chunks.append(chunk)
-                all_metadatas.append({
-                    "source": source,
-                    "page": page_number,
-                    "branch": note_branch,
-                    "type": note_type,
-                    "school_id": file_school,
-                })
-                all_ids.append(f"obsidian_{path_hash}_page{page_number}_part{j}")
-
-    if all_chunks:
-        store.upsert(all_ids, all_chunks, all_metadatas, embeddings.embed_documents(all_chunks))
-
-    return len(all_chunks), set(all_ids)
+    return total_chunks, set(stored_ids)
 
 def _safe_branch(branch: str) -> str:
     return re.sub(r"[^A-Za-z0-9 _-]", "", branch).strip() or "General"
@@ -685,6 +720,8 @@ def sync_drive_index(materials: list[tuple[str, str, str]], force: bool = False,
         try:
             contents = drive_storage.download_bytes(file_id)
             with indexing._one_at_a_time:   # one file at a time, shared with the upload queue
+                if force:   # a re-index replaces the file's chunks: ones from the old reading must not linger
+                    store.delete_source(source)
                 count, _ = _index_documents([(source, branch, PurePosixPath(source).name, contents)],
                                             (schools or {}).get(filename, _UNSET))
             chunks += count
