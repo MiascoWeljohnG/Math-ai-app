@@ -167,3 +167,13 @@
     .gm-game, .gm-xp span, .gm-node { transition: none; }
     .gm-chip.is-wrong, .gm-card.is-wrong, .gm-wheel.is-shake, .gm-stars.big span.is-on, .gm-levelup, .gm-note.busy::after { animation: none; }
 }
+
+/* ---------- Solve the Equation ---------- */
+.gm-question { font: 800 clamp(1.5rem, 5vw, 2.2rem) var(--font-display); text-align: center; margin: 1.2rem 0; overflow-wrap: anywhere; }
+.gm-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; max-width: 34rem; margin: 0 auto; }
+.gm-choice { padding: 0.9rem 1rem; border: 2px solid var(--field-border); border-radius: var(--r-md); background: var(--bg-elevated); color: var(--text); font: 700 1.25rem var(--font-display); cursor: pointer; touch-action: manipulation; }
+.gm-choice:hover:not(:disabled) { border-color: var(--accent); }
+.gm-choice:disabled { cursor: default; }
+.gm-choice.is-right { background: color-mix(in srgb, var(--gm-ok) 18%, var(--bg-elevated)); border-color: var(--gm-ok); }
+.gm-choice.is-wrong { background: color-mix(in srgb, var(--gm-bad) 16%, var(--bg-elevated)); border-color: var(--gm-bad); animation: gm-shake 0.4s; }
+.gm-question + .gm-choices + .gm-note { text-align: center; min-height: 3rem; }

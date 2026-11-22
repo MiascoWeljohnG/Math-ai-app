@@ -233,6 +233,7 @@ EVERYTHING = {
                                                           {"text": "3", "side": "right"}, {"text": "5", "side": "right"}]},
     "blanks": [{"sentence": f"Fact {i} is ___ here.", "answer": f"word{i}"} for i in range(4)],
     "match": [{"a": f"term{i}", "b": f"meaning {i}"} for i in range(5)],
+    "problems": [{"question": f"Solve for x: x + {i} = {i + 5}", "answer": "5", "wrong": ["4", "6", "7"], "steps": "Subtract."} for i in range(1, 5)],
 }
 
 
@@ -260,11 +261,12 @@ def with_game(world, game):
 
 
 @pytest.mark.parametrize("game, part, others", [
-    ("sorting", "sort", ("terms", "blanks", "match")),
-    ("matching", "match", ("terms", "sort", "blanks")),
-    ("fill-blanks", "blanks", ("terms", "sort", "match")),
-    ("hangman", "terms", ("sort", "blanks", "match")),
-    ("word-search", "terms", ("sort", "blanks", "match")),
+    ("sorting", "sort", ("terms", "blanks", "match", "problems")),
+    ("matching", "match", ("terms", "sort", "blanks", "problems")),
+    ("fill-blanks", "blanks", ("terms", "sort", "match", "problems")),
+    ("hangman", "terms", ("sort", "blanks", "match", "problems")),
+    ("word-search", "terms", ("sort", "blanks", "match", "problems")),
+    ("equations", "problems", ("terms", "sort", "blanks", "match")),
 ])
 def test_the_model_is_only_asked_for_the_selected_game_and_only_that_is_kept(world, greedy_model, game, part, others):
     lesson, url = with_game(world, game)
@@ -312,11 +314,41 @@ def test_a_student_only_triggers_the_assigned_games_content(world, greedy_model)
 def test_free_play_on_a_lesson_with_no_game_still_gets_every_game(world, greedy_model):
     lesson, url = with_game(world, None)
     world.as_student()
-    assert set(world.post(url + "/games").json()) == {"terms", "sort", "blanks", "match"}
-    assert all(f'"{part}":' in greedy_model[0] for part in ("terms", "sort", "blanks", "match"))
+    assert set(world.post(url + "/games").json()) == {"terms", "sort", "blanks", "match", "problems"}
+    assert all(f'"{part}":' in greedy_model[0] for part in ("terms", "sort", "blanks", "match", "problems"))
 
 
 def test_teacher_script_sends_the_selected_game_when_generating():
     from pathlib import Path
     script = (Path(__file__).resolve().parents[2] / "frontend/js/teacher.js").read_text()
     assert "games/generate`, { game_id:" in script
+
+
+# ---------------------------------------------------------------- equation problems
+def test_check_problem_verifies_the_models_answers_by_arithmetic():
+    from routes.games_routes import check_problem
+    assert check_problem("Solve for x: 2x + 3 = 11", "4") is True
+    assert check_problem("Solve for x: 2x + 3 = 11", "5") is False
+    assert check_problem("Evaluate: 4 + 3 x 2", "10") is True         # a lone x between numbers is a times sign
+    assert check_problem("Solve for x: 3(x - 1) = 12", "x = 5") is True
+    assert check_problem("Solve for x: x/2 = 3/4", "3/2") is True
+    assert check_problem("What is the slope of y = 2x + 1?", "2") is None   # cannot be checked: kept, not dropped
+
+
+def test_clean_pack_drops_problems_with_a_wrong_answer_key():
+    from routes.games_routes import clean_pack
+    good = [{"question": f"Solve for x: x + {i} = {i + 5}", "answer": "5", "wrong": ["4", "5", "6", "6"], "steps": "Subtract."} for i in range(1, 5)]
+    bad = {"question": "Solve for x: 2x + 3 = 11", "answer": "5", "wrong": ["3"], "steps": ""}
+    word = {"question": "Name the top number of a fraction", "answer": "numerator", "wrong": []}   # no calculation: not a problem
+    pack = clean_pack({"problems": good + [bad, word]})
+    assert len(pack["problems"]) == 4
+    assert pack["problems"][0]["wrong"] == ["4", "6"]                  # the right answer and repeats are removed from the wrong ones
+    assert "problems" not in clean_pack({"problems": good[:3] + [bad]})   # too few left: the page makes its own
+
+
+def test_lesson_game_can_be_set_to_equations(world):
+    lesson = add(world, "published")
+    world.as_teacher()
+    response = world.put(f"/subjects/{world.shared.id}/lessons/{lesson.id}/preferred-game", json={"game_id": "equations"})
+    assert response.status_code == 200 and response.json()["preferred_game"] == "equations"
+

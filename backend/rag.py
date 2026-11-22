@@ -8,7 +8,6 @@ import json
 import io
 import re
 import uuid
-import chromadb
 import httpx
 from pathlib import Path, PurePosixPath
 from typing import Optional
@@ -22,8 +21,16 @@ import ocr
 
 log = logging.getLogger(__name__)
 
-chroma_client = chromadb.PersistentClient(path=config.CHROMA_PERSIST_DIR)
-collection = chroma_client.get_or_create_collection(name=config.CHROMA_COLLECTION)
+# Chroma is opened only when something really needs it (the on-disk fallback), so with pgvector it never loads.
+_chroma_client = None
+
+
+def get_chroma_client():
+    global _chroma_client
+    if _chroma_client is None:
+        import chromadb
+        _chroma_client = chromadb.PersistentClient(path=config.CHROMA_PERSIST_DIR)
+    return _chroma_client
 
 
 
@@ -173,7 +180,7 @@ embeddings = GeminiEmbeddings(
     max_retries=config.EMBEDDING_MAX_RETRIES, tokens_per_minute=config.EMBEDDING_TOKENS_PER_MINUTE,
 )
 # Where the searchable chunks live: Postgres (pgvector) when available, so they survive restarts; see vectorstore.py
-store = vectorstore.make_store(embeddings, chroma_client)
+store = vectorstore.make_store(embeddings, get_chroma_client)
 _chat_semaphore = asyncio.Semaphore(config.MAX_CONCURRENT_CHATS)
 _waiting_count = 0
 _waiting_lock = asyncio.Lock()

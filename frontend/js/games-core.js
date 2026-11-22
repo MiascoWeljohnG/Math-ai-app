@@ -2,7 +2,8 @@
 // content is loaded for a lesson.
 //
 // Game content ("a pack") looks like this. Every part is optional; whatever is missing is filled in from something simpler:
-//   { terms: [{word, clue}], sort: {left, right, items: [{text, side}]}, blanks: [{sentence, answer}], match: [{a, b}] }
+//   { terms: [{word, clue}], sort: {left, right, items: [{text, side}]}, blanks: [{sentence, answer}], match: [{a, b}],
+//     problems: [{question, answer, wrong: [..], steps}] }
 //
 //   1. The AI pack from the backend (POST /subjects/:id/lessons/:id/games), best quality.
 //   2. Words found in the lesson text itself (bold terms and their sentences), so games work with no model at all.
@@ -122,6 +123,44 @@ const BUILTIN_PACK = {
     ],
 };
 
+// ---------- equation problems ----------
+// Problems are the one part with no word fallback: a lesson's text cannot be turned into a checked calculation without a model.
+// When the AI pack has none, these are made here, so "Solve the Equation" always works and every answer is right.
+function makeProblems(level = 1, count = 6) {
+    const big = level >= 4 ? 2 : level >= 2 ? 1.5 : 1;
+    const n = (lo, hi) => randInt(Math.round(lo * big), Math.round(hi * big));
+    const makers = [
+        () => { const x = n(2, 15), a = n(2, 20); return { question: `Solve for x: x + ${a} = ${x + a}`, answer: x, steps: `Subtract ${a} from both sides: x = ${x + a} − ${a} = ${x}.` }; },
+        () => { const x = n(2, 12), a = randInt(2, 9), b = n(1, 20); return { question: `Solve for x: ${a}x + ${b} = ${a * x + b}`, answer: x, steps: `Subtract ${b} to get ${a}x = ${a * x}, then divide by ${a}: x = ${x}.` }; },
+        () => { const x = n(2, 12), a = randInt(2, 9), b = n(1, 20); return { question: `Solve for x: ${a}x − ${b} = ${a * x - b}`, answer: x, steps: `Add ${b} to get ${a}x = ${a * x}, then divide by ${a}: x = ${x}.` }; },
+        () => { const a = n(2, 12), b = randInt(2, 9), c = randInt(2, 9); return { question: `Evaluate: ${a} + ${b} × ${c}`, answer: a + b * c, steps: `Multiply first: ${b} × ${c} = ${b * c}. Then add ${a}: ${a + b * c}.` }; },
+        () => { const a = randInt(2, 9), b = randInt(2, 9), c = randInt(2, 9); return { question: `Evaluate: (${a} + ${b}) × ${c}`, answer: (a + b) * c, steps: `Brackets first: ${a} + ${b} = ${a + b}. Then × ${c}: ${(a + b) * c}.` }; },
+        () => { const a = randInt(2, 12), b = randInt(2, 4); return { question: `Evaluate: ${a}^${b}`, answer: a ** b, steps: `${a}^${b} means ${a} multiplied by itself ${b} times: ${a ** b}.` }; },
+        () => { const x = randInt(2, 12), a = randInt(2, 9); return { question: `Solve for x: x ÷ ${a} = ${x}`, answer: x * a, steps: `Multiply both sides by ${a}: x = ${x} × ${a} = ${x * a}.` }; },
+    ];
+    const out = [], seen = new Set();
+    for (let guard = 0; guard < 60 && out.length < count; guard++) {
+        const problem = pickOne(makers)();
+        if (seen.has(problem.question)) continue;
+        seen.add(problem.question);
+        out.push({ ...problem, answer: String(problem.answer), wrong: numericWrongAnswers(problem.answer, 3) });
+    }
+    return out;
+}
+
+// Wrong answers that look like honest slips (off by one or a few) for a whole-number answer. Not possible for other kinds of answers.
+function numericWrongAnswers(answer, count, have = []) {
+    const value = Number(String(answer).replace("−", "-"));
+    if (!Number.isInteger(value)) return [];
+    const taken = new Set([String(value), ...have.map(String)]);
+    const out = [];
+    for (const offset of shuffle([-1, 1, -2, 2, -3, 3, -5, 5, -10, 10])) {
+        const guess = String(value + offset);
+        if (!taken.has(guess) && out.length < count) { taken.add(guess); out.push(guess); }
+    }
+    return out;
+}
+
 const STOP_WORDS = new Set(["THE", "AND", "THAT", "THIS", "WITH", "FROM", "THEY", "WILL", "EACH", "ARE", "FOR"]);
 
 // Find vocabulary in the lesson's own text: **bold terms** (and headings) with the sentence that explains them.
@@ -163,10 +202,12 @@ function mergePacks(...packs) {
         sort: (v) => v && Array.isArray(v.items) && v.items.length >= 4,
         blanks: (v) => Array.isArray(v) && v.length >= 3,
         match: (v) => Array.isArray(v) && v.length >= 4,
+        problems: (v) => Array.isArray(v) && v.length >= 4,
     };
     for (const part of Object.keys(usable)) {
         const source = packs.find(p => p && usable[part](p[part]));
-        out[part] = (source || BUILTIN_PACK)[part];
+        const value = (source || BUILTIN_PACK)[part];
+        if (value) out[part] = value;   // problems have no built-in copy: the game makes its own
     }
     return out;
 }

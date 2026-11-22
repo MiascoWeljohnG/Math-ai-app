@@ -38,6 +38,7 @@ GAME_PARTS = {
     "matching": ("match",),
     "sorting": ("sort",),
     "fill-blanks": ("blanks",),
+    "equations": ("problems",),
 }
 
 

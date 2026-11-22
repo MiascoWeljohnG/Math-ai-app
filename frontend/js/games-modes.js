@@ -1,4 +1,4 @@
-// The seven games. Each one is { id, name, blurb, icon, mount(stage, pack, finish) }.
+// The eight games. Each one is { id, name, blurb, icon, mount(stage, pack, finish) }.
 //   stage  - an empty element the game builds itself into
 //   pack   - the lesson's game content (see games-core.js)
 //   finish - call once when the round is over: finish(stars 0-3, "short summary")
@@ -422,6 +422,66 @@ function mountMathOps(stage, pack, finish) {
     stage.append(hud(tries, "Work out each expression, then drop it where it makes the equation true."), h("div", { class: "gm-equations" }, rows), pool, h("div", { class: "gm-actions" }, button));
 }
 
+// ---------- 8. Solve the Equation ----------
+// Real calculations. The questions come from the lesson (the backend checks each answer by arithmetic before sending it); if the
+// lesson has none, they are made here. One question at a time, pick the right answer, see the worked steps.
+const prettyMath = (text) => String(text).replace(/\^2\b/g, "²").replace(/\^3\b/g, "³").replace(/\^(\d+)/g, "^$1").replace(/ - /g, " − ").replace(/ \* /g, " × ");
+
+function mountSolve(stage, pack, finish) {
+    const level = GameStore.level(GameStore.load().xp);
+    const fromLesson = Array.isArray(pack.problems) ? pack.problems.filter(p => p && p.question && p.answer) : [];
+    const pool = fromLesson.length >= 4 ? shuffle(fromLesson) : [...shuffle(fromLesson), ...makeProblems(level, 6)];
+    const problems = pool.slice(0, 5);
+    let index = 0, right = 0, lives = 3, locked = false;
+
+    const progress = h("span", {}), hearts = h("span", {});
+    const questionEl = h("p", { class: "gm-question", "aria-live": "polite" });
+    const choicesEl = h("div", { class: "gm-choices" });
+    const feedback = h("p", { class: "gm-note", role: "status" });
+    const next = h("button", { class: "gm-btn primary", type: "button", hidden: true }, "Next");
+    const paintHud = () => { progress.textContent = `Question ${Math.min(index + 1, problems.length)} of ${problems.length}`; hearts.textContent = `Lives: ${"♥".repeat(lives)}${"♡".repeat(3 - lives)}`; };
+
+    function show() {
+        const problem = problems[index];
+        locked = false; next.hidden = true; feedback.textContent = ""; feedback.className = "gm-note";
+        questionEl.textContent = prettyMath(problem.question);
+        const wrong = [...new Set((problem.wrong || []).map(String))].filter(w => w.toLowerCase() !== String(problem.answer).toLowerCase());
+        const extra = wrong.length < 3 ? numericWrongAnswers(problem.answer, 3 - wrong.length, wrong) : [];
+        const options = shuffle([String(problem.answer), ...wrong.slice(0, 3), ...extra]);
+        choicesEl.replaceChildren(...options.map(option => h("button", { class: "gm-choice", type: "button", dataset: { value: option }, onclick: (event) => choose(event.currentTarget, option) }, prettyMath(option))));
+        paintHud();
+    }
+
+    function choose(button, option) {
+        if (locked) return;
+        locked = true;
+        const problem = problems[index];
+        const ok = option.toLowerCase() === String(problem.answer).toLowerCase();
+        button.classList.add(ok ? "is-right" : "is-wrong");
+        if (ok) right += 1;
+        else { lives -= 1; choicesEl.querySelectorAll(".gm-choice").forEach(c => { if (c.dataset.value.toLowerCase() === String(problem.answer).toLowerCase()) c.classList.add("is-right"); }); }
+        choicesEl.querySelectorAll(".gm-choice").forEach(c => { c.disabled = true; });
+        feedback.className = `gm-note ${ok ? "ok" : "bad"}`;
+        feedback.textContent = `${ok ? "Correct!" : `Not quite. The answer is ${prettyMath(problem.answer)}.`} ${problem.steps ? prettyMath(problem.steps) : ""}`.trim();
+        paintHud();
+        const over = lives === 0 || index === problems.length - 1;
+        next.textContent = over ? "See result" : "Next";
+        next.hidden = false;
+        next.focus();
+    }
+
+    next.addEventListener("click", () => {
+        if (lives === 0 || index === problems.length - 1) {
+            const stars = lives === 0 ? 0 : right === problems.length ? 3 : right >= problems.length - 1 ? 2 : right >= Math.ceil(problems.length / 2) ? 1 : 0;
+            return finish(stars, `${right} of ${problems.length} correct`);
+        }
+        index += 1; show();
+    });
+
+    stage.append(hud(progress, hearts, "Work it out on paper if you like, then pick the right answer."), questionEl, choicesEl, feedback, h("div", { class: "gm-actions" }, next));
+    show();
+}
+
 // ---------- 7. Word Connect ----------
 function mountConnect(stage, pack, finish) {
     const usable = pack.terms.filter(t => t.word.length >= 4 && t.word.length <= 8);
@@ -531,6 +591,8 @@ const GAMES = [
       icon: gameIcon('<path d="M4 7h16M4 12h5M15 12h5M4 17h16"/><rect x="9.5" y="9.5" width="5" height="5" rx="1" stroke-dasharray="2 2"/>') },
     { id: "mathops", name: "Math Operations", blurb: "Drag the right expression into each equation.", mount: mountMathOps,
       icon: gameIcon('<path d="M5 8h6M8 5v6M14 17h6M5 17l5 0M14 6l6 0M14 9l6 0"/>') },
+    { id: "solve", name: "Solve the Equation", blurb: "Work out equations and calculations, then pick the right answer.", mount: mountSolve,
+      icon: gameIcon('<path d="M4 9h7M4 15h7M15 8l5 8M20 8l-5 8"/>') },
     { id: "connect", name: "Word Connect", blurb: "Slide across the circle of letters to spell the term.", mount: mountConnect,
       icon: gameIcon('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="6" r="1.6"/><circle cx="17.2" cy="15" r="1.6"/><circle cx="6.8" cy="15" r="1.6"/><path d="M12 6l5.2 9M17.2 15H6.8"/>') },
 ];

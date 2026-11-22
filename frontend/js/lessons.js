@@ -384,7 +384,7 @@ async function selectLesson(lessonId) {
 
 const LESSON_GAMES = [
     ["hangman", "Math Hangman"], ["word-search", "Word Search"], ["matching", "Matching"],
-    ["sorting", "Sorting Challenge"], ["fill-blanks", "Fill in the Blanks"],
+    ["sorting", "Sorting Challenge"], ["fill-blanks", "Fill in the Blanks"], ["equations", "Solve the Equations"],
 ];
 function buildLessonGamePanel(subjectId, lesson) {
     const teacher = ["teacher", "school_admin"].includes(localStorage.getItem("role"));

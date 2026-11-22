@@ -6,9 +6,9 @@ const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6
 const starRow = (count, cls = "") => h("span", { class: `gm-stars ${cls}`, "aria-label": `${count} of 3 stars` },
     [0, 1, 2].map(i => { const s = h("span", { class: i < count ? "is-on" : "" }); s.innerHTML = STAR; return s; }));
 
-// A lesson names its game "sorting", "word-search", "matching" or "fill-blanks"; the cards on this page call them
+// A lesson names its game "sorting", "word-search", "matching", "fill-blanks" or "equations"; the cards on this page call them
 // "sort", "wordsearch", "match" and "blanks". Without this the Play link on a lesson found no game and showed the hub.
-const LESSON_GAME_TO_CARD = { hangman: "hangman", "word-search": "wordsearch", matching: "match", sorting: "sort", "fill-blanks": "blanks" };
+const LESSON_GAME_TO_CARD = { hangman: "hangman", "word-search": "wordsearch", matching: "match", sorting: "sort", "fill-blanks": "blanks", equations: "solve" };
 const PACK_WAIT_MS = 25000;   // how long a direct launch waits for the lesson's game content before using the words in the lesson text
 
 let currentPack = BUILTIN_PACK;

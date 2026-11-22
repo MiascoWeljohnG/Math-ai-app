@@ -6,8 +6,11 @@ XP and streaks live in the browser (see frontend/js/games-core.js).
 
 The page works without this route (it falls back to words it finds in the lesson text), so a model error is harmless.
 """
+import ast
 import json
+import operator
 import re
+from fractions import Fraction
 
 from typing import Optional
 
@@ -26,13 +29,13 @@ from routes.subjects_routes import (
 router = APIRouter(prefix="/subjects", tags=["games"])
 
 GAME_SYSTEM = (
-    "You turn a math lesson into short game content for high-school students. Be accurate. "
+    "You turn a math lesson into short game content for high-school students. Be accurate: every calculation must be right. "
     "Reply with ONE JSON object and nothing else: no markdown fences, no commentary. "
     "Use plain text only: no LaTeX, no backslashes, no dollar signs, no emojis. "
-    "Write fractions as 3/4 and powers as x^2."
+    "Write fractions as 3/4, powers as x^2 and multiplication with the word x or the sign *."
 )
 
-ALL_PARTS = ("terms", "sort", "blanks", "match")   # everything, for free play on a lesson that has no game of its own
+ALL_PARTS = ("terms", "sort", "blanks", "match", "problems")   # everything, for free play on a lesson that has no game of its own
 
 # For each part of the content: its place in the JSON the model returns, and the rules it must follow.
 PART_SPEC = {
@@ -55,6 +58,14 @@ PART_SPEC = {
     "match": (
         '"match": [{"a": "term", "b": "short definition"}]',
         '- "match": exactly 5 pairs. "a" is a term (under 25 characters), "b" is its definition (under 80 characters).',
+    ),
+    "problems": (
+        '"problems": [{"question": "Solve for x: 2x + 3 = 11", "answer": "4", "wrong": ["3", "5", "7"], "steps": "Subtract 3 from both sides to get 2x = 8, then divide by 2."}]',
+        '- "problems": exactly 6 problems where the student must CALCULATE or SOLVE something, never recall a definition. Base them on the\n'
+        '  equations, formulas and worked examples in the lesson, with new numbers. Each "question" is under 90 characters and contains the\n'
+        '  equation or calculation itself (for example "Solve for x: 3x - 5 = 16" or "Evaluate: 4 + 3 x 2"). "answer" is ONE short number,\n'
+        '  fraction like 3/4, or expression under 12 characters, and it must be correct. "wrong" is 3 different wrong answers of the same kind\n'
+        '  that come from common mistakes. "steps" is a worked solution under 140 characters.',
     ),
 }
 
@@ -100,6 +111,63 @@ def _extract_json(text: str):
 
 def _text(value, limit: int) -> str:
     return re.sub(r"[\\$]", "", re.sub(r"\s+", " ", str(value or ""))).strip()[:limit]
+
+
+# ---- checking the model's maths: a wrong answer key is worse than no question ----
+_BINOPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
+
+
+def _calc(node) -> Fraction:
+    """Exact arithmetic on a parsed expression. Only numbers, + - * / ** and brackets are allowed."""
+    if isinstance(node, ast.Expression):
+        return _calc(node.body)
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+        return Fraction(str(node.value))
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        value = _calc(node.operand)
+        return -value if isinstance(node.op, ast.USub) else value
+    if isinstance(node, ast.BinOp):
+        left, right = _calc(node.left), _calc(node.right)
+        if isinstance(node.op, ast.Pow):
+            if right.denominator != 1 or abs(right) > 8 or abs(left) > 1000:
+                raise ValueError("power out of range")
+            return left ** int(right)
+        if type(node.op) in _BINOPS:
+            return _BINOPS[type(node.op)](left, right)
+    raise ValueError("unsupported")
+
+
+def _evaluate(expr: str, var: Optional[str] = None, value: Optional[Fraction] = None) -> Fraction:
+    expr = expr.replace("\u00d7", "*").replace("\u00f7", "/").replace("\u2212", "-").replace("^", "**")
+    expr = re.sub(r"(?<=[0-9a-z)])\s+x\s+(?=[0-9(])", " * ", expr)    # "4 + 3 x 2": a lone x between numbers is a times sign
+    if var:
+        expr = re.sub(rf"(?<![A-Za-z]){var}(?![A-Za-z])", f"({value})", expr)
+    expr = re.sub(r"(?<=[0-9)])\s*(?=\()", "*", expr)                  # 2(4) and )( mean multiply
+    return _calc(ast.parse(expr.strip(), mode="eval"))
+
+
+def check_problem(question: str, answer: str) -> Optional[bool]:
+    """True or False when the answer can be verified by arithmetic, None when it cannot (word problems, formulas)."""
+    try:
+        want = Fraction(re.sub(r"^[a-z]\s*=\s*", "", answer.replace("\u2212", "-").replace(" ", "")))
+        body = question.split(":", 1)[-1] if ":" in question else question
+        body = re.sub(r"^(what is|calculate|evaluate|simplify|compute|find|solve( for [a-z])?)\s*", "", body.strip().rstrip("?."), flags=re.I)
+        if not re.fullmatch(r"[0-9a-z+\-*/^().=\s\u00d7\u00f7\u2212]+", body.lower()):
+            return None
+        letters = set(re.findall(r"(?<![a-z])[a-z](?![a-z])", body.lower())) - ({"x"} if re.search(r"\d\s+x\s+\d", body) else set())
+        if len(letters) > 1:
+            return None
+        var = next(iter(letters), None)
+        if "=" in body:
+            if body.count("=") != 1 or not var:
+                return None
+            left, right = body.split("=")
+            return _evaluate(left, var, want) == _evaluate(right, var, want)
+        if var:
+            return None
+        return _evaluate(body) == want
+    except (ValueError, SyntaxError, ZeroDivisionError, ArithmeticError):
+        return None
 
 
 def clean_pack(data) -> dict:
@@ -149,6 +217,23 @@ def clean_pack(data) -> dict:
             pairs.append({"a": _text(item["a"], 30), "b": _text(item["b"], 90)})
     if len(pairs) >= 4:
         pack["match"] = pairs[:6]
+
+    problems = []
+    for item in data.get("problems") or []:
+        if not isinstance(item, dict):
+            continue
+        question, answer = _text(item.get("question"), 120), _text(item.get("answer"), 14)
+        if not question or not answer or not re.search(r"\d", question) or check_problem(question, answer) is False:
+            continue   # not a calculation, or the model's own answer fails when checked
+        wrong, seen_answers = [], {answer.lower()}
+        for value in item.get("wrong") or []:
+            value = _text(value, 14)
+            if value and value.lower() not in seen_answers:
+                seen_answers.add(value.lower())
+                wrong.append(value)
+        problems.append({"question": question, "answer": answer, "wrong": wrong[:3], "steps": _text(item.get("steps"), 160)})
+    if len(problems) >= 4:
+        pack["problems"] = problems[:8]
 
     return pack
 
