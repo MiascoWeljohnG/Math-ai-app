@@ -97,8 +97,10 @@ function renderPersonalSubject(subject, entry, beforeElement, removable = true, 
         (removable ? '<button type="button" class="tile-btn danger remove">Remove</button>' : '') +
         '</div>';
     // textContent (not innerHTML) for anything the student typed.
-    tile.querySelector(".tile-name").textContent = subject.name;
-    tile.querySelector(".tile-desc").textContent = subject.description || CLASSIC_DESCRIPTIONS[subject.name] || (removable ? "Your personal subject" : "Subject from your teacher");
+    tile.querySelector(".tile-name").textContent = subjectLabel(subject);
+    // A subject with a code shows the code as its heading and its title underneath
+    tile.querySelector(".tile-desc").textContent = subject.subject_code ? subject.name
+        : subject.description || CLASSIC_DESCRIPTIONS[subject.name] || (removable ? "Your personal subject" : "Subject from your teacher");
     paintProgress(tile, entry);
 
     tile.addEventListener("click", () => openLessons(subject.id));

@@ -74,7 +74,7 @@ async function initPicker() {
     let subjects = [];   // declared out here: the deep link below needs it after the try block has ended
     try {
         subjects = await gameSubjects();
-        subjectSelect.replaceChildren(new Option("Choose a subject", ""), ...subjects.map(s => new Option(s.name, s.id)));
+        subjectSelect.replaceChildren(new Option("Choose a subject", ""), ...subjects.map(s => Object.assign(new Option(subjectLabel(s), s.id), { title: s.name })));
     } catch (error) { setError(error.message); }
 
     subjectSelect.addEventListener("change", async () => {

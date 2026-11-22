@@ -71,3 +71,46 @@ def drop_legacy_full_name():
             conn.execute(text("ALTER TABLE users DROP COLUMN full_name"))
     except Exception as exc:   # very old SQLite (< 3.35) cannot drop columns; the nullable column is harmless
         print(f"[migrate] could not drop users.full_name: {exc}")
+
+
+def backfill_subject_managers():
+    """Shared subjects made before subjects had a managing teacher: credit the teacher of the same school who wrote the subject's
+    first lesson. A subject with no lessons stays unclaimed (the first teacher to edit it claims it). Safe to run on every start:
+    it only fills subjects that have no manager yet."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    if not inspector.has_table("subjects") or "manager_id" not in {c["name"] for c in inspector.get_columns("subjects")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE subjects SET manager_id = ("
+            " SELECT u.id FROM lessons l JOIN users u ON u.username = l.created_by"
+            " WHERE l.subject_id = subjects.id AND u.role = 'teacher'"
+            " AND (u.school_id = subjects.school_id OR (u.school_id IS NULL AND subjects.school_id IS NULL))"
+            " ORDER BY l.id ASC LIMIT 1) "
+            "WHERE manager_id IS NULL AND owner_user_id IS NULL"))
+
+
+def sync_id_sequences():
+    """PostgreSQL only. Rows copied in with their own ids (a move from SQLite, or typed into the Supabase table editor) can leave a
+    table's id counter at or behind its highest id, so the next INSERT fails with "duplicate key value violates unique constraint
+    ..._pkey". Move any such counter up to the highest id. Safe to run on every start: it never moves a counter backwards."""
+    if engine.dialect.name != "postgresql":
+        return
+    from sqlalchemy import inspect, text
+    inspector = inspect(engine)
+    for table in Base.metadata.sorted_tables:
+        if "id" not in table.columns or not table.columns["id"].primary_key or not inspector.has_table(table.name):
+            continue
+        quoted = '"' + table.name.replace('"', '""') + '"'
+        try:
+            with engine.begin() as conn:
+                sequence = conn.execute(text("SELECT pg_get_serial_sequence(:table, 'id')"), {"table": quoted}).scalar()
+                if not sequence:
+                    continue
+                top = conn.execute(text(f"SELECT COALESCE(MAX(id), 0) FROM {quoted}")).scalar() or 0
+                counter = conn.execute(text(f"SELECT last_value FROM {sequence}")).scalar() or 0
+                if top > 0 and top >= counter:
+                    conn.execute(text("SELECT setval(CAST(:sequence AS regclass), :top)"), {"sequence": sequence, "top": top})
+        except Exception as exc:   # an odd permission or a table without a serial id: leave it alone
+            print(f"[migrate] could not sync the id counter of {table.name}: {exc}")

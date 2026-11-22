@@ -41,32 +41,15 @@ body { font-family: var(--font-body); font-size: 1rem; background: var(--bg); co
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn:focus-visible, .branch-select:focus-visible, textarea:focus-visible, .lesson-form input[type="text"]:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
 
-/* ---- button loading state & spinner utility ---- */
+/* ---- button loading state: the login spinner next to the label (see withButtonLoading in utils.js) ---- */
 .btn.is-loading {
-    color: transparent !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
     pointer-events: none;
-    cursor: wait;
+    cursor: progress;
     opacity: 0.85;
-}
-
-.btn.is-loading::after {
-    content: "";
-    position: absolute;
-    width: 18px;
-    height: 18px;
-    top: 50%;
-    left: 50%;
-    margin: -9px 0 0 -9px;
-    border: 2px solid currentColor;
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: btn-spinner-rotate 0.6s linear infinite;
-}
-
-@keyframes btn-spinner-rotate {
-    to {
-        transform: rotate(360deg);
-    }
 }
 
 /* ---- form fields ---- */

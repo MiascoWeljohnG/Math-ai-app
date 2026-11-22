@@ -167,6 +167,22 @@ class Subject(Base):
     description = Column(String, nullable=True)
     owner_user_id = Column(Integer, nullable=True, index=True)
     school_id = Column(Integer, nullable=True, index=True)   # which school's shared subject this is (personal subjects ignore it)
+    # The teacher who handles this shared subject (its weekly schedule today). Set to whoever creates it; an older subject is
+    # credited to the teacher who wrote its first lesson, and one nobody handles yet goes to the first teacher who edits it.
+    manager_id = Column(Integer, nullable=True, index=True)
+    subject_code = Column(String, nullable=True)   # e.g. "BSEM 21": what students and teachers see in place of the name; the name is its title
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SubjectAccess(Base):
+    """A teacher, other than the one who handles a subject, who was given permission to edit it. One row per teacher per subject."""
+    __tablename__ = "subject_access"
+    __table_args__ = (UniqueConstraint("subject_id", "user_id"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    subject_id = Column(Integer, ForeignKey("subjects.id"), index=True, nullable=False)
+    user_id = Column(Integer, index=True, nullable=False)       # the teacher who was given access
+    granted_by = Column(String, nullable=True)                  # username of whoever gave it
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

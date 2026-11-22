@@ -77,10 +77,11 @@ async function uploadFiles() {
         statusEl.textContent = message;
         selectedFiles = selectedFiles.filter(f => !savedNames.has(f.name));   // unfiled files stay selected
         renderChips();
-    }).catch(err => {
+    }, "Uploading...").catch(err => {
         statusEl.className = "status error";
         statusEl.textContent = err.message;
     });
+    uploadBtn.disabled = selectedFiles.length === 0;   // withButtonLoading re-enables it; nothing left to upload means stay off
 }
 
 async function initUploadSubjects() {

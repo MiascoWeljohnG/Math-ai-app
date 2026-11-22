@@ -39,7 +39,7 @@ async function loadLessonSubjects(selectId) {
         const response = await fetch(`${API}/subjects`, { headers: getHeaders() });
         if (!response.ok) throw new Error("Couldn't load lesson subjects.");
         const subjects = (await response.json()).filter(subject => !subject.is_personal);
-        lessonSubjectSelect.replaceChildren(...subjects.map(subject => new Option(subject.name, subject.id)));
+        lessonSubjectSelect.replaceChildren(...subjects.map(subject => Object.assign(new Option(subjectLabel(subject), subject.id), { title: subject.name })));
         const keep = subjects.find(subject => subject.id === selectId);
         activeLessonSubjectId = keep ? keep.id : (subjects.length ? subjects[0].id : null);
         if (keep) lessonSubjectSelect.value = keep.id;
@@ -1101,7 +1101,7 @@ async function saveLesson() {
         lessonDialog.close();
         showLessonStatus("Lesson saved.", "success");
         await loadLessonList();
-    }).catch(error => showLessonStatus(error.message, "error"));
+    }, "Saving...").catch(error => showLessonStatus(error.message, "error"));
 }
 
 loadLessonSubjects();
@@ -1156,6 +1156,7 @@ async function refreshDeletionState() {
 // --- New subject: type a name, or upload a file and let the AI fill in the details and write the lessons ---
 const subjectDialog = document.getElementById("subjectDialog");
 const subjectFileInput = document.getElementById("subjectFileInput");
+const subjectCodeInput = document.getElementById("subjectCodeInput");
 const subjectNameInput = document.getElementById("subjectNameInput");
 const subjectDescInput = document.getElementById("subjectDescInput");
 const subjectLessonsInput = document.getElementById("subjectLessonsInput");
@@ -1169,19 +1170,28 @@ function showSubjectStatus(message, kind) {
     subjectDialogStatus.textContent = message;
 }
 
-async function postForm(url, form) {
-    const response = await fetch(url, { method: "POST", headers: getHeaders(), body: form });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.detail || "Request failed.");
+// Read a reply as JSON without throwing on a plain-text error page, and say something useful when the request fails.
+async function sendRequest(url, options) {
+    let response;
+    try { response = await fetch(url, options); }
+    catch { throw new Error("Couldn't reach the server. Check your connection and try again in a moment."); }
+    const text = await response.text();
+    let result = {};
+    try { result = text ? JSON.parse(text) : {}; } catch { /* not JSON: use the status below */ }
+    if (!response.ok) throw new Error(detailText(result, `The server had a problem (error ${response.status}). Please try again.`));
     return result;
 }
 
+async function postForm(url, form) {
+    return sendRequest(url, { method: "POST", headers: getHeaders(), body: form });
+}
+
 function addSubject() {
-    subjectFileInput.value = subjectNameInput.value = subjectDescInput.value = "";
+    subjectFileInput.value = subjectCodeInput.value = subjectNameInput.value = subjectDescInput.value = "";
     subjectCreateBtn.disabled = false;
     showSubjectStatus("", "");
     subjectDialog.showModal();
-    subjectNameInput.focus();
+    subjectCodeInput.focus();
 }
 
 subjectDialog.addEventListener("close", () => { suggestRun++; });
@@ -1218,7 +1228,7 @@ async function createSubject() {
     let subject;
     await withButtonLoading(subjectCreateBtn, async () => {
         try {
-            subject = await postJson(`${API}/subjects/shared`, { name, description: subjectDescInput.value.trim() || null });
+            subject = await postJson(`${API}/subjects/shared`, { name, subject_code: subjectCodeInput.value.trim() || null, description: subjectDescInput.value.trim() || null });
         } catch (error) {
             showSubjectStatus(error.message, "error");   // e.g. 'A subject called "Algebra" already exists'
             throw error;
@@ -1354,14 +1364,11 @@ loadMaterialOptions();
 
 
 async function postJson(url, body) {
-    const response = await fetch(url, {
+    return sendRequest(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getHeaders() },
         body: JSON.stringify(body),
     });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.detail || "Request failed.");
-    return result;
 }
 
 refreshLessonForm();

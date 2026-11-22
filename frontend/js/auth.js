@@ -12,6 +12,11 @@ function detailText(data, fallback) {
     return d || fallback;
 }
 
+// What a subject is called on screen: its code ("BSEM 21") when it has one, otherwise its name. The name stays the subject's title.
+function subjectLabel(subject) {
+    return (subject && (subject.subject_code || subject.name)) || "";
+}
+
 const SPINNER_HTML = '<span class="spinner" role="status"><span aria-hidden="true">' +
     Array.from({ length: 12 }, (_, i) => `<i style="--i:${i}"></i>`).join("") +
     '</span><span class="sr-only">Loading</span></span>';

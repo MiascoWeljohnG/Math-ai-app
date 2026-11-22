@@ -21,7 +21,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 def admin_subjects(user=Depends(require_school_admin), db: Session = Depends(get_db)):
     from models import Subject
     from school import visible_subjects
-    return [{"id": subject.id, "name": subject.name} for subject in db.query(Subject).filter(visible_subjects(user)).order_by(Subject.name).all()]
+    return [{"id": subject.id, "name": subject.name, "subject_code": subject.subject_code} for subject in db.query(Subject).filter(visible_subjects(user)).order_by(Subject.name).all()]
 
 
 @router.post("/upload")

@@ -1,4 +1,4 @@
-"""Weekly pacing: the school admin puts lessons in weeks and decides how the current week moves; students see each lesson as
+"""Weekly pacing: the teacher who handles a subject puts its lessons in weeks and decides how the current week moves; students see each lesson as
 done (green), this week's (blue), behind (red) or not opened yet (gray, and they cannot open it)."""
 from datetime import date, timedelta
 from types import SimpleNamespace as NS
@@ -76,7 +76,9 @@ def world(rag, db, monkeypatch):
     admin = User(username="admin_a", password_hash="x", role="school_admin", school_id=a.id)
     teacher = User(username="teach", password_hash="x", role="teacher", school_id=a.id)
     student = User(username="stud", password_hash="x", role="user", school_id=a.id, status="active")
-    db.add_all([admin, teacher, student])
+    teacher2 = User(username="teach2", first_name="Second", last_name="Teacher", password_hash="x", role="teacher", school_id=a.id, status="active")
+    outsider = User(username="teach_b", password_hash="x", role="teacher", school_id=b.id, status="active")
+    db.add_all([admin, teacher, teacher2, outsider, student])
     db.commit()
     mine = Subject(name="Algebra", owner_user_id=None, school_id=a.id)
     theirs = Subject(name="Algebra", owner_user_id=None, school_id=b.id)
@@ -89,12 +91,15 @@ def world(rag, db, monkeypatch):
     app.include_router(weekly_routes.router)
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[auth.get_current_user] = lambda: who["user"]
-    app.dependency_overrides[auth.require_staff] = lambda: teacher
+    staff = {"user": teacher}
+    app.dependency_overrides[auth.require_staff] = lambda: staff["user"]
     app.dependency_overrides[auth.require_school_admin] = lambda: admin
     client = TestClient(app)
     client.db, client.subject, client.other_subject, client.student = db, mine, theirs, student
     client.as_student = lambda: who.update(user=student)
     client.as_teacher = lambda: who.update(user=teacher)
+    client.teacher, client.teacher2, client.outsider, client.admin = teacher, teacher2, outsider, admin
+    client.act_as = lambda user: staff.update(user=user)   # who the weekly routes see as the signed-in staff account
     return client
 
 
@@ -170,7 +175,7 @@ def test_teachers_are_never_held_back_by_the_schedule(world):
 
 def test_admin_sets_a_lessons_week_and_takes_it_out_again(world):
     one, = lessons_for(world, [None])
-    url = f"/school-admin/weekly/{world.subject.id}/lessons/{one.id}"
+    url = f"/weekly/{world.subject.id}/lessons/{one.id}"
     assert world.put(url, json={"week_number": 4}).json()["lessons"][0]["week_number"] == 4
     assert world.put(url, json={"week_number": None}).json()["lessons"][0]["week_number"] is None
     assert world.put(url, json={"week_number": 0}).status_code == 422
@@ -179,18 +184,18 @@ def test_admin_sets_a_lessons_week_and_takes_it_out_again(world):
 
 def test_a_draft_cannot_be_put_in_the_plan(world):
     draft, = lessons_for(world, [None], status="draft")
-    assert world.put(f"/school-admin/weekly/{world.subject.id}/lessons/{draft.id}", json={"week_number": 1}).status_code == 409
+    assert world.put(f"/weekly/{world.subject.id}/lessons/{draft.id}", json={"week_number": 1}).status_code == 409
 
 
 def test_admin_auto_assigns_lessons(world):
     lessons_for(world, [None] * 5)
-    state = world.post(f"/school-admin/weekly/{world.subject.id}/auto-assign", json={"per_week": 2}).json()
+    state = world.post(f"/weekly/{world.subject.id}/auto-assign", json={"per_week": 2}).json()
     assert [l["week_number"] for l in state["lessons"]] == [1, 1, 2, 2, 3]
 
 
 def test_admin_turns_pacing_on_holds_the_week_and_advances_it(world):
     lessons_for(world, [1, 2, 3])
-    base = f"/school-admin/weekly/{world.subject.id}"
+    base = f"/weekly/{world.subject.id}"
     assert world.get(base).json()["schedule"] is None                       # not on yet: students see the old behaviour
     on = world.put(f"{base}/schedule", json={"mode": "auto", "start_date": date.today().isoformat()}).json()
     assert on["schedule"]["mode"] == "auto" and on["schedule"]["current_week"] == 1
@@ -206,23 +211,23 @@ def test_admin_turns_pacing_on_holds_the_week_and_advances_it(world):
 def test_admin_sees_how_many_students_are_behind(world):
     one, two = lessons_for(world, [1, 2])
     schedule(world, start_date=date.today() - timedelta(days=7))            # week 2: lesson 1 is overdue
-    rows = world.get(f"/school-admin/weekly/{world.subject.id}").json()["lessons"]
+    rows = world.get(f"/weekly/{world.subject.id}").json()["lessons"]
     assert (rows[0]["behind"], rows[0]["completed"]) == (1, 0) and rows[1]["behind"] == 0
     world.db.add(LessonCompletion(user_id=world.student.id, lesson_id=one.id))
     world.db.commit()
-    assert world.get(f"/school-admin/weekly/{world.subject.id}").json()["lessons"][0]["behind"] == 0
+    assert world.get(f"/weekly/{world.subject.id}").json()["lessons"][0]["behind"] == 0
 
 
 def test_moving_the_week_needs_pacing_to_be_on_first(world):
-    assert world.post(f"/school-admin/weekly/{world.subject.id}/week", json={"action": "next"}).status_code == 409
+    assert world.post(f"/weekly/{world.subject.id}/week", json={"action": "next"}).status_code == 409
 
 
 def test_another_schools_subject_cannot_be_touched(world):
-    other = f"/school-admin/weekly/{world.other_subject.id}"
+    other = f"/weekly/{world.other_subject.id}"
     assert world.get(other).status_code == 404
     assert world.put(f"{other}/schedule", json={"mode": "auto"}).status_code == 404
     assert world.post(f"{other}/auto-assign", json={}).status_code == 404
-    assert [s["id"] for s in world.get("/school-admin/weekly").json()] == [world.subject.id]
+    assert [s["id"] for s in world.get("/weekly").json()] == [world.subject.id]
 
 
 # ---------------------------------------------------------------- the roadmap shows the same colours
@@ -299,7 +304,7 @@ def test_weekly_green_needs_a_passed_quiz_too(world):
     world.db.add(LessonCompletion(user_id=world.student.id, lesson_id=one.id))
     add_quiz(world, one, (3, False))
     assert student_view(world)[0] == ("Lesson 1", "current", False)               # blue, not green
-    assert world.get(f"/school-admin/weekly/{world.subject.id}").json()["lessons"][0]["completed"] == 0
+    assert world.get(f"/weekly/{world.subject.id}").json()["lessons"][0]["completed"] == 0
 
 
 def test_a_students_own_subject_counts_a_click(world):
@@ -323,3 +328,78 @@ def test_home_progress_agrees_with_the_lessons_page(world):
     add_quiz(world, one, (2, False))
     row = next(r for r in progress_for_user(world.db, world.student) if r["subject_id"] == world.subject.id)
     assert (row["completed"], row["total"]) == (0, 2)
+
+
+# ---------------------------------------------------------------- who may edit a subject's schedule
+def test_first_teacher_to_edit_an_unclaimed_subject_handles_it(world):
+    lessons_for(world, [None, None])
+    assert world.subject.manager_id is None
+    state = world.post(f"/weekly/{world.subject.id}/auto-assign", json={"per_week": 1}).json()
+    world.db.refresh(world.subject)
+    assert world.subject.manager_id == world.teacher.id
+    assert state["access"]["manager"]["username"] == "teach" and state["access"]["can_edit"] is True
+
+
+def test_another_teacher_can_look_but_not_change_a_subject_someone_handles(world):
+    world.subject.manager_id = world.teacher.id
+    world.db.commit()
+    rows = lessons_for(world, [1, 2])
+    world.act_as(world.teacher2)
+    state = world.get(f"/weekly/{world.subject.id}").json()
+    assert state["access"]["can_edit"] is False and state["access"]["can_manage"] is False
+    assert state["access"]["candidates"] == [] and state["access"]["granted"] == []   # not theirs to hand out
+    base = f"/weekly/{world.subject.id}"
+    for response in (world.put(f"{base}/schedule", json={"mode": "auto"}),
+                     world.post(f"{base}/week", json={"action": "next"}),
+                     world.post(f"{base}/auto-assign", json={"per_week": 1}),
+                     world.put(f"{base}/lessons/{rows[0].id}", json={"week_number": 2})):
+        assert response.status_code == 403 and "handles this subject" in response.json()["detail"]
+    assert world.get("/weekly").json()[0]["can_edit"] is False
+    world.db.refresh(world.subject)
+    assert world.subject.manager_id == world.teacher.id                      # looking never claims it
+
+
+def test_the_teacher_who_handles_a_subject_gives_and_takes_back_access(world):
+    world.subject.manager_id = world.teacher.id
+    world.db.commit()
+    lessons_for(world, [None, None])
+    base = f"/weekly/{world.subject.id}"
+
+    mine = world.get(base).json()["access"]
+    assert mine["can_manage"] is True and [t["username"] for t in mine["candidates"]] == ["teach2"]
+
+    given = world.put(f"{base}/access", json={"user_id": world.teacher2.id}).json()["access"]
+    assert [t["username"] for t in given["granted"]] == ["teach2"] and given["candidates"] == []
+    assert world.db.query(AuditLog).filter(AuditLog.action == "weekly.access.give").count() == 1
+
+    world.act_as(world.teacher2)                                              # with access they can change it...
+    assert world.post(f"{base}/auto-assign", json={"per_week": 1}).status_code == 200
+    assert world.get(base).json()["access"]["can_manage"] is False            # ...but cannot pass it on
+    assert world.put(f"{base}/access", json={"user_id": world.teacher2.id}).status_code == 403
+
+    world.act_as(world.teacher)
+    taken = world.delete(f"{base}/access/{world.teacher2.id}").json()["access"]
+    assert taken["granted"] == [] and [t["username"] for t in taken["candidates"]] == ["teach2"]
+    world.act_as(world.teacher2)
+    assert world.post(f"{base}/auto-assign", json={"per_week": 1}).status_code == 403
+
+
+def test_access_can_only_go_to_active_teachers_of_the_same_school(world):
+    world.subject.manager_id = world.teacher.id
+    world.db.commit()
+    base = f"/weekly/{world.subject.id}/access"
+    assert world.put(base, json={"user_id": world.outsider.id}).status_code == 404    # another school
+    assert world.put(base, json={"user_id": world.student.id}).status_code == 404     # not a teacher
+    assert world.put(base, json={"user_id": world.teacher.id}).status_code == 409     # already handles it
+
+
+def test_the_school_admin_can_always_step_in(world):
+    world.subject.manager_id = world.teacher.id
+    world.db.commit()
+    lessons_for(world, [None])
+    world.act_as(world.admin)
+    base = f"/weekly/{world.subject.id}"
+    assert world.post(f"{base}/auto-assign", json={"per_week": 1}).status_code == 200
+    assert world.put(f"{base}/access", json={"user_id": world.teacher2.id}).status_code == 200
+    world.db.refresh(world.subject)
+    assert world.subject.manager_id == world.teacher.id                       # stepping in does not take the subject over

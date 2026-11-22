@@ -1,0 +1,297 @@
+// Teacher page: Weekly schedule (weekly-schedule.html). The teacher puts each lesson of a subject in a week and decides how the
+// school's "current week" moves; students see the result as blue / red / green / gray lesson cards (lessons.js, weekly.css).
+// Needs teacher-common.js (getHeaders), utils.js (esc) and the markup of that page. The server reads the school from the account.
+const wkSubject = document.getElementById("weeklySubject");
+const wkBody = document.getElementById("weeklyBody");
+const wkStatus = document.getElementById("weeklyStatus");
+let wkState = null;   // what the server last said about the chosen subject
+const wkPending = {}; // lesson id -> the week picked in its dropdown but not saved yet (null = "Not in the plan")
+
+function wkSay(message, kind = "success") {
+    wkStatus.textContent = message;
+    wkStatus.className = message ? `status ${kind}` : "status";
+}
+
+async function wkCall(method, path, body) {
+    const response = await fetch(`${API}/weekly${path}`, {
+        method,
+        headers: { ...getHeaders(), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+        body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(detailText(data, "Something went wrong. Try again."));
+    return data;
+}
+
+const wkDay = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+const wkSubjectLabel = (s) => `${subjectLabel(s)}${s.enabled ? ` (week ${s.current_week})` : ""}${s.can_edit ? "" : " · view only"}`;
+
+async function wkLoadSubjects(keep) {
+    try {
+        const subjects = await wkCall("GET", "");
+        document.getElementById("weeklyNoSubjects").hidden = subjects.length > 0;
+        wkSubject.replaceChildren(...subjects.map(s => new Option(
+            wkSubjectLabel(s), String(s.id), false, String(s.id) === String(keep))));
+        wkSubject.disabled = subjects.length === 0;
+        if (subjects.length) await wkLoadSubject(wkSubject.value);
+        else wkBody.hidden = true;
+    } catch (error) {
+        wkSay(error.message, "error");
+    }
+}
+
+async function wkLoadSubject(id) {
+    try {
+        wkState = await wkCall("GET", `/${id}`);
+        wkRender();
+    } catch (error) {
+        wkSay(error.message, "error");
+    }
+}
+
+function wkRender() {
+    const { schedule, lessons } = wkState;
+    wkBody.hidden = false;
+    wkRenderAccess();
+
+    // --- how the week moves
+    const on = !!(schedule && schedule.enabled);
+    document.getElementById("wkEnabled").checked = schedule ? on : true;
+    document.getElementById("wkNow").hidden = !schedule;
+    document.getElementById("wkOffBanner").hidden = !schedule || on;   // a schedule that exists but is switched off does nothing for students
+    const mode = schedule ? schedule.mode : "auto";
+    document.getElementById(mode === "manual" ? "wkModeManual" : "wkModeAuto").checked = true;
+    document.getElementById("wkStartDate").value = (schedule && schedule.start_date) || wkState.today;
+    document.getElementById("wkManualWeek").value = schedule ? (schedule.current_week ?? schedule.manual_week) : 1;
+    if (schedule) {
+        const week = schedule.current_week;
+        document.getElementById("wkNowNum").textContent = (week ? `Week ${week}` : "Not started") + (on ? "" : " (not applied)");
+        document.getElementById("wkNowSub").textContent = !on ? "Weekly pacing is OFF: students see no colours and unlock lessons one by one."
+            : schedule.mode === "manual" ? "Staying here until you advance it."
+            : week ? "Moves on by itself every 7 days." : `Starts on ${wkDay(schedule.start_date)}.`;
+    }
+    // moving the week does nothing for students while pacing is off, so those buttons wait until it is on
+    const offHint = "Turn on weekly pacing first";
+    for (const [id, blocked] of [["wkPrev", !schedule || !on || (schedule.current_week || 0) <= 0], ["wkNext", !schedule || !on]]) {
+        const button = document.getElementById(id);
+        button.disabled = blocked;
+        button.title = schedule && !on ? offHint : "";
+    }
+
+    // --- lessons & weeks
+    document.getElementById("wkNoLessons").hidden = lessons.length > 0;
+    const now = schedule && on ? schedule.current_week : null;
+    const topWeek = Math.min(60, Math.max(12, (now || 0) + 2, ...lessons.map(l => (l.week_number || 0) + 2)));
+    document.getElementById("wkPlanList").replaceChildren(...lessons.map(lesson => wkRow(lesson, now, topWeek)));
+}
+
+// Who handles the subject, whether this teacher may change it, and (for the teacher who handles it) who else may.
+function wkRenderAccess() {
+    const { manager, can_edit: canEdit, can_manage: canManage, granted, candidates } = wkState.access;
+    const name = manager ? manager.name : null;
+    document.getElementById("wkManagerLine").textContent = !manager
+        ? "Nobody handles this subject yet. The first teacher to change its schedule will."
+        : canManage && manager.username === wkMe() ? "You handle this subject." : `${name} handles this subject.`;
+    // a disabled fieldset switches off every control inside it, so a teacher without access can look but not change anything
+    document.getElementById("wkControls").disabled = !canEdit;
+    document.getElementById("wkLockedBanner").hidden = canEdit;
+    document.getElementById("wkLockedText").textContent = `You can look at this schedule, but ${name || "another teacher"} handles this subject. Ask them to give you access if you need to change it.`;
+    document.getElementById("wkAccessManage").hidden = !canManage;
+    if (!canManage) return;
+    document.getElementById("wkGrantedList").replaceChildren(...granted.map(t => {
+        const row = document.createElement("div");
+        row.className = "access-row";
+        row.innerHTML = `<span>${esc(t.name)}<small>${esc(t.username)}</small></span>
+            <button class="btn btn-secondary btn-sm" type="button" data-take-back="${t.id}">Take back access</button>`;
+        return row;
+    }));
+    document.getElementById("wkCandidate").replaceChildren(...candidates.map(t => new Option(`${t.name} (${t.username})`, String(t.id))));
+    document.getElementById("wkGiveRow").hidden = candidates.length === 0;
+    document.getElementById("wkNoCandidates").hidden = candidates.length > 0;
+}
+
+// the signed-in account's username, as the token page already stores it
+function wkMe() {
+    try { return localStorage.getItem("username") || ""; } catch { return ""; }
+}
+
+// The colour is what students see for this lesson, as far as the school can tell (green = every student finished it).
+function wkPace(lesson, now) {
+    if (now === null || lesson.week_number === null || lesson.week_number > now) return "closed";
+    if (lesson.week_number === now) return "current";
+    return lesson.behind === 0 && lesson.completed > 0 ? "done" : "behind";
+}
+
+function wkRow(lesson, now, topWeek) {
+    const row = document.createElement("div");
+    row.className = `plan-row pace-${wkPace(lesson, now)}`;
+    const dates = lesson.week_start ? ` · ${wkDay(lesson.week_start)} – ${wkDay(lesson.week_end)}` : "";
+    const shown = lesson.id in wkPending ? wkPending[lesson.id] : lesson.week_number;
+    const options = ['<option value="">Not in the plan</option>']
+        .concat(Array.from({ length: topWeek }, (_, i) => `<option value="${i + 1}"${shown === i + 1 ? " selected" : ""}>Week ${i + 1}</option>`));
+    row.innerHTML = `
+        <span class="plan-title">${esc(lesson.title)}<small>${lesson.week_number ? `Week ${lesson.week_number}${esc(dates)}` : "Gray for students"}</small></span>
+        <span class="plan-stat">${lesson.completed} of ${wkState.students} students finished</span>
+        ${lesson.behind ? `<span class="plan-stat bad">${lesson.behind} behind</span>` : ""}
+        <select class="branch-select" aria-label="Week for ${esc(lesson.title)}" data-lesson="${lesson.id}">${options.join("")}</select>
+        <div class="plan-actions" hidden>
+            <span class="plan-pending"></span>
+            <button class="btn btn-secondary btn-sm" type="button" data-act="cancel" data-lesson="${lesson.id}">Cancel</button>
+            <button class="btn btn-primary btn-sm" type="button" data-act="save" data-lesson="${lesson.id}">Save</button>
+        </div>`;
+    wkShowPending(row, lesson);
+    return row;
+}
+
+// ---- actions (each answers with the subject's new state, which is simply drawn again)
+async function wkRun(button, work, okMessage) {
+    wkSay("");
+    try {
+        const act = async () => { wkState = await work(); wkRender(); };
+        if (button) await withButtonLoading(button, act);   // withButtonLoading quietly does nothing without a button, so never rely on it alone
+        else await act();
+        wkSay(okMessage);
+        wkRefreshSubjectNames();
+    } catch (error) {
+        wkSay(error.message, "error");
+    }
+}
+
+// the dropdown shows "(week N)" next to a subject that runs on a schedule; keep it in step with changes
+async function wkRefreshSubjectNames() {
+    try {
+        const subjects = await wkCall("GET", "");
+        for (const s of subjects) {
+            const option = [...wkSubject.options].find(o => o.value === String(s.id));
+            if (option) option.textContent = wkSubjectLabel(s);
+        }
+    } catch { /* the names are only a convenience */ }
+}
+
+const wkId = () => wkState.subject.id;
+
+document.getElementById("wkSave").addEventListener("click", (event) => {
+    const mode = document.querySelector('input[name="wkMode"]:checked').value;
+    const body = { enabled: document.getElementById("wkEnabled").checked, mode };
+    if (mode === "auto") body.start_date = document.getElementById("wkStartDate").value || null;
+    else body.manual_week = Number(document.getElementById("wkManualWeek").value || 0);
+    wkRun(event.currentTarget, () => wkCall("PUT", `/${wkId()}/schedule`, body),
+        body.enabled ? "Saved. Students see the change right away."
+            : "Saved, but weekly pacing is still OFF, so students do not see weeks or colours. Tick \"Run this subject on a weekly schedule\" and Save again.");
+});
+
+document.getElementById("wkTurnOn").addEventListener("click", async (event) => {
+    const button = event.currentTarget;   // event.currentTarget is gone once we have awaited the confirmation, so keep the button
+    const sc = wkState.schedule;
+    const ok = await uiConfirm(
+        `Turn on weekly pacing for "${subjectLabel(wkState.subject)}"?\n\nStudents will immediately see their lessons as blue, red, green or gray, and lessons you haven't put in a week will be gray and locked.`,
+        { title: "Turn on weekly pacing?", okText: "Turn on", cancelText: "Cancel" });
+    if (!ok) return;
+    const body = { enabled: true, mode: sc.mode };
+    if (sc.mode === "auto") body.start_date = sc.start_date; else body.manual_week = sc.manual_week;
+    wkRun(button, () => wkCall("PUT", `/${wkId()}/schedule`, body), "Weekly pacing is on. Students see the colours now.");
+});
+
+document.getElementById("wkNext").addEventListener("click", (event) =>
+    wkRun(event.currentTarget, () => wkCall("POST", `/${wkId()}/week`, { action: "next" }), "Moved to the next week."));
+document.getElementById("wkPrev").addEventListener("click", (event) =>
+    wkRun(event.currentTarget, () => wkCall("POST", `/${wkId()}/week`, { action: "previous" }), "Moved back one week."));
+
+document.getElementById("wkAuto").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const overwrite = document.getElementById("wkOverwrite").checked;
+    if (overwrite && !(await uiConfirm("This replaces the week of every lesson in this subject, including ones you set by hand. Continue?", { title: "Replace all weeks?" }))) return;
+    const body = {
+        per_week: Number(document.getElementById("wkPerWeek").value || 1),
+        start_week: Number(document.getElementById("wkStartWeek").value || 1),
+        overwrite,
+    };
+    wkRun(button, () => wkCall("POST", `/${wkId()}/auto-assign`, body), "Weeks assigned in course order.");
+});
+
+const wkWeekText = (week) => (week ? `Week ${week}` : "Not in the plan");
+
+// Show or hide the Save / Cancel bar under a row, depending on whether its dropdown differs from what is saved.
+function wkShowPending(row, lesson) {
+    const changed = lesson.id in wkPending;
+    row.classList.toggle("changed", changed);
+    const bar = row.querySelector(".plan-actions");
+    bar.hidden = !changed;
+    if (changed) bar.querySelector(".plan-pending").textContent = `${wkWeekText(lesson.week_number)} → ${wkWeekText(wkPending[lesson.id])}`;
+}
+
+// What the students will see once the change is saved, in plain words (for the confirmation).
+function wkEffect(week) {
+    const sc = wkState.schedule;
+    if (!week) return "Students will see it as gray and won't be able to open it.";
+    if (!sc || !sc.enabled) return "Weekly pacing is off for this subject, so it won't affect students until you turn it on.";
+    const now = sc.current_week || 0;
+    if (week === now) return "It becomes this week's task: blue for students who haven't finished it.";
+    if (week < now) return "That week has already passed: students who haven't finished it will see it as red (behind).";
+    return "That week hasn't started: it stays gray for students until then.";
+}
+
+document.getElementById("wkPlanList").addEventListener("change", (event) => {
+    const select = event.target.closest("select[data-lesson]");
+    if (!select) return;
+    const lesson = wkState.lessons.find(item => String(item.id) === select.dataset.lesson);
+    const week = select.value ? Number(select.value) : null;
+    if (week === lesson.week_number) delete wkPending[lesson.id];   // picked the saved value again: nothing to save
+    else wkPending[lesson.id] = week;
+    wkShowPending(select.closest(".plan-row"), lesson);
+    wkSay("");
+});
+
+document.getElementById("wkPlanList").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-act]");
+    if (!button) return;
+    const lesson = wkState.lessons.find(item => String(item.id) === button.dataset.lesson);
+    if (!lesson || !(lesson.id in wkPending)) return;
+    const week = wkPending[lesson.id];
+
+    if (button.dataset.act === "cancel") {
+        const discard = await uiConfirm(
+            `Discard the change to "${lesson.title}"?\n\nIt stays as it is now: ${wkWeekText(lesson.week_number)}.`,
+            { title: "Discard change?", okText: "Discard", cancelText: "Keep editing", danger: true });
+        if (!discard) return;
+        delete wkPending[lesson.id];
+        wkRender();   // draws the dropdown back at the saved week
+        wkSay("Change discarded.");
+        return;
+    }
+
+    const confirmed = await uiConfirm(
+        `${week ? `Set "${lesson.title}" as the task for week ${week}?` : `Take "${lesson.title}" out of the weekly plan?`}\n\n${wkEffect(week)}`,
+        { title: "Save this change?", okText: "Save", cancelText: "Cancel" });
+    if (!confirmed) return;
+    wkRun(button, async () => {
+        const state = await wkCall("PUT", `/${wkId()}/lessons/${lesson.id}`, { week_number: week });
+        delete wkPending[lesson.id];
+        return state;
+    }, week ? `"${lesson.title}" is now the task for week ${week}.` : `"${lesson.title}" was taken out of the weekly plan.`);
+});
+
+document.getElementById("wkGive").addEventListener("click", (event) => {
+    const teacher = document.getElementById("wkCandidate").value;
+    if (!teacher) return;
+    const label = document.getElementById("wkCandidate").selectedOptions[0].textContent;
+    wkRun(event.currentTarget, () => wkCall("PUT", `/${wkId()}/access`, { user_id: Number(teacher) }), `${label} can now edit this subject's schedule.`);
+});
+
+document.getElementById("wkGrantedList").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-take-back]");
+    if (!button) return;
+    const person = wkState.access.granted.find(t => String(t.id) === button.dataset.takeBack);
+    const ok = await uiConfirm(`Take back ${person ? person.name : "this teacher"}'s access to "${subjectLabel(wkState.subject)}"?\n\nThey will still see the schedule but won't be able to change it.`,
+        { title: "Take back access?", okText: "Take back", cancelText: "Keep access", danger: true });
+    if (!ok) return;
+    wkRun(button, () => wkCall("DELETE", `/${wkId()}/access/${button.dataset.takeBack}`), "Access taken back.");
+});
+
+wkSubject.addEventListener("change", () => {
+    for (const id of Object.keys(wkPending)) delete wkPending[id];
+    wkSay("");
+    wkLoadSubject(wkSubject.value);
+});
+wkLoadSubjects();

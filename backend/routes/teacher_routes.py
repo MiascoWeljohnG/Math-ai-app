@@ -88,7 +88,7 @@ def teacher_overview(user: User = Depends(require_teacher), db: Session = Depend
 
 @router.get("/subjects")
 def teacher_subjects(user=Depends(require_teacher), db: Session = Depends(get_db)):
-    return [{"id": subject.id, "name": subject.name} for subject in db.query(Subject).filter(visible_subjects(user)).order_by(Subject.name).all()]
+    return [{"id": subject.id, "name": subject.name, "subject_code": subject.subject_code} for subject in db.query(Subject).filter(visible_subjects(user)).order_by(Subject.name).all()]
 
 
 @router.post("/upload")

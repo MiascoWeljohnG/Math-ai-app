@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from database import Base, engine, SessionLocal, migrate_add_missing_columns, drop_legacy_full_name, backfill_user_status
+from database import Base, engine, SessionLocal, migrate_add_missing_columns, drop_legacy_full_name, backfill_user_status, backfill_subject_managers, sync_id_sequences
 from models import User, Subject
 from bootstrap import ensure_schools, ensure_school_admins, retire_main_admins, warn_if_default_password
 from routes import approval_routes, auth_routes, user_routes, teacher_routes, materials_routes, profile_routes, subjects_routes, subject_deletion_routes, file_deletion_routes, lesson_deletion_routes, notification_routes, learning_routes, schools_routes, school_admin_routes, practice_routes, retake_routes, games_routes, weekly_routes
@@ -23,6 +23,8 @@ Base.metadata.create_all(bind=engine)
 migrate_add_missing_columns()
 drop_legacy_full_name()
 backfill_user_status()   # accounts from before the approval workflow stay usable
+backfill_subject_managers()   # older shared subjects are credited to the teacher who wrote their first lesson
+sync_id_sequences()   # PostgreSQL: rows added with their own ids must not make the next insert collide
 
 db = SessionLocal()
 ensure_schools(db)        # exactly the two configured schools

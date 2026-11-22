@@ -192,7 +192,10 @@
         <label for="subjectFileInput">Upload a file (optional)</label>
         <input id="subjectFileInput" type="file" accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff">
         <p class="hint">PDF, DOCX, PPTX, TXT, MD, or a scan or photo (PNG, JPG). Scanned pages are read with OCR. The AI reads it, fills in the name and description, and can write the lessons too.</p>
-        <label for="subjectNameInput">Name</label>
+        <label for="subjectCodeInput">Subject code (optional)</label>
+        <input id="subjectCodeInput" type="text" maxlength="30" placeholder="e.g. BSEM 21">
+        <p class="hint">Students and teachers see the code in place of the name. The name below stays as the subject's title.</p>
+        <label for="subjectNameInput">Name (title)</label>
         <input id="subjectNameInput" type="text" maxlength="80" placeholder="e.g. Geometry">
         <label for="subjectDescInput">Description</label>
         <textarea id="subjectDescInput" rows="3" maxlength="500" placeholder="What will students learn?"></textarea>

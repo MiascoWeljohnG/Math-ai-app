@@ -4,18 +4,28 @@
  * 
  * @param {HTMLButtonElement} buttonEl - The button element being clicked.
  * @param {Function} asyncCallback - The async function to execute.
+ * @param {string} [loadingText] - Label shown next to the spinner while running (defaults to the button's own text).
  * @returns {Promise<any>} - Returns the result of the async callback.
  */
-async function withButtonLoading(buttonEl, asyncCallback) {
+async function withButtonLoading(buttonEl, asyncCallback, loadingText) {
     if (!buttonEl) {
         console.warn("withButtonLoading: Button element not found.");
         return;
     }
-    
-    // Activate loading state
+
+    // Same 12-bar spinner as the login button, followed by the label (or loadingText, e.g. "Saving...")
+    const spinner = '<span class="spinner" role="status"><span aria-hidden="true">' +
+        Array.from({ length: 12 }, (_, i) => `<i style="--i:${i}"></i>`).join("") +
+        '</span><span class="sr-only">Loading</span></span>';
+    const originalHTML = buttonEl.innerHTML;
+    const label = document.createElement("span");
+    label.textContent = loadingText || buttonEl.textContent.trim();
+    buttonEl.innerHTML = spinner;
+    buttonEl.appendChild(label);
     buttonEl.classList.add("is-loading");
     buttonEl.disabled = true;
-    
+    buttonEl.setAttribute("aria-busy", "true");
+
     try {
         const result = await asyncCallback();
         return result;
@@ -23,8 +33,10 @@ async function withButtonLoading(buttonEl, asyncCallback) {
         console.error("Action execution failed:", error);
         throw error; // Re-throw to be handled by the specific button logic
     } finally {
-        // Always ensure button state is restored
+        // Put the label back, unless the callback already rewrote the button's text itself
+        if (buttonEl.querySelector(":scope > .spinner")) buttonEl.innerHTML = originalHTML;
         buttonEl.classList.remove("is-loading");
+        buttonEl.removeAttribute("aria-busy");
         buttonEl.disabled = false;
     }
 }

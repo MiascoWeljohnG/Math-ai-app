@@ -1,3 +1,4 @@
+import logging
 import hashlib
 import json
 import random
@@ -10,6 +11,7 @@ from typing import Optional, Union
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -19,7 +21,7 @@ import retakes
 import weekly
 from auth import get_current_user, require_staff
 from database import get_db
-from models import AuditLog, Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, QuizRetakeRequest, QuizSession, Subject, User, WeeklySchedule
+from models import AuditLog, Lesson, LessonCompletion, LessonQuiz, Material, PracticeSet, QuizAttempt, QuizRetakeRequest, QuizSession, Subject, SubjectAccess, User, WeeklySchedule
 from classifier import (
     check_relevance, choose_subject, document_text, parse_page_range, read_upload, relevant_text, sample_text,
     summarize_document,
@@ -29,6 +31,7 @@ from rag import ask_stream, generate_text
 from routes.materials_routes import material_bytes
 from school import in_school, shared_subjects, visible_subjects
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/subjects", tags=["subjects"])
 
 # Which parts of the game pack each lesson game needs (used by games_routes.py)
@@ -46,6 +49,7 @@ def _serialize_subject(subject: Subject) -> dict:
     return {
         "id": subject.id,
         "name": subject.name,
+        "subject_code": subject.subject_code,
         "description": subject.description,
         "is_personal": subject.owner_user_id is not None,
     }
@@ -81,6 +85,7 @@ def list_subjects(user: User = Depends(get_current_user), db: Session = Depends(
 class CreateSubjectRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     description: Optional[str] = Field(default=None, max_length=500)
+    subject_code: Optional[str] = Field(default=None, max_length=30)   # shared subjects only; personal ones ignore it
 
 
 @router.post("")
@@ -115,9 +120,20 @@ def create_shared_subject(
         raise HTTPException(status_code=400, detail="Subject name is required")
     if db.query(Subject).filter(shared_subjects(user), func.lower(Subject.name) == name.lower()).first():
         raise HTTPException(status_code=409, detail=f'A subject called "{name}" already exists')
-    subject = Subject(name=name, description=(req.description or "").strip() or None, owner_user_id=None, school_id=user.school_id)
+    code = " ".join((req.subject_code or "").split()) or None   # "BSEM   21 " -> "BSEM 21"
+    if code and db.query(Subject).filter(shared_subjects(user), func.lower(Subject.subject_code) == code.lower()).first():
+        raise HTTPException(status_code=409, detail=f'A subject with the code "{code}" already exists')
+    subject = Subject(name=name, subject_code=code, description=(req.description or "").strip() or None, owner_user_id=None,
+                      school_id=user.school_id, manager_id=user.id if user.role == "teacher" else None)   # the creating teacher handles it
     db.add(subject)
-    db.commit()
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        # Say what went wrong. An unhandled error here would reach the browser as a bare "failed" (no CORS headers on a 500).
+        db.rollback()
+        log.exception("Could not create the subject %r", name)
+        reason = str(getattr(exc, "orig", exc)).strip().splitlines()[0][:160]
+        raise HTTPException(status_code=500, detail=f"The subject couldn't be saved ({reason}).")
     db.refresh(subject)
     return _serialize_subject(subject)
 
@@ -156,6 +172,8 @@ def delete_subject_cascade(db: Session, subject: Subject) -> None:
     lesson_ids = [lesson.id for lesson in db.query(Lesson).filter(Lesson.subject_id == subject.id)]
     _delete_lesson_children(db, lesson_ids)
     db.query(Lesson).filter(Lesson.subject_id == subject.id).delete(synchronize_session=False)
+    db.query(WeeklySchedule).filter(WeeklySchedule.subject_id == subject.id).delete(synchronize_session=False)
+    db.query(SubjectAccess).filter(SubjectAccess.subject_id == subject.id).delete(synchronize_session=False)
     db.delete(subject)
 
 

@@ -12,7 +12,7 @@ body.home .content { width: 100%; max-width: 1180px; margin: 0 auto; padding: cl
 .ring::before { content: ""; position: absolute; inset: 13px; border-radius: 50%; background: var(--hero-card); }
 .ring span { position: relative; font: 800 1.7rem var(--font-display); }
 .resume-text { min-width: 0; }
-.resume-text .chip { display: inline-block; background: var(--sun2); color: #8A5A00; border-radius: 999px; padding: 0.15rem 0.85rem; font-weight: 600; font-size: 0.95rem; }
+.resume-text .chip { display: inline-block; background: var(--sun2); color: var(--sun-ink); border-radius: 999px; padding: 0.15rem 0.85rem; font-weight: 700; font-size: 0.95rem; }
 .resume-text h2 { font: 800 clamp(1.5rem, 2.6vw, 2rem)/1.1 var(--font-display); letter-spacing: -0.02em; margin: 0.6rem 0 0.3rem; overflow-wrap: anywhere; }
 .resume-text p { opacity: 0.75; }
 .resume-btn { margin-left: auto; flex: none; background: var(--sun); color: #151B3A; padding: 0.95rem 1.6rem; border-radius: 16px; font-weight: 700; text-decoration: none; }

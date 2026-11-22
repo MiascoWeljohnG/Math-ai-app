@@ -117,7 +117,7 @@ function renderSubjects() {
         return;
     }
     subjectSelect.replaceChildren(...subjects.map(subject =>
-        new Option(`${subject.name}${subject.is_personal ? " (personal)" : ""}`, String(subject.id), false, subject.id === activeSubjectId)));
+        Object.assign(new Option(`${subjectLabel(subject)}${subject.is_personal ? " (personal)" : ""}`, String(subject.id), false, subject.id === activeSubjectId), { title: subject.name })));
     subjectSelect.disabled = false;
 }
 

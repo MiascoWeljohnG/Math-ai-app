@@ -189,3 +189,18 @@ def test_shared_subject_names_are_unique_and_teacher_only(api):
     as_user(api, "stu")
     assert api.client.post("/subjects/shared", json={"name": "Whatever"}).status_code == 403
     assert api.client.post("/subjects/analyze-material", json={"filename": "x"}).status_code == 403
+
+
+def test_a_shared_subject_keeps_its_code_and_title_and_is_handled_by_its_creator(api):
+    made = api.client.post("/subjects/shared", json={"name": "Mathematics in the Modern World", "subject_code": "  GNED   03 "})
+    assert made.status_code == 200
+    assert made.json()["subject_code"] == "GNED 03" and made.json()["name"] == "Mathematics in the Modern World"
+    api.db.expire_all()
+    assert api.db.query(Subject).filter(Subject.id == made.json()["id"]).first().manager_id == api.users["ana"].id
+
+    same_code = api.client.post("/subjects/shared", json={"name": "Something else", "subject_code": "gned 03"})
+    assert same_code.status_code == 409 and "code" in same_code.json()["detail"]
+
+    as_user(api, "stu")                                                        # students get the code and the title to show
+    listed = {s["name"]: s["subject_code"] for s in api.client.get("/subjects").json()}
+    assert listed["Mathematics in the Modern World"] == "GNED 03" and listed["Algebra"] is None

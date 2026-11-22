@@ -2,3 +2,8 @@
 function getHeaders() {
     return { "Authorization": `Bearer ${localStorage.getItem("token")}` };
 }
+
+// Escape text before it goes into an innerHTML template (lesson titles, names).
+function esc(v) {
+    return String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}

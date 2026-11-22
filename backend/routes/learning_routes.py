@@ -174,7 +174,7 @@ def rankings(
     for rank, row in enumerate(table, 1):
         row["rank"] = rank
     return {
-        "branches": [{"id": s.id, "name": s.name} for s in shared],
+        "branches": [{"id": s.id, "name": s.name, "subject_code": s.subject_code} for s in shared],
         "entries": table[:limit],
         "me": next((r for r in table[limit:] if r["you"]), None),
         "total": len(table),   # how many students are ranked

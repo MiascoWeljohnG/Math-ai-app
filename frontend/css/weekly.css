@@ -86,3 +86,12 @@
     .lesson-row.paced .lesson-main { flex: 1 1 calc(100% - 3rem); }
     .lesson-row.paced .lesson-main + .pace-pill { margin-left: 2.6rem; }
 }
+
+/* --- who may edit a subject's schedule --- */
+.wk-controls { border: 0; margin: 0; padding: 0; min-width: 0; }
+.wk-controls:disabled { opacity: 0.6; }
+.wk-controls:disabled .btn, .wk-controls:disabled select, .wk-controls:disabled input { cursor: not-allowed; }
+.access-list { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.5rem 0 0.9rem; }
+.access-row { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; padding: 0.55rem 0.9rem;
+              border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-elevated); }
+.access-row small { display: block; color: var(--text-muted); }

@@ -193,10 +193,11 @@ async function uploadFiles() {
         selectedFiles = selectedFiles.filter(f => !savedNames.has(f.name));   // unfiled files stay selected
         renderChips();
         loadFiles();
-    }).catch(err => {
+    }, "Uploading...").catch(err => {
         statusEl.className = "status error";
         statusEl.textContent = err.message;
     });
+    uploadBtn.disabled = selectedFiles.length === 0;
 }
 
 // --- Notification Modal ---

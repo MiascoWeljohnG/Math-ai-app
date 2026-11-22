@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
     <meta name="theme-color" content="#F2F5FA">
-    <title>Weekly schedule · School Admin</title>
+    <title>Weekly schedule · Teacher Dashboard</title>
     <script src="js/theme.js"></script>
     <link rel="stylesheet" href="css/theme.css">
     <link rel="stylesheet" href="css/nav-drawer.css">
@@ -14,11 +14,11 @@
     <link rel="stylesheet" href="css/pages.css?v=1">
     <link rel="stylesheet" href="css/mobile.css?v=1">
     <link rel="stylesheet" href="css/admin-profile.css?v=1">
-    <link rel="stylesheet" href="css/weekly.css?v=2">
+    <link rel="stylesheet" href="css/weekly.css?v=3">
 </head>
 <body>
 <div class="page">
-    <div class="header" id="staffHeader" data-title="School Admin"></div>
+    <div class="header" id="staffHeader" data-title="Teacher Dashboard"></div>
     <script src="js/staff-header.js"></script>
 
     <div class="section" id="weeklySection">
@@ -38,9 +38,29 @@
             <label for="weeklySubject" class="label">Subject</label>
             <select id="weeklySubject" class="branch-select"></select>
         </div>
-        <p class="empty" id="weeklyNoSubjects" hidden>Your school has no subjects yet. Teachers create them on their Manage Lessons page.</p>
+        <p class="empty" id="weeklyNoSubjects" hidden>Your school has no subjects yet. Create one on your Manage Lessons page first.</p>
 
         <div id="weeklyBody" hidden>
+            <div class="panel" id="wkAccessPanel" style="margin-bottom:1rem;">
+                <h3>Who handles this subject</h3>
+                <p class="hint" id="wkManagerLine"></p>
+                <div class="pace-warning" id="wkLockedBanner" role="alert" hidden>
+                    <strong>View only.</strong>
+                    <span id="wkLockedText"></span>
+                </div>
+                <div id="wkAccessManage" hidden>
+                    <p class="hint">Teachers you give access to can change this subject's weekly schedule too. You can take it back any time.</p>
+                    <div class="access-list" id="wkGrantedList"></div>
+                    <div class="field-row" id="wkGiveRow">
+                        <label for="wkCandidate" class="label">Give access to</label>
+                        <select id="wkCandidate" class="branch-select"></select>
+                        <button class="btn btn-secondary btn-sm" type="button" id="wkGive">Give access</button>
+                    </div>
+                    <p class="empty" id="wkNoCandidates" hidden>There are no other teachers in your school to give access to.</p>
+                </div>
+            </div>
+
+            <fieldset class="wk-controls" id="wkControls">
             <div class="panel">
                 <h3>How the week moves</h3>
                 <div class="pace-warning" id="wkOffBanner" role="alert" hidden>
@@ -92,6 +112,7 @@
                 <div class="plan-list" id="wkPlanList"></div>
                 <p class="empty" id="wkNoLessons" hidden>This subject has no published lessons yet.</p>
             </div>
+            </fieldset>
         </div>
         <div class="status" id="weeklyStatus" role="status" aria-live="polite"></div>
     </div>
@@ -102,12 +123,12 @@
     <script src="js/nav.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/icons.js"></script>
-    <script src="js/school-admin-common.js"></script>
-    <script src="js/school-admin-weekly.js"></script>
-    <script src="js/school-admin-bell.js"></script>
+    <script src="js/teacher-common.js"></script>
+    <script src="js/teacher-weekly.js"></script>
+    <script src="js/teacher-bell.js"></script>
     <script>
-        requireRole("school_admin");
-        initNavDrawer({ staff: true, pages: STAFF_PAGES.school_admin });
+        requireRole("teacher");
+        initNavDrawer({ staff: true, pages: STAFF_PAGES.teacher });
     </script>
 </body>
 </html>
