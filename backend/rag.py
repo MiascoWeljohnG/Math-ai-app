@@ -413,8 +413,8 @@ def _pdf_page_batches(contents: bytes, page_range: tuple[int, int] | None = None
                         try:
                             text = ocr.ocr_pdf_page(page).strip() or text
                             scanned += 1
-                        except ocr.OcrUnavailable:
-                            ocr_missing = 1
+                        except ocr.OcrUnavailable as exc:
+                            ocr_missing = str(exc) or "The scan reader is not available."
                 if text or tables:
                     batch.append((i, text, tables))
                 page.flush_cache()
@@ -424,7 +424,7 @@ def _pdf_page_batches(contents: bytes, page_range: tuple[int, int] | None = None
         any_pages = any_pages or bool(batch)
         yield batch, batch_last - start + 1, span
     if ocr_missing and not any_pages:
-        raise ValueError("This PDF has no text layer (it is a scan) and OCR is not available on the server, so it can't be read.")
+        raise ValueError(f"This PDF has no text layer (it is a scan), so it can't be read. {ocr_missing}")
 
 
 def iter_text_batches(filename: str, contents: bytes, figures_too: bool = False):
