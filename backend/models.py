@@ -416,3 +416,21 @@ class Reminder(Base):
     due_date = Column(Date, nullable=True)
     school_id = Column(Integer, nullable=True, index=True)   # the author's school: only its students see "everyone" reminders
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ArchivedItem(Base):
+    """Something a teacher deleted (a file, a lesson or a whole subject). It is gone from the app at once, but a copy of what
+    it was is kept here for ARCHIVE_DAYS (archive.py) so the school admin can see it. After that it shows up on the admin's
+    File deletion page, where the admin deletes it for good. `payload` is a JSON snapshot; title/context are copied so the
+    list reads correctly without it. Always tied to one school: an admin only ever sees their own school's rows."""
+    __tablename__ = "archived_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String, nullable=False, index=True)          # file | lesson | subject
+    school_id = Column(Integer, nullable=True, index=True)
+    title = Column(String, nullable=False)                     # file name, lesson title or subject name
+    context = Column(String, nullable=True)                    # file: its branch; lesson: its subject; subject: "N lessons"
+    reason = Column(String, nullable=True)                     # what the teacher wrote when deleting
+    archived_by = Column(String, index=True, nullable=False)   # username of the teacher
+    archived_at = Column(DateTime, default=datetime.utcnow, index=True, nullable=False)
+    payload = Column(Text, nullable=True)

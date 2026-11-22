@@ -73,8 +73,8 @@ function fillLessonTitle(button, lesson) {
     button.append(source);
 }
 
-// A published lesson can't be deleted outright: the teacher asks and the school admin decides.
-// Which lessons were already asked about (waiting, or recently kept) so the list can say so next to the lesson.
+// Deleting a published lesson moves it to the archive (the school admin sees it there and deletes it for good after 30 days).
+// Which lessons still have an older request from before the archive existed (waiting, or recently kept), so the list can say so next to the lesson.
 let lessonDeletionTimer = null;
 async function loadLessonDeletionStatus() {
     let asked = new Map();
@@ -114,13 +114,8 @@ async function loadLessonList() {
             deleteButton.type = "button";
             deleteButton.className = "lesson-delete";
             const state = asked.get(lesson.id);
-            if (state === "pending") {   // waiting for the school admin: nothing more to do here
-                deleteButton.disabled = true;
-                setIconButton(deleteButton, "trash", "Deletion requested. Waiting for the school admin.");
-            } else {
-                setIconButton(deleteButton, "trash", "Ask the school admin to delete this lesson");
-                deleteButton.addEventListener("click", () => deleteLesson(lesson.id, false));
-            }
+            setIconButton(deleteButton, "trash", "Delete this lesson (moves it to the archive)");
+            deleteButton.addEventListener("click", () => deleteLesson(lesson.id, false));
             row.append(editButton);
             if (state) {
                 const note = document.createElement("span");
@@ -418,8 +413,8 @@ async function deleteLesson(lessonId, isDraft) {
 }
 
 async function requestLessonDeletion(lessonId) {
-    if (!await uiConfirm("Ask your school admin to delete this lesson?\n\nThe lesson is NOT deleted yet. Students can still see it until the admin approves.", { title: "Request lesson deletion", okText: "Continue", danger: true })) return;
-    const reason = await uiPrompt("Why should it be deleted? (optional)", "", { title: "Reason", okText: "Send request" });
+    if (!await uiConfirm("Delete this lesson?\n\nStudents stop seeing it right away. It is moved to the archive: your school admin can see it there, and it is permanently deleted after 30 days.", { title: "Delete lesson", okText: "Continue", danger: true })) return;
+    const reason = await uiPrompt("Why are you deleting it? (optional)", "", { title: "Reason", okText: "Delete lesson" });
     if (reason === null) return;
     try {
         const response = await fetch(`${API}/lesson-deletions`, {
@@ -428,7 +423,8 @@ async function requestLessonDeletion(lessonId) {
             body: JSON.stringify({ subject_id: activeLessonSubjectId, lesson_id: lessonId, reason: reason.trim() || null }),
         });
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.detail || "Couldn't send the request.");
+        if (!response.ok) throw new Error(result.detail || "Couldn't delete this lesson.");
+        if (editingLessonId === lessonId) startNewLesson();   // the lesson open in the editor is gone
         showLessonStatus(result.message, "success");
     } catch (error) {
         showLessonStatus(error.message, "error");
@@ -1118,7 +1114,7 @@ async function lessonPost(path, body) {
 }
 
 
-// --- Delete a subject: needs every admin's approval ---
+// --- Delete a subject: it moves to the archive (older requests that still wait for an admin show their note here) ---
 const deleteSubjectBtn = document.getElementById("deleteSubjectBtn");
 const deletionNote = document.getElementById("deletionNote");
 let pendingDeletions = [];
@@ -1287,8 +1283,8 @@ async function writeLessonsFromFile(subject, file, withQuiz) {
 async function requestSubjectDeletion() {
     if (activeLessonSubjectId === null) return showLessonStatus("Choose a subject first.", "error");
     const name = lessonSubjectSelect.selectedOptions[0].textContent;
-    if (!await uiConfirm(`Ask the admins to delete "${name}" with all of its lessons and quizzes?\n\nNothing is deleted until EVERY admin approves.`, { title: "Request deletion", okText: "Continue", danger: true })) return;
-    const reason = await uiPrompt("Why should it be deleted? (optional)", "", { title: "Reason", okText: "Send request" });
+    if (!await uiConfirm(`Delete "${name}" with all of its lessons and quizzes?\n\nStudents stop seeing it right away. It is moved to the archive: your school admin can see it there, and it is permanently deleted after 30 days.`, { title: "Delete subject", okText: "Continue", danger: true })) return;
+    const reason = await uiPrompt("Why are you deleting it? (optional)", "", { title: "Reason", okText: "Delete subject" });
     if (reason === null) return;
     try {
         const response = await fetch(`${API}/subject-deletions`, {
@@ -1297,9 +1293,9 @@ async function requestSubjectDeletion() {
             body: JSON.stringify({ subject_id: activeLessonSubjectId, reason: reason.trim() || null }),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || "Couldn't send the request.");
+        if (!response.ok) throw new Error(result.detail || "Couldn't delete this subject.");
         showLessonStatus(result.message, "success");
-        if (result.status === "approved") await loadLessonSubjects();
+        if (result.status === "approved" || result.status === "archived") await loadLessonSubjects();
         else await refreshDeletionState();
     } catch (error) {
         showLessonStatus(error.message, "error");

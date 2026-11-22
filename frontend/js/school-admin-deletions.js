@@ -1,4 +1,4 @@
-// School admin page: Deletion requests (deletion-request.html) - teachers ask to delete a subject, a lesson or a module; the admin decides.
+// School admin page: File deletion (deletion-request.html), the older requests part - requests teachers sent before deleted items went to the archive (see school-admin-archive.js); the admin still decides them.
 // Needs school-admin-common.js, material-table.js (formatUploadDate), modal.js and the #deletionSection markup of that page.
 // A teacher asked to delete a subject, a lesson or a module (an uploaded file); the school admin decides ---
 // One list, three kinds. Each kind has its own endpoint; the page merges them, oldest first, and a dropdown filters by kind.
@@ -101,6 +101,7 @@ function renderDeletions() {
     const choice = DELETION_TYPES.includes(deletionFilter.value) ? deletionFilter.value : "all";
     const shown = choice === "all" ? all : all.filter(r => r.type === choice);
 
+    document.getElementById("deletionSection").style.display = all.length ? "" : "none";   // only while requests from before the archive are still waiting
     deletionList.replaceChildren(...shown.map(deletionCard));
     const empty = document.getElementById("noDeletions");
     empty.style.display = shown.length ? "none" : "block";

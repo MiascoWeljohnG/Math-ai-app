@@ -8,6 +8,8 @@ const AUDIT_LABEL = {
     "subject.delete.reject": "Rejected a subject deletion",
     "file.delete.request": "Asked to delete a module (file)", "file.delete.approve": "Approved a module (file) deletion",
     "file.delete.reject": "Rejected a module (file) deletion",
+    "file.archive": "Teacher deleted a file (moved to the archive)", "lesson.archive": "Teacher deleted a lesson (moved to the archive)",
+    "subject.archive": "Teacher deleted a subject (moved to the archive)", "archive.purge": "Permanently deleted an archived item",
     "lesson.delete": "Deleted a lesson", "lesson.delete.request": "Asked to delete a lesson",
     "lesson.delete.approve": "Approved a lesson deletion", "lesson.delete.reject": "Rejected a lesson deletion",
     "quiz.retake.approve": "Approved a quiz retake", "quiz.retake.reject": "Rejected a quiz retake",
@@ -25,7 +27,7 @@ const AUDIT_WHAT = {
     accounts: ["*.create"],
     requests: ["subject.delete.request", "lesson.delete.request", "file.delete.request"],
     verdicts: ["*.delete.approve", "*.delete.reject"],
-    deleted: ["file.delete", "lesson.delete"],
+    deleted: ["file.delete", "lesson.delete", "*.archive", "archive.purge"],
     retakes: ["quiz.retake.*"],
     views: ["*.view"],
 };

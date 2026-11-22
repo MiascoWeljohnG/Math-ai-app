@@ -63,7 +63,7 @@ function paintAdminOverview(o) {
     else {
         const parts = [];
         if (attention.approvals) parts.push(plural(attention.approvals, "student approval"));
-        if (attention.deletions) parts.push(plural(attention.deletions, "deletion request"));
+        if (attention.deletions) parts.push(`${plural(attention.deletions, "item")} to delete`);
         if (attention.oldest_approval_days >= 1) parts.push(`oldest waiting ${plural(attention.oldest_approval_days, "day")}`);
         set("ovAttentionSub", joinParts(parts));
     }
@@ -81,7 +81,7 @@ function announceDeletions(waiting) {
         if (sessionStorage.getItem("deletionsAnnounced")) return;
         sessionStorage.setItem("deletionsAnnounced", "1");
     } catch (_) { /* no session storage: just show it */ }
-    showNotification("Approval needed", `${plural(waiting, "deletion request")} ${waiting === 1 ? "is" : "are"} waiting for your decision.`);
+    showNotification("Deletion waiting", `${plural(waiting, "item")} ${waiting === 1 ? "is" : "are"} waiting for you on the File deletion page.`);
 }
 
 async function loadAdminOverview() {

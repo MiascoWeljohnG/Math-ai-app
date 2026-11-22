@@ -35,6 +35,7 @@ const ICONS = {
     warning:   navIcon('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>'),
     dot:       navIcon('<circle cx="12" cy="12" r="3"/>'),
     log:       navIcon('<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>'),
+    archive:   navIcon('<rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>'),
     retake:    navIcon('<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>'),
 };
 
@@ -55,7 +56,8 @@ const STAFF_PAGES = {
     school_admin: [
         { label: "Overview",                  icon: ICONS.overview, href: "admin-overview.html" },
         { label: "Pending student approvals", icon: ICONS.idcard,   href: "pending-approvals.html" },
-        { label: "Deletion requests",         icon: ICONS.trash,    href: "deletion-request.html" },
+        { label: "Archive",                   icon: ICONS.archive,  href: "archive.html" },
+        { label: "File deletion",             icon: ICONS.trash,    href: "deletion-request.html" },
         { label: "Teachers & Students",       icon: ICONS.users,    href: "teachers-students.html" },
         { label: "Files from your school",    icon: ICONS.files,    href: "school-files.html" },
         { label: "Audit log",                 icon: ICONS.log,      href: "audit-log.html" },

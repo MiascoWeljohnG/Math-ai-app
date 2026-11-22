@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#F2F5FA">
+    <title>Archive · School Admin</title>
+    <script src="js/theme.js"></script>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/nav-drawer.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/overview.css">
+    <link rel="stylesheet" href="css/pages.css?v=1">
+    <link rel="stylesheet" href="css/mobile.css?v=1">
+    <link rel="stylesheet" href="css/admin-profile.css?v=1">
+</head>
+<body>
+<div class="page">
+    <div class="header" id="staffHeader" data-title="School Admin"></div>
+    <script src="js/staff-header.js"></script>
+
+    <div class="section" id="archiveSection">
+        <div class="section-head">
+            <h2>Archive <span class="tag" id="archiveCount" style="display:none;">0</span></h2>
+            <p class="hint">Files, lessons and subjects your school's teachers deleted, newest first. They are already gone for students and the AI. Each one is kept here for 30 days; after that it moves to <a href="deletion-request.html">File deletion</a>, where you delete it permanently. Only your school's items are shown.</p>
+        </div>
+        <div class="field-row" style="margin-bottom:0.75rem;">
+            <label for="archiveFilter" class="label">Show</label>
+            <select id="archiveFilter" class="branch-select">
+                <option value="all">Everything</option>
+                <option value="file">Files</option>
+                <option value="lesson">Lessons</option>
+                <option value="subject">Subjects</option>
+            </select>
+            <span id="archiveNote" class="hint"></span>
+        </div>
+        <div class="table-wrap file-list">
+            <table id="archiveTable">
+                <thead><tr><th>Name</th><th>Type</th><th>Deleted by</th><th>Deleted</th><th>Time left</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <p id="noArchive" class="empty">The archive is empty.</p>
+    </div>
+</div>
+
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/icons.js"></script>
+    <script src="js/material-table.js"></script>
+    <script src="js/school-admin-common.js"></script>
+    <script src="js/school-admin-archive.js"></script>
+    <script src="js/school-admin-bell.js"></script>
+    <script>
+        requireRole("school_admin");
+        initNavDrawer({ staff: true, pages: STAFF_PAGES.school_admin });
+    </script>
+</body>
+</html>

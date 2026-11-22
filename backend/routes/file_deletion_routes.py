@@ -1,6 +1,7 @@
-"""Deleting an uploaded file. A teacher can only ASK to delete a file they uploaded; the admin of their school decides.
-Approving removes the file (its record and what the AI learned from it) and archives the original (Drive: Archived folder); rejecting keeps it.
-Everything is limited to the requester's own school, and each request and decision goes into the audit log."""
+"""Deleting an uploaded file. When a teacher deletes a file they uploaded it goes to the archive (archive.py) at once: the file and what the
+AI learned from it are removed from the app, the original is kept, and the school admin can see it in the Archive. After 30 days it appears on
+the admin's File deletion page to be deleted for good. The old ask-and-approve routes below (list / decision) stay only so requests made
+before the archive existed can still be answered. Everything is limited to the requester's own school, and each action goes into the audit log."""
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from auth import require_school_admin, require_teacher
 from database import get_db
+import archive
 from models import AuditLog, FileDeletionRequest, Material, User
 from notifications import notify_admins
 from routes.school_admin_routes import remove_material
@@ -30,7 +32,7 @@ class FileDeletionBody(BaseModel):
 
 @router.post("")
 def request_file_deletion(req: FileDeletionBody, user: User = Depends(require_teacher), db: Session = Depends(get_db)):
-    # A teacher can only ask about their own uploads. Anything else looks like it does not exist.
+    # A teacher can only delete their own uploads. Anything else looks like it does not exist.
     material = db.query(Material).filter(
         Material.filename == req.filename,
         Material.uploaded_by == user.username,
@@ -38,19 +40,15 @@ def request_file_deletion(req: FileDeletionBody, user: User = Depends(require_te
     ).first()
     if material is None:
         raise HTTPException(status_code=404, detail="File not found")
-    if db.query(FileDeletionRequest).filter(FileDeletionRequest.filename == material.filename, FileDeletionRequest.status == "pending").first():
-        raise HTTPException(status_code=409, detail="A deletion request for this file is already waiting for the school admin")
 
-    reason = (req.reason or "").strip() or None
-    db.add(FileDeletionRequest(
-        filename=material.filename, display_name=material.display_name,
-        requested_by=user.username, school_id=user.school_id, reason=reason,
-    ))
-    db.add(AuditLog(actor=user.username, school_id=user.school_id, action="file.delete.request", target=material.display_name, detail=reason))
-    notify_admins(db, "file_deletion_request", "File deletion requested",
-                  f'@{user.username} asked to delete "{material.display_name}".', school_id=user.school_id)
+    name, filename = material.display_name, material.filename
+    item = archive.archive_material(db, material, by=user.username, school_id=user.school_id, reason=req.reason)   # a Drive failure raises 502 here, nothing changed
+    archive.settle_old_requests(db, archive.FILE, "filename", filename)
+    db.add(AuditLog(actor=user.username, school_id=user.school_id, action="file.archive", target=name, detail=item.reason))
+    notify_admins(db, "item_archived", "File moved to the archive",
+                  f'@{user.username} deleted "{name}". It is in the Archive for {archive.ARCHIVE_DAYS} days.', school_id=user.school_id)
     db.commit()
-    return {"status": "pending", "message": f'Request sent. "{material.display_name}" will be deleted once your school admin approves.'}
+    return {"status": "archived", "message": f'"{name}" was moved to the archive. Your school admin can see it there, and it is permanently deleted after {archive.ARCHIVE_DAYS} days.'}
 
 
 @router.get("/mine")

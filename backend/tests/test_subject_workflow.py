@@ -1,4 +1,4 @@
-"""Deleting a shared subject needs the approval of the admin of its school; lessons can be generated from an
+"""A teacher deleting a shared subject sends it to the archive; the old ask-and-approve requests can still be answered by the admin of its school; lessons can be generated from an
 uploaded file, creating a new branch when the AI says the file doesn't fit an existing one."""
 import json
 from types import SimpleNamespace
@@ -11,7 +11,7 @@ import classifier
 import config
 from auth import get_current_user
 from database import get_db
-from models import Lesson, LessonCompletion, LessonQuiz, Material, School, Subject, SubjectDeletionRequest, User
+from models import ArchivedItem, AuditLog, Lesson, LessonCompletion, LessonQuiz, Material, School, Subject, SubjectDeletionRequest, User
 from routes import subject_deletion_routes, subjects_routes
 
 NAMES = ["Algebra", "Geometry"]
@@ -60,19 +60,34 @@ def subject_exists(api, subject):
     return api.db.query(Subject).filter(Subject.id == subject.id).first() is not None
 
 
-# ---------------------------------------------------------------- deletion is decided by the school's admin
-def test_request_is_pending_and_subject_stays(api):
-    res = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id, "reason": "duplicate"})
-    assert res.status_code == 200 and res.json()["status"] == "pending"
-    assert subject_exists(api, api.algebra)
-    pending = api.client.get("/subject-deletions").json()
-    assert pending[0]["subject_name"] == "Algebra" and pending[0]["lesson_count"] == 1
-    assert pending[0]["waiting_on"] == ["root"] and pending[0]["approved_by"] == [] and pending[0]["admins_total"] == 1
+def legacy_request(api, subject=None):
+    """A deletion request made before the archive existed: still waiting for the school admin."""
+    subject = subject or api.algebra
+    row = SubjectDeletionRequest(subject_id=subject.id, subject_name=subject.name, requested_by="ana")
+    api.db.add(row)
+    api.db.commit()
+    return row.id
 
 
-def test_second_request_for_same_subject_is_refused(api):
-    api.client.post("/subject-deletions", json={"subject_id": api.algebra.id})
-    assert api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).status_code == 409
+# ---------------------------------------------------------------- a teacher's delete goes to the archive
+def test_teachers_delete_moves_the_subject_to_the_archive(api):
+    algebra_id = api.algebra.id   # read before the delete: the row is gone afterwards
+    res = api.client.post("/subject-deletions", json={"subject_id": algebra_id, "reason": "duplicate"})
+    assert res.status_code == 200 and res.json()["status"] == "archived"
+    assert not subject_exists(api, api.algebra)                                   # gone from the app at once
+    assert api.db.query(Lesson).count() == 0 and api.db.query(LessonQuiz).count() == 0 and api.db.query(LessonCompletion).count() == 0
+    assert subject_exists(api, api.geometry)                                      # nothing else was touched
+    item = api.db.query(ArchivedItem).one()
+    assert (item.kind, item.title, item.context, item.archived_by, item.reason) == ("subject", "Algebra", "1 lesson", "ana", "duplicate")
+    assert json.loads(item.payload)["lessons"][0]["title"] == "Intro"             # what it was is kept
+    assert api.db.query(AuditLog).filter(AuditLog.action == "subject.archive", AuditLog.actor == "ana").count() == 1
+
+
+def test_deleting_an_already_archived_subject_is_a_404_and_closes_old_requests(api):
+    old = legacy_request(api)
+    assert api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()["status"] == "archived"
+    assert api.db.query(SubjectDeletionRequest).filter(SubjectDeletionRequest.id == old).one().status == "approved"   # nothing left to decide
+    assert api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).status_code == 404
 
 
 def test_personal_or_missing_subjects_cannot_be_requested(api):
@@ -87,12 +102,12 @@ def test_students_cannot_request_and_teachers_cannot_decide(api):
     as_user(api, "stu")
     assert api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).status_code == 403
     as_user(api, "ana")
-    request_id = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()["request_id"]
+    request_id = legacy_request(api)
     assert api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).status_code == 403
 
 
 def test_the_school_admins_approval_deletes_the_subject_and_everything_under_it(api):
-    request_id = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()["request_id"]
+    request_id = legacy_request(api)
     as_user(api, "root")
     done = api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).json()
     assert done["status"] == "approved" and not subject_exists(api, api.algebra)
@@ -103,7 +118,7 @@ def test_the_school_admins_approval_deletes_the_subject_and_everything_under_it(
 
 
 def test_a_rejection_keeps_the_subject(api):
-    request_id = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()["request_id"]
+    request_id = legacy_request(api)
     as_user(api, "root")
     assert api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": False}).json()["status"] == "rejected"
     assert subject_exists(api, api.algebra)
@@ -118,7 +133,7 @@ def test_school_admin_asking_counts_as_approving(api):
 
 
 def test_another_schools_admin_cannot_see_or_decide_the_request(api):
-    request_id = api.client.post("/subject-deletions", json={"subject_id": api.algebra.id}).json()["request_id"]
+    request_id = legacy_request(api)
     as_user(api, "other")
     assert api.client.get("/subject-deletions").json() == []
     assert api.client.post(f"/subject-deletions/{request_id}/decision", json={"approve": True}).status_code == 404

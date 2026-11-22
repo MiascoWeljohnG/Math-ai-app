@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 import config
 from auth import get_current_user
 from database import get_db
-from models import Material, School, Subject, User
+from models import Material, School, Subject, SubjectDeletionRequest, User
 from routes import (auth_routes, learning_routes, materials_routes, school_admin_routes,
                     schools_routes, subject_deletion_routes, subjects_routes, teacher_routes)
 
@@ -220,8 +220,8 @@ def test_deletion_requests_are_per_school_and_the_schools_admin_decides(api):
     subject = Subject(name="Algebra", school_id=a.id)
     api.db.add(subject)
     api.db.commit()
-    as_(api, "t_a")
-    assert api.client.post("/subject-deletions", json={"subject_id": subject.id}).status_code == 200
+    api.db.add(SubjectDeletionRequest(subject_id=subject.id, subject_name="Algebra", requested_by="t_a"))   # an old request, made before the archive
+    api.db.commit()
     as_(api, "t_b")
     assert api.client.post("/subject-deletions", json={"subject_id": subject.id}).status_code == 404   # not their subject
     assert api.client.get("/subject-deletions").json() == []

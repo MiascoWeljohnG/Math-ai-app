@@ -1,7 +1,9 @@
-"""Deleting a published lesson. A teacher can only ASK to delete a lesson; the admin of their school decides.
-Approving deletes the lesson with its quiz, practice sets and students' completion records; rejecting keeps it.
+"""Deleting a published lesson. When a teacher deletes a published lesson it goes to the archive (archive.py) at once: students no longer see it
+(its quiz, practice sets and their completion records go with it), a copy is kept, and the school admin can see it in the Archive. After 30 days
+it appears on the admin's File deletion page to be deleted for good. The old ask-and-approve routes below (list / decision) stay only so requests
+made before the archive existed can still be answered.
 Drafts (lessons nobody but staff can see yet) are not covered: they can still be thrown away directly.
-Everything is limited to the requester's own school, and each request and decision goes into the audit log."""
+Everything is limited to the requester's own school, and each action goes into the audit log."""
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -10,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import archive
 from auth import require_school_admin, require_teacher
 from database import get_db
 from models import AuditLog, Lesson, LessonCompletion, LessonDeletionRequest, Subject, User
@@ -44,21 +47,16 @@ def request_lesson_deletion(req: LessonDeletionBody, user: User = Depends(requir
     if subject is None or lesson is None:   # another school's lesson looks like it does not exist
         raise HTTPException(status_code=404, detail="Lesson not found")
     if lesson.status != "published":
-        raise HTTPException(status_code=400, detail="Only published lessons need approval. A draft can be deleted directly.")
-    if db.query(LessonDeletionRequest).filter(LessonDeletionRequest.lesson_id == lesson.id, LessonDeletionRequest.status == "pending").first():
-        raise HTTPException(status_code=409, detail="A deletion request for this lesson is already waiting for the school admin")
+        raise HTTPException(status_code=400, detail="Only published lessons go to the archive. A draft can be deleted directly.")
 
-    reason = (req.reason or "").strip() or None
-    request = LessonDeletionRequest(
-        lesson_id=lesson.id, lesson_title=lesson.title, subject_id=subject.id, subject_name=subject.name,
-        requested_by=user.username, school_id=user.school_id, reason=reason,
-    )
-    db.add(request)
-    db.add(AuditLog(actor=user.username, school_id=user.school_id, action="lesson.delete.request", target=_target(request), detail=reason))
-    notify_admins(db, "lesson_deletion_request", "Lesson deletion requested",
-                  f'@{user.username} asked to delete the lesson "{lesson.title}" in "{subject.name}".', school_id=user.school_id)
+    title, lesson_id = lesson.title, lesson.id
+    item = archive.archive_lesson(db, lesson, subject, by=user.username, school_id=user.school_id, reason=req.reason)
+    archive.settle_old_requests(db, archive.LESSON, "lesson_id", lesson_id)
+    db.add(AuditLog(actor=user.username, school_id=user.school_id, action="lesson.archive", target=f"{title} ({subject.name})", detail=item.reason))
+    notify_admins(db, "item_archived", "Lesson moved to the archive",
+                  f'@{user.username} deleted the lesson "{title}" in "{subject.name}". It is in the Archive for {archive.ARCHIVE_DAYS} days.', school_id=user.school_id)
     db.commit()
-    return {"status": "pending", "message": f'Request sent. "{lesson.title}" will be deleted once your school admin approves.', "request_id": request.id}
+    return {"status": "archived", "message": f'"{title}" was moved to the archive. Your school admin can see it there, and it is permanently deleted after {archive.ARCHIVE_DAYS} days.'}
 
 
 @router.get("/mine")

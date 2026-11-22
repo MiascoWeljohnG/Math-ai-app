@@ -52,8 +52,8 @@ function showFilesProblem(message) {
     filesRetryTimer = setTimeout(loadMyFiles, 8000);
 }
 
-// A teacher can't delete a file outright: Delete sends a request and the school admin decides.
-// Marks the files already asked about (waiting for the admin, or recently kept) so the table can say so.
+// Delete moves the file to the archive (the school admin sees it there and deletes it for good after 30 days).
+// Marks the files that still have an older request from before the archive existed (waiting, or recently kept) so the table can say so.
 let deletionRefreshTimer = null;
 async function attachDeletionStatus(files) {
     try {
@@ -66,8 +66,8 @@ async function attachDeletionStatus(files) {
 }
 
 async function requestFileDeletion(file) {
-    if (!await uiConfirm(`Ask your school admin to delete "${file.display_name}"?\n\nThe file is NOT deleted yet. It stays until the admin approves. Once deleted, the chatbot can no longer use it.`, { title: "Request file deletion", okText: "Continue", danger: true })) return;
-    const reason = await uiPrompt("Why should it be deleted? (optional)", "", { title: "Reason", okText: "Send request" });
+    if (!await uiConfirm(`Delete "${file.display_name}"?\n\nThe chatbot stops using it right away. The file is moved to the archive: your school admin can see it there, and it is permanently deleted after 30 days.`, { title: "Delete file", okText: "Continue", danger: true })) return;
+    const reason = await uiPrompt("Why are you deleting it? (optional)", "", { title: "Reason", okText: "Delete file" });
     if (reason === null) return;
     try {
         const response = await fetch(`${API}/file-deletions`, {
@@ -76,10 +76,10 @@ async function requestFileDeletion(file) {
             body: JSON.stringify({ filename: file.filename, reason: reason.trim() || null }),
         });
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.detail || "Couldn't send the request.");
-        await uiAlert(result.message, { title: "Request sent" });
+        if (!response.ok) throw new Error(result.detail || "Couldn't delete the file.");
+        await uiAlert(result.message, { title: "Moved to the archive" });
     } catch (error) {
-        await uiAlert(error.message, { title: "Couldn't send the request" });
+        await uiAlert(error.message, { title: "Couldn't delete the file" });
     }
     loadMyFiles();
 }

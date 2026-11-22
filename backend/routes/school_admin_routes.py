@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+import archive
 import config
 import drive_storage
 from accounts import CreateTeacherRequest, new_account
@@ -89,6 +90,7 @@ def school_overview(user: User = Depends(require_school_admin), db: Session = De
         .filter(LessonDeletionRequest.status == "pending", LessonDeletionRequest.school_id == user.school_id)
         .scalar() or 0
     )
+    pending_deletions += archive.due_count(db, user.school_id)   # archived items whose 30 days passed: waiting for the permanent deletion
 
     return {
         "accounts": {

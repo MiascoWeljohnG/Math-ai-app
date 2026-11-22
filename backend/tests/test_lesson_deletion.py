@@ -1,4 +1,6 @@
-"""A teacher can only ASK to delete a published lesson; the admin of their school decides, and every step is audited."""
+"""A teacher deleting a published lesson sends it to the archive; the old ask-and-approve requests can still be answered by the admin of their school. Every step is audited."""
+import json
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -7,7 +9,7 @@ import config
 from auth import create_access_token, hash_password
 from database import get_db
 from models import (
-    ACTIVE, AuditLog, Lesson, LessonCompletion, LessonDeletionRequest, LessonQuiz, Notification, School, Subject, User,
+    ACTIVE, ArchivedItem, AuditLog, Lesson, LessonCompletion, LessonDeletionRequest, LessonQuiz, Notification, School, Subject, User,
 )
 from routes import lesson_deletion_routes, school_admin_routes, subjects_routes
 
@@ -51,15 +53,29 @@ def _ask(client, subject, lesson, who="tea1", reason="duplicate of lesson 2"):
     return client.post("/lesson-deletions", json={"subject_id": subject.id, "lesson_id": lesson.id, "reason": reason}, headers=_headers(who))
 
 
-def test_teacher_request_waits_for_the_admin_and_the_lesson_stays(api):
+def _legacy_request(db, subject, lesson):
+    """A deletion request made before the archive existed: still waiting for the school admin."""
+    row = LessonDeletionRequest(lesson_id=lesson.id, lesson_title=lesson.title, subject_id=subject.id, subject_name=subject.name,
+                                requested_by="tea1", school_id=subject.school_id)
+    db.add(row)
+    db.commit()
+    return row.id
+
+
+def test_teacher_delete_moves_the_lesson_to_the_archive(api):
     client, db, subject, live, _ = api
+    lesson_id = live.id   # read before the delete: the row is gone afterwards
     response = _ask(client, subject, live)
-    assert response.status_code == 200 and response.json()["status"] == "pending"
-    assert db.query(Lesson).filter(Lesson.id == live.id).first() is not None   # nothing deleted yet
-    assert db.query(Notification).filter(Notification.admin_username == "admin_a", Notification.kind == "lesson_deletion_request").count() == 1
+    assert response.status_code == 200 and response.json()["status"] == "archived"
+    assert db.query(Lesson).filter(Lesson.id == lesson_id).first() is None                 # gone from the app at once
+    assert db.query(LessonQuiz).filter(LessonQuiz.lesson_id == lesson_id).count() == 0
+    assert db.query(LessonCompletion).filter(LessonCompletion.lesson_id == lesson_id).count() == 0
+    item = db.query(ArchivedItem).one()
+    assert (item.kind, item.title, item.context, item.archived_by, item.reason) == ("lesson", "Linear equations", "Algebra", "tea1", "duplicate of lesson 2")
+    assert item.school_id == subject.school_id and json.loads(item.payload)["lesson"]["content"] == "x"
+    assert db.query(Notification).filter(Notification.admin_username == "admin_a", Notification.kind == "item_archived").count() == 1
     assert db.query(Notification).filter(Notification.admin_username == "admin_b").count() == 0   # the other school hears nothing
-    assert client.get("/lesson-deletions/mine", headers=_headers("tea1")).json() == [{"lesson_id": live.id, "status": "pending"}]
-    log = db.query(AuditLog).filter(AuditLog.action == "lesson.delete.request").one()
+    log = db.query(AuditLog).filter(AuditLog.action == "lesson.archive").one()
     assert log.actor == "tea1" and "Linear equations" in log.target and log.detail == "duplicate of lesson 2"
 
 
@@ -72,19 +88,19 @@ def test_a_published_lesson_cannot_be_deleted_directly_by_a_teacher(api):
     assert db.query(Lesson).filter(Lesson.id == draft.id).first() is None
 
 
-def test_only_published_lessons_can_be_asked_about_and_only_once(api):
+def test_only_published_lessons_go_to_the_archive_and_only_once(api):
     client, db, subject, live, draft = api
     assert _ask(client, subject, draft).status_code == 400
+    assert _ask(client, subject, live, who="admin_a").status_code == 403      # the admin has their own delete, this route is the teacher's
     assert _ask(client, subject, live).status_code == 200
-    assert _ask(client, subject, live).status_code == 409
-    assert _ask(client, subject, live, who="admin_a").status_code == 403      # the admin decides, they do not ask
+    assert _ask(client, subject, live).status_code == 404                     # already in the archive
     assert _ask(client, subject, live, who="stu1").status_code == 403
     assert _ask(client, subject, live, who="admin_b").status_code == 403
 
 
 def test_the_admins_approval_deletes_the_lesson_and_everything_under_it(api):
     client, db, subject, live, _ = api
-    _ask(client, subject, live)
+    _legacy_request(db, subject, live)
     queue = client.get("/lesson-deletions", headers=_headers("admin_a")).json()
     assert len(queue) == 1 and queue[0]["lesson_title"] == "Linear equations" and queue[0]["subject_name"] == "Algebra" and queue[0]["completions"] == 1
     lesson_id = live.id   # read before the delete: the row is gone afterwards
@@ -101,17 +117,16 @@ def test_the_admins_approval_deletes_the_lesson_and_everything_under_it(api):
 
 def test_a_rejection_keeps_the_lesson_and_the_teacher_is_told(api):
     client, db, subject, live, _ = api
-    request_id = _ask(client, subject, live).json()["request_id"]
+    request_id = _legacy_request(db, subject, live)
     assert client.post(f"/lesson-deletions/{request_id}/decision", json={"approve": False}, headers=_headers("admin_a")).json()["status"] == "rejected"
     assert db.query(Lesson).filter(Lesson.id == live.id).first() is not None
     assert db.query(AuditLog).filter(AuditLog.action == "lesson.delete.reject").count() == 1
     assert client.get("/lesson-deletions/mine", headers=_headers("tea1")).json() == [{"lesson_id": live.id, "status": "rejected"}]
-    assert _ask(client, subject, live).status_code == 200                      # may ask again after a decline
 
 
 def test_another_schools_admin_cannot_see_or_decide_the_request(api):
     client, db, subject, live, _ = api
-    request_id = _ask(client, subject, live).json()["request_id"]
+    request_id = _legacy_request(db, subject, live)
     assert client.get("/lesson-deletions", headers=_headers("admin_b")).json() == []
     assert client.post(f"/lesson-deletions/{request_id}/decision", json={"approve": True}, headers=_headers("admin_b")).status_code == 404
     assert db.query(Lesson).filter(Lesson.id == live.id).first() is not None
@@ -119,7 +134,7 @@ def test_another_schools_admin_cannot_see_or_decide_the_request(api):
 
 def test_a_request_for_a_lesson_that_is_already_gone_clears_itself(api):
     client, db, subject, live, _ = api
-    _ask(client, subject, live)
+    _legacy_request(db, subject, live)
     assert client.delete(f"/subjects/{subject.id}/lessons/{live.id}", headers=_headers("admin_a")).status_code == 200
     assert client.get("/lesson-deletions", headers=_headers("admin_a")).json() == []
     assert db.query(LessonDeletionRequest).one().status == "approved"
@@ -132,10 +147,16 @@ def test_the_school_admin_can_delete_a_lesson_directly_and_it_is_audited(api):
     assert row.actor == "admin_a" and "Linear equations" in row.target and row.school_id == subject.school_id
 
 
-def test_lesson_requests_count_towards_the_admins_needs_attention_number(api):
+def test_old_requests_still_count_towards_the_admins_needs_attention_number(api):
     client, db, subject, live, _ = api
     before = client.get("/school-admin/overview", headers=_headers("admin_a")).json()["attention"]["deletions"]
-    _ask(client, subject, live)
+    _legacy_request(db, subject, live)
     assert client.get("/school-admin/overview", headers=_headers("admin_a")).json()["attention"]["deletions"] == before + 1
-    actions = [r["action"] for r in client.get("/school-admin/audit-log", headers=_headers("admin_a")).json()]
-    assert "lesson.delete.request" in actions
+
+
+def test_a_teacher_archiving_a_lesson_closes_an_old_request_for_it(api):
+    client, db, subject, live, _ = api
+    _legacy_request(db, subject, live)
+    assert _ask(client, subject, live).status_code == 200
+    assert db.query(LessonDeletionRequest).one().status == "approved"             # nothing left to decide
+    assert client.get("/lesson-deletions", headers=_headers("admin_a")).json() == []

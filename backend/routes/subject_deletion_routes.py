@@ -1,6 +1,8 @@
-"""Deleting a shared subject. A teacher (or the school admin) asks; the admin of the subject's school decides.
-One approval deletes the subject with its lessons, quizzes and progress; a rejection keeps it. Everything is
-limited to the requester's own school, and each request and decision goes into the audit log."""
+"""Deleting a shared subject. When a teacher deletes a subject it goes to the archive (archive.py) at once: the subject, its lessons, quizzes and
+students' progress leave the app, a copy is kept, and the school admin can see it in the Archive. After 30 days it appears on the admin's File
+deletion page to be deleted for good. When the school admin asks, the old rule still applies (their request is their own approval and deletes it).
+Requests made before the archive existed can still be answered with the decision route. Everything is limited to the requester's own school,
+and each action goes into the audit log."""
 from datetime import datetime
 from typing import Optional
 
@@ -9,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import archive
 from auth import require_school_admin, require_staff
 from database import get_db
 from models import AuditLog, Lesson, Subject, SubjectDeletionRequest, SubjectDeletionVote, User
@@ -90,6 +93,17 @@ def request_subject_deletion(
     subject = db.query(Subject).filter(Subject.id == req.subject_id, shared_subjects(user)).first()
     if subject is None:
         raise HTTPException(status_code=404, detail="Subject not found")
+
+    if user.role != "school_admin":   # a teacher's delete goes straight to the archive
+        name, subject_id = subject.name, subject.id
+        item = archive.archive_subject(db, subject, by=user.username, school_id=user.school_id, reason=req.reason)
+        archive.settle_old_requests(db, archive.SUBJECT, "subject_id", subject_id)
+        db.add(AuditLog(actor=user.username, school_id=user.school_id, action="subject.archive", target=name, detail=item.reason))
+        notify_admins(db, "item_archived", "Subject moved to the archive",
+                      f'@{user.username} deleted the subject "{name}" with {item.context}. It is in the Archive for {archive.ARCHIVE_DAYS} days.', school_id=user.school_id)
+        db.commit()
+        return {"status": "archived", "message": f'"{name}" was moved to the archive. Your school admin can see it there, and it is permanently deleted after {archive.ARCHIVE_DAYS} days.'}
+
     if db.query(SubjectDeletionRequest).filter(
         SubjectDeletionRequest.subject_id == subject.id,
         SubjectDeletionRequest.status.in_(OPEN),
